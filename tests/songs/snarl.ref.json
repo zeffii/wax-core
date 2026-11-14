@@ -1,0 +1,19 @@
+{
+  "song": "snarl.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.212969,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "fa2c15812bd8b93de1c6a52781013b893932cbc33f46477aba7b1ced76b1e146",
+  "nodeTypes": [
+    "bus-in",
+    "out",
+    "prismacanyon",
+    "snarl",
+    "tempo",
+    "voices"
+  ]
+}

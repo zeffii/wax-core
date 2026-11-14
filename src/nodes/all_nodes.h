@@ -59,6 +59,7 @@ void registerJawHarp(NodeRegistry& registry);
 void registerKhufu(NodeRegistry& registry);
 void registerGranular(NodeRegistry& registry);
 void registerGroove(NodeRegistry& registry);
+void registerSnarl(NodeRegistry& registry);
 void registerSweep(NodeRegistry& registry);
 void registerExciter(NodeRegistry& registry);
 void registerCardinal(NodeRegistry& registry);

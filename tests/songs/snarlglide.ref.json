@@ -1,0 +1,19 @@
+{
+  "song": "snarlglide.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.274693,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "adff95804326cd40ad48895afeda4c22a5789c53a9a334d3f80e4d945a44819f",
+  "nodeTypes": [
+    "bus-in",
+    "out",
+    "prismacanyon",
+    "snarl",
+    "tempo",
+    "voices"
+  ]
+}
