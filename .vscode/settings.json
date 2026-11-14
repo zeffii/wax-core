@@ -1,0 +1,16 @@
+{
+  "cmake.buildDirectory": "${workspaceFolder}/build",
+  "cmake.configureOnOpen": true,
+  "cmake.parallelJobs": 3,
+  "cmake.buildTask": false,
+  "cmake.defaultVariants": {
+    "buildType": {
+      "default": "release",
+      "choices": {
+        "release": { "short": "Release", "buildType": "Release" },
+        "debug": { "short": "Debug", "buildType": "Debug" }
+      }
+    }
+  },
+  "files.associations": { "*.wax": "json" }
+}

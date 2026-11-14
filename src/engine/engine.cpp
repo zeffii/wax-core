@@ -95,7 +95,20 @@ Engine::Engine(const Project& project, double sampleRate, int threads)
   song.beatsPerBar = project.song.beatsPerBar;
   song.master = findMasterSlots(registry_);
   sequencer_.setSong(song);
-  for (const PreparedLane& lane : prepareSong(project, registry_)) sequencer_.setLane(lane);
+  for (const PreparedLane& lane : prepareSong(project, registry_)) {
+    sequencer_.setLane(lane);
+    std::vector<std::string>& names = labels_[lane.id];
+    for (const Column& column : lane.columns) {
+      switch (column.kind) {
+        case ColumnKind::Note: names.push_back("N" + std::to_string(column.nc + 1)); break;
+        case ColumnKind::Vel: names.push_back("V" + std::to_string(column.nc + 1)); break;
+        case ColumnKind::Trig: names.push_back("T" + std::to_string(column.tc + 1)); break;
+        case ColumnKind::Param: names.push_back(column.param); break;
+        case ColumnKind::Cmd: names.push_back("CMD"); break;
+        case ColumnKind::Spacer: names.push_back(""); break;
+      }
+    }
+  }
 
   if (project.song.raw.contains("nodeseq") && project.song.raw["nodeseq"].is_object()) {
     const Json& graph = project.song.raw["nodeseq"];
@@ -105,6 +118,12 @@ Engine::Engine(const Project& project, double sampleRate, int threads)
     }
   }
 
+}
+
+const std::vector<std::string>& Engine::columnLabels(const std::string& laneId) const {
+  static const std::vector<std::string> none;
+  const auto found = labels_.find(laneId);
+  return found == labels_.end() ? none : found->second;
 }
 
 }  // namespace wax

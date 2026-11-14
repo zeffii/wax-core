@@ -37,6 +37,8 @@ built engine first, with the window last. Tick a step when it is done.
 - [x] **7. Live sound and MIDI**: miniaudio and RtMidi (vendored in third_party), `wax-play`: a player without a window, keyjazz from a MIDI controller. The set-up shared with the offline renderer is now `engine::Engine`. Tested here on miniaudio's null device and with `--dry` (the audio callback run by hand in odd block sizes: bit-identical to `wax-render`); real sound and real MIDI are for a Windows ear. `-DWAX_LIVE=OFF` skips it.
 - [ ] **8. The window**: Dear ImGui on SDL3. The pattern editor first, then the sequence view, the mixer, parameter
       panels, and the drawn views (Bezier envelopes, the DX loader) last.
+      First slice done (`wax-app`): transport, a pattern table per lane that follows the playhead, level meters, keyjazz from the
+      computer keyboard and MIDI, drop a .wax on the window to open it. See docs/BUILDING.md. Next: editing cells.
 - [ ] **9. The long tail**: the nodes no demo uses, the genexpr node (its compiler has to be ported) and the glsl node.
 
 ## Parts of the engine still to come

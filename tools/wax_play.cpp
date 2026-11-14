@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "engine/engine.h"
+#include "live/player.h"
 #include "io/wav.h"
 #include "miniaudio/miniaudio.h"
 #include "project/project.h"
@@ -37,124 +38,8 @@ namespace {
 
 using namespace wax;
 
-// Things the player is told, from other threads, and does at the start of the next block.
-struct LiveCommand {
-  enum Kind : int { None, Play, Stop, NoteOn, NoteOff, AllOff } kind = None;
-  int note = 0;
-  double vel = 1;
-};
-
-// Many producers (the MIDI thread, the terminal) and one consumer (the audio callback). The callback never waits:
-// only the producers take the little spin lock.
-class LiveRing {
-public:
-  bool push(const LiveCommand& c) {
-    while (lock_.test_and_set(std::memory_order_acquire)) {}
-    const unsigned w = write_.load(std::memory_order_relaxed);
-    const bool room = w - read_.load(std::memory_order_acquire) < kSize;
-    if (room) {
-      items_[w % kSize] = c;
-      write_.store(w + 1, std::memory_order_release);
-    }
-    lock_.clear(std::memory_order_release);
-    return room;
-  }
-  bool pop(LiveCommand& c) {
-    const unsigned r = read_.load(std::memory_order_relaxed);
-    if (r == write_.load(std::memory_order_acquire)) return false;
-    c = items_[r % kSize];
-    read_.store(r + 1, std::memory_order_release);
-    return true;
-  }
-private:
-  static constexpr unsigned kSize = 1024;
-  LiveCommand items_[kSize];
-  std::atomic<unsigned> write_{0}, read_{0};
-  std::atomic_flag lock_ = ATOMIC_FLAG_INIT;
-};
-
-// The engine, its commands, and the carry between the engine's block size and whatever size the sound card asks for.
-class Player {
-public:
-  Player(const Project& project, double rate, int threads, std::string instrument, bool loop)
-      : engine_(project, rate, threads), instrument_(std::move(instrument)), once_(!loop), rate_(rate) {}
-
-  LiveRing& ring() { return ring_; }
-  Engine& engine() { return engine_; }
-  void setInstrument(const std::string& id) { instrument_ = id; }   // terminal thread, only while idle or between notes
-  double peak() const { return peak_.load(); }
-
-  // Fills n frames of interleaved stereo. Runs on the audio thread.
-  void fill(float* out, int frames) {
-    int done = 0;
-    while (done < frames) {
-      if (pos_ >= kEngineBlock) { renderBlock(); pos_ = 0; }
-      const int take = std::min(frames - done, kEngineBlock - pos_);
-      for (int i = 0; i < take; i++) {
-        out[(done + i) * 2] = left_[pos_ + i];
-        out[(done + i) * 2 + 1] = right_[pos_ + i];
-      }
-      pos_ += take;
-      done += take;
-    }
-  }
-
-private:
-  void renderBlock() {
-    LiveCommand c;
-    while (ring_.pop(c)) {
-      switch (c.kind) {
-        case LiveCommand::Play: engine_.sequencer().play(0, once_); break;
-        case LiveCommand::Stop: engine_.sequencer().stop(); engine_.runtime().note(instrument_, NoteEvent{NoteType::AllOff}); break;
-        case LiveCommand::NoteOn: {
-          NoteEvent e; e.type = NoteType::On; e.note = c.note; e.vel = c.vel;
-          engine_.runtime().note(instrument_, e);
-          break;
-        }
-        case LiveCommand::NoteOff: {
-          NoteEvent e; e.type = NoteType::Off; e.note = c.note;
-          engine_.runtime().note(instrument_, e);
-          break;
-        }
-        case LiveCommand::AllOff: engine_.runtime().note(instrument_, NoteEvent{NoteType::AllOff}); break;
-        case LiveCommand::None: break;
-      }
-    }
-    engine_.sequencer().process(left_, right_, kEngineBlock);
-    float p = peak_.load(std::memory_order_relaxed);
-    for (int i = 0; i < kEngineBlock; i++) p = std::max(p, std::max(std::fabs(left_[i]), std::fabs(right_[i])));
-    peak_.store(p, std::memory_order_relaxed);
-  }
-
-  Engine engine_;
-  LiveRing ring_;
-  std::string instrument_;
-  bool once_;
-  double rate_;
-  float left_[kEngineBlock] = {}, right_[kEngineBlock] = {};
-  int pos_ = kEngineBlock;   // the whole block is used: the next frame needs a new one
-  std::atomic<float> peak_{0};
-};
-
 void dataCallback(ma_device* device, void* output, const void*, ma_uint32 frames) {
   static_cast<Player*>(device->pUserData)->fill(static_cast<float*>(output), static_cast<int>(frames));
-}
-
-void midiCallback(double, std::vector<unsigned char>* message, void* user) {
-  if (message->empty()) return;
-  LiveRing& ring = static_cast<Player*>(user)->ring();
-  const unsigned char status = (*message)[0] & 0xF0;
-  LiveCommand c;
-  if (message->size() >= 3 && status == 0x90 && (*message)[2] > 0) {
-    c.kind = LiveCommand::NoteOn; c.note = (*message)[1]; c.vel = (*message)[2] / 127.0;
-  } else if (message->size() >= 3 && (status == 0x80 || status == 0x90)) {
-    c.kind = LiveCommand::NoteOff; c.note = (*message)[1];
-  } else if (message->size() >= 3 && status == 0xB0 && ((*message)[1] == 123 || (*message)[1] == 120)) {
-    c.kind = LiveCommand::AllOff;
-  } else {
-    return;
-  }
-  ring.push(c);
 }
 
 void usage() {

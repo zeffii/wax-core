@@ -3,6 +3,7 @@
 // window: offline.cpp renders it to a file, the live player feeds it to a sound device.
 #pragma once
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -26,6 +27,8 @@ public:
   Sequencer& sequencer() { return sequencer_; }
   const std::vector<std::string>& warnings() const { return warnings_; }          // what the song uses that is not ported yet
   const std::vector<std::string>& instrumentIds() const { return instrumentIds_; }   // in the order of the file
+  // Short headings for the cells of a lane's rows ("N1", "V1", "T2", the parameter's name, "CMD"); empty for an unknown lane.
+  const std::vector<std::string>& columnLabels(const std::string& laneId) const;
 
 private:
   ParamRegistry registry_;
@@ -33,6 +36,7 @@ private:
   Sequencer sequencer_;
   std::vector<std::string> warnings_;
   std::vector<std::string> instrumentIds_;
+  std::map<std::string, std::vector<std::string>> labels_;
 };
 
 }  // namespace wax

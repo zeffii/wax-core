@@ -162,6 +162,58 @@ if(WAX_LIVE)
   # Other people's code: no warnings from it.
   set_source_files_properties(tools/miniaudio_impl.cpp third_party/rtmidi/RtMidi.cpp PROPERTIES COMPILE_OPTIONS
     "$<IF:$<CXX_COMPILER_ID:MSVC>,/W0,-w>")
+  target_sources(waxlive PRIVATE src/live/audio_out.cpp)
+  target_link_libraries(waxlive PUBLIC waxcore)
   add_executable(wax-play tools/wax_play.cpp)
   target_link_libraries(wax-play PRIVATE waxcore waxlive)
+
+  # The window: SDL3 (fetched at configure time, built static, video only) and Dear ImGui (vendored). Off with -DWAX_GUI=OFF.
+  option(WAX_GUI "Build wax-app, the window" ON)
+  if(WAX_GUI)
+    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+    set(SDL_INSTALL OFF CACHE BOOL "" FORCE)
+    set(SDL_AUDIO OFF CACHE BOOL "" FORCE)        # sound is miniaudio's
+    set(SDL_CAMERA OFF CACHE BOOL "" FORCE)
+    set(SDL_JOYSTICK OFF CACHE BOOL "" FORCE)
+    set(SDL_HAPTIC OFF CACHE BOOL "" FORCE)
+    set(SDL_HIDAPI OFF CACHE BOOL "" FORCE)
+    set(SDL_SENSOR OFF CACHE BOOL "" FORCE)
+    set(SDL_POWER OFF CACHE BOOL "" FORCE)
+    set(SDL_GPU OFF CACHE BOOL "" FORCE)
+    if(UNIX AND NOT APPLE)
+      # SDL3 needs the X11 development packages to open a real window. Without them (a CI machine, a server) it is
+      # built with its dummy video driver: the app runs and draws, nowhere, which is enough to test it.
+      find_package(PkgConfig QUIET)
+      if(PkgConfig_FOUND)
+        pkg_check_modules(WAX_XCURSOR QUIET xcursor xext xi xrandr xfixes xscrnsaver xkbcommon)
+      endif()
+      if(NOT WAX_XCURSOR_FOUND)
+        message(STATUS "X11 development files not found: wax-app is built with SDL's dummy video driver only")
+        set(SDL_X11 OFF CACHE BOOL "" FORCE)
+        set(SDL_WAYLAND OFF CACHE BOOL "" FORCE)
+        set(SDL_KMSDRM OFF CACHE BOOL "" FORCE)
+      endif()
+    endif()
+    FetchContent_Declare(sdl3 GIT_REPOSITORY https://github.com/libsdl-org/SDL.git GIT_TAG release-3.4.8 GIT_SHALLOW TRUE)
+    FetchContent_MakeAvailable(sdl3)
+    add_library(waximgui STATIC
+      third_party/imgui/imgui.cpp third_party/imgui/imgui_draw.cpp third_party/imgui/imgui_tables.cpp
+      third_party/imgui/imgui_widgets.cpp third_party/imgui/imgui_impl_sdl3.cpp third_party/imgui/imgui_impl_sdlrenderer3.cpp)
+    target_include_directories(waximgui PUBLIC third_party/imgui third_party)
+    target_link_libraries(waximgui PUBLIC SDL3::SDL3)
+    set_source_files_properties(
+      third_party/imgui/imgui.cpp third_party/imgui/imgui_draw.cpp third_party/imgui/imgui_tables.cpp
+      third_party/imgui/imgui_widgets.cpp third_party/imgui/imgui_impl_sdl3.cpp third_party/imgui/imgui_impl_sdlrenderer3.cpp
+      PROPERTIES COMPILE_OPTIONS "$<IF:$<CXX_COMPILER_ID:MSVC>,/W0,-w>")
+    add_executable(wax-app tools/wax_app.cpp src/app/theme.cpp src/app/pattern_view.cpp)
+    target_include_directories(wax-app PRIVATE third_party/imgui)
+    target_link_libraries(wax-app PRIVATE waxcore waxlive waximgui)
+    if(MSVC)
+      # No console window behind the app, but keep main().
+      set_target_properties(wax-app PROPERTIES WIN32_EXECUTABLE ON)
+      target_link_options(wax-app PRIVATE /ENTRY:mainCRTStartup)
+    endif()
+  endif()
 endif()
