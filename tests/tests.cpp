@@ -177,6 +177,8 @@ int main() {
   testRenderSong("saturator");
   testRenderSong("bongo");
   testRenderSong("membrane");
+  testRenderSong("cardinal-eco");
+  testRenderSong("cardinal");
   testRenderSong("drumsynth");
   testRenderSong("waveshaper");
   testRenderSong("combringtransient");

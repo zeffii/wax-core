@@ -37,6 +37,7 @@ void registerIslands(NodeRegistry& registry);
 void registerGate(NodeRegistry& registry);
 void registerLadder(NodeRegistry& registry);
 void registerEq(NodeRegistry& registry);
+void registerCardinal(NodeRegistry& registry);
 void registerMembrane(NodeRegistry& registry);
 void registerBongo(NodeRegistry& registry);
 void registerDrumSynth(NodeRegistry& registry);

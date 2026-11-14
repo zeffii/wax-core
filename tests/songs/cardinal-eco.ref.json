@@ -1,0 +1,19 @@
+{
+  "song": "cardinal-eco.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.131901,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "0b8f1f4e710edc43f9bf7a2e354f0ed287c34eea141b88a65f0273089865589b",
+  "nodeTypes": [
+    "bus-in",
+    "cardinal",
+    "out",
+    "prismacanyon",
+    "tempo",
+    "voices"
+  ]
+}

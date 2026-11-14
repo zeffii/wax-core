@@ -1,0 +1,19 @@
+{
+  "song": "cardinal.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.415403,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "cde575502ec5ec49fcb906f3cf197f48729d3e9cbb5eb333b187249030608581",
+  "nodeTypes": [
+    "bus-in",
+    "cardinal",
+    "out",
+    "prismacanyon",
+    "tempo",
+    "voices"
+  ]
+}
