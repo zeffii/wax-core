@@ -1,0 +1,19 @@
+{
+  "song": "hpssperc.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.43366,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "b1500a983b5c9167f808dcb17f755741136133f3200dc0d8cfe2a8cd5be517af",
+  "nodeTypes": [
+    "bus-in",
+    "hpss",
+    "lone",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}

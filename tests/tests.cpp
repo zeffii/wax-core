@@ -197,6 +197,10 @@ int main() {
   testRenderSong("notepan");
   testRenderSong("notepancluster");
   testRenderSong("notepanrandom");
+  testRenderSong("hpss");
+  testRenderSong("hpssperc");
+  testRenderSong("bodyblur");
+  testRenderSong("bodyblurbig");
   testRenderSong("cardinal");
   testRenderSong("drumsynth");
   testRenderSong("waveshaper");

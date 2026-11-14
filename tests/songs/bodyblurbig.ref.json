@@ -1,0 +1,19 @@
+{
+  "song": "bodyblurbig.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.454309,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "6cad2aa0d70b59bd6bd5181ae792343ef054d4ecc2d08f4e180f460980fd758f",
+  "nodeTypes": [
+    "bodyblur",
+    "bus-in",
+    "lone",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}

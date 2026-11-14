@@ -49,6 +49,8 @@ void registerRange(NodeRegistry& registry);
 void registerEnvFx(NodeRegistry& registry);
 void registerCtrl(NodeRegistry& registry);
 void registerNotePan(NodeRegistry& registry);
+void registerHpss(NodeRegistry& registry);
+void registerBodyBlur(NodeRegistry& registry);
 void registerSweep(NodeRegistry& registry);
 void registerExciter(NodeRegistry& registry);
 void registerCardinal(NodeRegistry& registry);

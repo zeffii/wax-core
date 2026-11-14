@@ -46,6 +46,8 @@ const NodeRegistry& builtinNodes() {
     registerEnvFx(r);
     registerCtrl(r);
     registerNotePan(r);
+    registerHpss(r);
+    registerBodyBlur(r);
     registerSweep(r);
     registerExciter(r);
     registerCardinal(r);

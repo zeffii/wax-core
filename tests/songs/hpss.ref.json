@@ -1,0 +1,19 @@
+{
+  "song": "hpss.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.099841,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "b95ad489ef2901155fb55d3c25faab935a66db2ab8f1fa4750f03600d0662d4c",
+  "nodeTypes": [
+    "bus-in",
+    "hpss",
+    "lone",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}
