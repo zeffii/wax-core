@@ -1,6 +1,8 @@
 #include "edit/cell_editor.h"
 
 #include <algorithm>
+#include <chrono>
+#include <set>
 #include <cstdio>
 #include <sstream>
 
@@ -104,9 +106,49 @@ CellEditor::Place CellEditor::place() const {
 
 bool CellEditor::onPattern() const { return place().pattern != nullptr; }
 
+bool CellEditor::createPatternHere() {
+  const Project& project = document_.project();
+  const Lane* lane = nullptr;
+  for (const Lane& l : project.lanes) if (l.id == lane_) lane = &l;
+  if (!lane || columns_.empty()) return false;
+  const int start = tick_ / kNewPatternRows * kNewPatternRows;
+  const int length = std::min(kNewPatternRows, project.song.length - start);
+  if (length < 1) return false;
+  for (const Placement& p : lane->placements) if (p.start == start) return false;   // one already starts there
+  const std::vector<RowOwner> owners = rowOwners(*lane, project.song.length);
+  if (owners[static_cast<std::size_t>(start)].pattern >= 0) return false;            // one plays there
+  std::set<int> used;
+  for (const Pattern& p : lane->patterns) used.insert(p.index);
+  int index = 0;
+  while (used.count(index)) index++;
+  if (index > 255) return false;
+  static int counter = 0;
+  Pattern pattern;
+  pattern.id = std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count()) + "-" + std::to_string(counter++);
+  pattern.index = index;
+  pattern.name = "pat" + hexText(index, 2);
+  std::string blank;
+  for (std::size_t i = 0; i < columns_.size(); i++) blank += (i ? " " : "") + tokenBlank(columns_[i].token);
+  pattern.rows.assign(static_cast<std::size_t>(kNewPatternRows), blank);
+  Placement placement;
+  placement.pattern = pattern.id;
+  placement.start = start;
+  placement.length = length;
+  document_.apply(std::make_unique<AddPattern>(lane_, pattern, placement));
+  return true;
+}
+
 bool CellEditor::setCell(const std::string& text, bool foldIntoPrevious) {
-  const Place at = place();
-  if (!at.pattern || cell_ >= static_cast<int>(columns_.size())) return false;
+  Place at = place();
+  if (cell_ >= static_cast<int>(columns_.size())) return false;
+  bool created = false;
+  if (!at.pattern) {
+    if (!createPatternHere()) return false;
+    created = true;
+    at = place();
+    if (!at.pattern) return false;
+  }
+  foldIntoPrevious = foldIntoPrevious || created;
   const std::string& row = at.pattern->rows[static_cast<std::size_t>(at.row)];
   const std::string updated = rowWithCell(row, columns_, cell_, text);
   document_.apply(std::make_unique<SetRow>(lane_, at.pattern->id, at.row, updated), foldIntoPrevious);

@@ -37,7 +37,10 @@ public:
   // What the cursor's cell takes. Spacers take nothing.
   bool onNoteCell() const;
   bool onHexCell() const;
-  bool onPattern() const;   // a pattern is under the cursor's tick (there is nothing to edit between patterns)
+  bool onPattern() const;   // a pattern is under the cursor's tick
+  // Typing where no pattern plays makes one: 16 rows, starting at the multiple of 16 at or just below the cursor, when nothing
+  // plays or starts there. (Anything else: the typing does nothing.)
+  static constexpr int kNewPatternRows = 16;
 
   // Typing. Each returns false when nothing was changed (no pattern here, or the cell does not take it).
   bool typeNote(int midi);          // a note cell (or a relative one, from its root)
@@ -63,6 +66,7 @@ private:
     int row = 0;
   };
   Place place() const;
+  bool createPatternHere();
   bool setCell(const std::string& text, bool foldIntoPrevious);
   void advance();
 };

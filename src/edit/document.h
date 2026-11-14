@@ -34,12 +34,32 @@ public:
   std::string label() const override { return "Edit row"; }
   std::string lane() const override { return lane_; }
   bool absorb(const Edit& next) override;
+  const std::string& patternId() const { return pattern_; }
+  int row() const { return row_; }
+  const std::string& text() const { return text_; }
 
 private:
   std::string lane_, pattern_;
   int row_;
   std::string text_, before_;
   bool applied_ = false;
+};
+
+// A new pattern and where it is placed. Typing into the first cell of a new pattern folds into this edit, so one undo takes
+// the pattern and what was typed in it away together.
+class AddPattern final : public Edit {
+public:
+  AddPattern(std::string lane, Pattern pattern, Placement placement);
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "New pattern"; }
+  std::string lane() const override { return lane_; }
+  bool absorb(const Edit& next) override;
+
+private:
+  std::string lane_;
+  Pattern pattern_;
+  Placement placement_;
 };
 
 // Puts blank text in a row's place and pushes the rows below it down one; the last row falls off the end (it comes back on undo).

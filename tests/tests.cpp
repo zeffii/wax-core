@@ -341,7 +341,7 @@ void testCellEditor() {
   const auto row = [&](int i) { return doc.project().lanes[0].patterns[0].rows[static_cast<std::size_t>(i)]; };
 
   ed.moveTo(0, 0);
-  check(!ed.onPattern() && !ed.typeNote(60), "nothing can be typed where no pattern plays");
+  check(ed.onPattern() == false, "no pattern plays on tick 0");
   ed.moveTo(2, 0);
   check(ed.onPattern() && ed.onNoteCell(), "the cursor finds the pattern and the kind of cell");
   check(ed.typeNote(61) && row(0) == "C#4 .. .... ......" && ed.tick() == 3, "a note is written and the cursor steps down");
@@ -380,7 +380,45 @@ void testCellEditor() {
   std::printf("ok: cell editor\n");
 }
 
+
+void testNewPattern() {
+  wax::Project project;
+  project.song.length = 40;
+  wax::Lane lane;
+  lane.id = "L1";
+  project.lanes.push_back(lane);
+  std::vector<wax::Column> columns(2);
+  columns[0].kind = wax::ColumnKind::Note; columns[0].token = wax::Token::Note;
+  columns[1].kind = wax::ColumnKind::Vel;  columns[1].token = wax::Token::Hex2;
+  wax::Document doc(project);
+  wax::CellEditor ed(doc);
+  ed.setLane("L1", columns);
+  const auto& l = [&]() -> const wax::Lane& { return doc.project().lanes[0]; };
+
+  ed.moveTo(21, 0);
+  check(ed.typeNote(60) && l().patterns.size() == 1 && l().placements.size() == 1, "typing where no pattern plays makes one");
+  check(l().placements[0].start == 16 && l().placements[0].length == 16 && l().patterns[0].rows.size() == 16, "it is 16 rows, at the multiple of 16 below the cursor");
+  check(l().patterns[0].rows[5] == "C-4 .." && l().patterns[0].name == "pat00" && l().patterns[0].index == 0, "the note is in the right row of the new pattern");
+  check(ed.tick() == 22, "and the cursor stepped on");
+  ed.moveTo(22, 1);
+  ed.typeHexDigit(4); ed.typeHexDigit(8);
+  doc.undo();
+  check(l().patterns[0].rows[6] == "... .." && l().patterns.size() == 1, "later typing is its own undo step");
+  doc.undo();
+  check(l().patterns.empty() && l().placements.empty() && !doc.canUndo(), "one undo takes the new pattern and its first note away");
+  doc.redo();
+  check(l().patterns.size() == 1 && l().patterns[0].rows[5] == "C-4 ..", "redo brings both back");
+
+  ed.moveTo(36, 0);
+  check(ed.typeNote(62) && l().placements.size() == 2 && l().placements[1].start == 32 && l().placements[1].length == 8, "a pattern at the end of the song is cut to fit it");
+  check(l().patterns[1].index == 1 && l().patterns[1].name == "pat01", "the next pattern takes the next index");
+  ed.moveTo(33, 0);
+  check(ed.onPattern() && !ed.typeNote(0) == false, "typing inside a pattern writes into it");
+  std::printf("ok: new patterns\n");
+}
+
 int main() {
+  testNewPattern();
   testCellEditor();
   testLiveEdit();
   testDocument();

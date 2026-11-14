@@ -57,6 +57,38 @@ bool SetRow::absorb(const Edit& next) {
   return true;
 }
 
+AddPattern::AddPattern(std::string lane, Pattern pattern, Placement placement)
+    : lane_(std::move(lane)), pattern_(std::move(pattern)), placement_(std::move(placement)) {}
+
+void AddPattern::apply(Project& project) {
+  for (Lane& lane : project.lanes) {
+    if (lane.id != lane_) continue;
+    lane.patterns.push_back(pattern_);
+    lane.placements.push_back(placement_);
+    return;
+  }
+  throw std::out_of_range("no lane " + lane_);
+}
+
+void AddPattern::revert(Project& project) {
+  for (Lane& lane : project.lanes) {
+    if (lane.id != lane_) continue;
+    for (std::size_t i = lane.patterns.size(); i-- > 0;) if (lane.patterns[i].id == pattern_.id) { lane.patterns.erase(lane.patterns.begin() + static_cast<long>(i)); break; }
+    for (std::size_t i = lane.placements.size(); i-- > 0;) {
+      if (lane.placements[i].pattern == pattern_.id && lane.placements[i].start == placement_.start) { lane.placements.erase(lane.placements.begin() + static_cast<long>(i)); break; }
+    }
+    return;
+  }
+}
+
+bool AddPattern::absorb(const Edit& next) {
+  const auto* row = dynamic_cast<const SetRow*>(&next);
+  if (!row || row->lane() != lane_ || row->patternId() != pattern_.id) return false;
+  if (row->row() < 0 || row->row() >= static_cast<int>(pattern_.rows.size())) return false;
+  pattern_.rows[static_cast<std::size_t>(row->row())] = row->text();   // redo brings the pattern back with what was typed in it
+  return true;
+}
+
 InsertRow::InsertRow(std::string lane, std::string pattern, int row, std::string blank)
     : lane_(std::move(lane)), pattern_(std::move(pattern)), row_(row), blank_(std::move(blank)) {}
 
