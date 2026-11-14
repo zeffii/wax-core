@@ -1,14 +1,11 @@
 // Vocoder: the spectrum of the `voice` input is measured in a bank of bandpass filters, and each band's loudness is
-// imposed on the same band of the `carrier` input. Bands are log-spaced between low and high; analysis and synthesis
-// are two-pole bandpasses, two in series each. `shift` moves the synthesis bands up or down against the analysis bands
+// imposed on the same band of the `carrier` input (or of a built-in buzz when nothing is wired to carrier). Bands are
+// log-spaced between low and high; analysis and synthesis are two-pole bandpasses, two in series each. `shift` moves the synthesis bands up or down against the analysis bands
 // (formant shift), `sibilance` lets the voice's own highs through so consonants stay crisp.
 // Port of webtracker src/audio/nodes/vocoder.js.
-//
-// (The JS also has a built-in buzz for when nothing is wired to carrier, set by `tune` and `noise`. It can never be
-// heard there: an unwired input still arrives as a buffer of silence, which the node takes for a carrier. This port
-// does the same, so the two parameters are kept and do nothing.)
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <string>
 
 #include "core/js_math.h"
@@ -41,7 +38,8 @@ double bandpass(const double* c, double* s, double x) {
 
 class Vocoder final : public Node {
 public:
-  explicit Vocoder(const NodeContext& context) : sr_(context.sampleRate) {}
+  explicit Vocoder(const NodeContext& context)
+      : sr_(context.sampleRate), carrierOn_(context.connected.size() > 1 && context.connected[1]) {}
 
   void process(const float* const* inputs, float* const* outputs, int n, const float* params, const int* slots) override {
     const float* voice = inputs[0];
@@ -49,6 +47,7 @@ public:
     float* out = outputs[0];
     const int bands = jsRoundInt(params[slots[kBands]]);
     const double low = params[slots[kLow]], high = std::max(static_cast<double>(params[slots[kHigh]]), low * 2);
+    const double hz = params[slots[kTune]], noiseAmt = params[slots[kNoise]], dt = hz / sr_;
     const double q = params[slots[kQ]], shift = params[slots[kShift]], sib = params[slots[kSibilance]];
     if (!set_ || bands != bands_ || low != low_ || high != high_ || q != q_ || shift != shift_) {
       set_ = true;
@@ -69,7 +68,24 @@ public:
     const double level = params[slots[kLevel]] * 10 * std::sqrt(16.0 / bands);
     const double gHp = std::tan(kPi * 5000 / sr_), hk = 1.4142, ha1 = 1 / (1 + gHp * (gHp + hk));
     for (int i = 0; i < n; i++) {
-      const double x = voice[i], c = carrier[i];
+      const double x = voice[i];
+      double c;
+      if (carrierOn_) {
+        c = carrier[i];
+      } else {   // built-in carrier: a band-limited sawtooth plus noise
+        phase_ += dt;
+        if (phase_ >= 1) phase_ -= 1;
+        double saw = 2 * phase_ - 1;
+        if (phase_ < dt) {
+          const double t = phase_ / dt;
+          saw -= t + t - t * t - 1;
+        } else if (phase_ > 1 - dt) {
+          const double t = (phase_ - 1) / dt;
+          saw -= t * t + t + t + 1;
+        }
+        rng_ = rng_ * 1664525u + 1013904223u;
+        c = saw * 0.6 + noiseAmt * 0.6 * (rng_ / 2147483648.0 - 1);
+      }
       double sum = 0;
       for (int b = 0; b < nb; b++) {
         const int o = b * 4;
@@ -92,6 +108,9 @@ public:
 
 private:
   double sr_;
+  bool carrierOn_;      // something is wired to carrier; otherwise the built-in buzz plays
+  double phase_ = 0;
+  uint32_t rng_ = 12345;
   // per band: analysis (two stages) and synthesis (two stages) states [ic1, ic2] and coefficients [a1, a2, a3, k]
   double analysisState_[kMaxBands * 4] = {}, synthState_[kMaxBands * 4] = {}, env_[kMaxBands] = {};
   double analysisCoef_[kMaxBands * 4] = {}, synthCoef_[kMaxBands * 4] = {};
