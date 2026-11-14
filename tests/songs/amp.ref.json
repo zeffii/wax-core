@@ -1,0 +1,19 @@
+{
+  "song": "amp.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.220654,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "5b7ebb7b4efa2e881dcf9b75fd87c82acb93a7d9d544302ec1e420756c66ecc7",
+  "nodeTypes": [
+    "amp",
+    "bus-in",
+    "lone",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}

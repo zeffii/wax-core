@@ -1,0 +1,19 @@
+{
+  "song": "ampclean.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.427615,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "96ab85b5c6e8024229b0b6feaf4dea69307e2e8179a17429f931cfdece177888",
+  "nodeTypes": [
+    "amp",
+    "bus-in",
+    "lone",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}

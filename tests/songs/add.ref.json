@@ -1,0 +1,21 @@
+{
+  "song": "add.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.209069,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "049eb476853ab1c2b82755475fb697f613f513b751dd60e5f036627a90c398fd",
+  "nodeTypes": [
+    "add",
+    "bus-in",
+    "lfo",
+    "lone",
+    "out",
+    "prismacanyon",
+    "tempo",
+    "voices"
+  ]
+}

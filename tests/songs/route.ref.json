@@ -1,0 +1,20 @@
+{
+  "song": "route.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.226272,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "e915f32e7be60046193605e0e2d3e4fae934c12c5cc5b377041675c618a2933e",
+  "nodeTypes": [
+    "bus-in",
+    "lone",
+    "out",
+    "prismacanyon",
+    "route",
+    "tempo",
+    "voices"
+  ]
+}
