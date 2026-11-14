@@ -37,6 +37,14 @@ add_library(waxcore
   src/engine/sequencer.cpp
   src/engine/offline.cpp
   src/io/wav.cpp
+  src/nodeseq/nodeseq.cpp
+  src/nodeseq/seq_parse.cpp
+  src/nodeseq/types.cpp
+  src/nodeseq/types_time.cpp
+  src/nodeseq/types_values.cpp
+  src/nodeseq/types_chords.cpp
+  src/nodeseq/types_output.cpp
+  src/nodeseq/types_logic.cpp
   src/nodes/all_nodes.cpp
   src/nodes/waves.cpp
   src/nodes/plumbing.cpp

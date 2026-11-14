@@ -13,6 +13,7 @@ public:
 
 }  // namespace
 
+// (also registers nsgroups, the other machine that only holds values for the sequencer to read)
 void registerTempo(NodeRegistry& registry) {
   NodeType type;
   type.type = "tempo";
@@ -32,6 +33,15 @@ void registerTempo(NodeRegistry& registry) {
   };
   type.create = [](const NodeContext&) { return std::make_unique<Tempo>(); };
   registry.add(std::move(type));
+
+  // The Node Sequencer's group switches as a machine of their own: eight on-off values a pattern lane can write, which
+  // start and stop the groups of nodes in the Node Sequencer's graph. It has no ports and makes no sound.
+  // Port of webtracker src/audio/nodes/nsgroups.js.
+  NodeType groups;
+  groups.type = "nsgroups";
+  for (int i = 1; i <= 8; i++) groups.params.push_back({"g" + std::to_string(i), 0, 1, 1, true});
+  groups.create = [](const NodeContext&) { return std::make_unique<Tempo>(); };
+  registry.add(std::move(groups));
 }
 
 }  // namespace wax

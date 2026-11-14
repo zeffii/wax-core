@@ -25,6 +25,7 @@ The programs land in `build\Release\`. Or open the folder in Visual Studio (File
 | `src/core/` | the parameter block, what a node is, the list of node types, the dice |
 | `src/graph/` | the graph compiler: an instrument's nodes and wires become a list of nodes to run and the buffers between them |
 | `src/engine/` | the runtime (runs the graphs, voices, sleep), the sequencer (plays the patterns), the limiter, offline rendering |
+| `src/nodeseq/` | the Node Sequencer: a graph of event and control wires that plays beside the patterns |
 | `src/seq/` | pattern cells and columns, and laying a lane's patterns out along the song |
 | `src/nodes/` | the machines' DSP, one file per node, each a translation of `webtracker/src/audio/nodes/<name>.js` |
 | `src/project/` | reading `.wax` files, and the master machine every project gets |

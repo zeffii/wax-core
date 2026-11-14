@@ -17,6 +17,7 @@
 
 #include "core/node.h"
 #include "core/node_registry.h"
+#include "core/random.h"
 #include "engine/sleep.h"
 #include "graph/compile.h"
 
@@ -65,6 +66,9 @@ public:
   double sampleRate() const { return sampleRate_; }
   float* params() { return params_; }
 
+  // The engine's dice: one stream for everything that calls for a random number where the JS calls Math.random.
+  Xorshift32& dice() { return dice_; }
+
   MasterSlots masterSlots;   // set by the sequencer when it is given the song
 
   // True once a song has switched on something this engine does not do yet (the render then differs from the web app's).
@@ -92,6 +96,7 @@ private:
   const NodeRegistry& nodeTypes_;
   int maxBlock_;
   Clock clock_;
+  Xorshift32 dice_;
   Bus bus_;
 
   std::vector<std::string> loadOrder_;                                        // instrument ids, in the order they were first loaded

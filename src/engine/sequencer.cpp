@@ -77,6 +77,8 @@ Sequencer::Sequencer(double sampleRate, GraphRuntime& runtime, int maxBlock)
       runtime_(runtime),
       params_(runtime.params()),
       limiter_(sampleRate),
+      nodeseq_(sampleRate, nodeseq::Io{[&runtime](const std::string& instrument, const NoteEvent& event) { runtime.note(instrument, event); },
+                                       runtime.params(), &runtime.clock(), &runtime.dice()}),
       scratchLeft_(static_cast<std::size_t>(maxBlock), 0.0f),
       scratchRight_(static_cast<std::size_t>(maxBlock), 0.0f) {}
 
@@ -92,6 +94,8 @@ void Sequencer::setSong(const SongSettings& song) {
   if (song.master.present() && changed) resetTempo();
   runtime_.clock().tickSamples = (sampleRate_ * 60) / (song.bpm * song.ticksPerBeat);
 }
+
+void Sequencer::setNodeseq(const Json& graph, const nodeseq::Resolve& resolve) { nodeseq_.load(graph, resolve); }
 
 void Sequencer::resetTempo() {
   const MasterSlots& m = song_.master;
@@ -163,6 +167,10 @@ void Sequencer::play(int from, bool once) {
   tick_ = from >= 0 && from < song_.length ? from : 0;
   songPos_ = tick_;
   countdown_ = 0;
+  subIdx_ = 0;
+  subLen_ = 0;
+  subCountdown_ = 0;
+  nodeseq_.start();
   once_ = once;
   wrapped_ = false;
   playing_ = true;
@@ -171,6 +179,7 @@ void Sequencer::play(int from, bool once) {
 // Stopping lets every voice fade out over its release time.
 void Sequencer::stop() {
   releaseAll();
+  nodeseq_.stop();
   playing_ = false;
 }
 
@@ -325,7 +334,11 @@ void Sequencer::fireTick() {
   if (once_ && wrapped_) { stop(); return; }   // the last row has had its full length
   runtime_.clock().tickId++;   // nodes that count song ticks (the MOD channel) watch this
   for (auto& lane : lanes_) playRow(*lane);
-  // (the Node Sequencer's tick goes here, after the patterns have written their parameters, once it is ported)
+  if (!nodeseq_.empty()) {   // the Node Sequencer's tick, after the patterns have written their parameters (a cell can start or stop a group)
+    const Tempo now = tempo();
+    const int barTicks = std::max(1, jsRoundInt(song_.beatsPerBar)) * now.tpb;
+    nodeseq_.onTick(tick_, now.tpb, barTicks, sampleRate_ * 60 / (now.bpm * now.tpb), now.bpm);
+  }
   if (std::abs(songPos_ - tick_) > 1.5) songPos_ = tick_;   // the end of the song: back on the grid
   if (++tick_ >= song_.length) tick_ = 0;
   if (once_ && tick_ == 0) wrapped_ = true;
@@ -350,14 +363,19 @@ void Sequencer::process(float* left, float* right, int n) {
         group = std::max(1, jsRoundInt(now.tpb / 4.0));
         tickLen_ = 2 * samplesPerTick * (first ? now.swing : 1 - now.swing);
         countdown_ += tickLen_;
+        subIdx_ = 0;
+        subLen_ = tickLen_ / nodeseq_.subs();
+        subCountdown_ = subLen_;
       }
       span = std::min(span, std::max(1, static_cast<int>(std::ceil(countdown_))));   // (also in the pass where the song has just stopped, as the JS does)
+      if (nodeseq_.subs() > 1 && !nodeseq_.empty()) span = std::min(span, std::max(1, static_cast<int>(std::ceil(subCountdown_))));   // the next subtick
     }
     Clock& clock = runtime_.clock();
     clock.playing = playing_;
     clock.songPos = songPos_;
     clock.tickSamples = samplesPerTick;
-    // (the lane curves and the Node Sequencer's control signals are applied here, once they are ported)
+    // (the lane curves are applied here, once they are ported)
+    if (playing_ && !nodeseq_.empty()) nodeseq_.control(span);
     runtime_.process(scratchLeft_.data(), scratchRight_.data(), span);
 
     const MasterSlots& m = song_.master;
@@ -380,7 +398,18 @@ void Sequencer::process(float* left, float* right, int n) {
     if (playing_) songPos_ += span / samplesPerTick;
     std::copy(scratchLeft_.begin(), scratchLeft_.begin() + span, left + done);
     std::copy(scratchRight_.begin(), scratchRight_.begin() + span, right + done);
-    if (playing_) countdown_ -= span;
+    if (playing_) {
+      countdown_ -= span;
+      if (!nodeseq_.empty() && nodeseq_.subs() > 1) {
+        // a subtick starts (the first of a tick came with the tick itself; the last ends where the next tick begins)
+        subCountdown_ -= span;
+        if (subCountdown_ <= 0 && subIdx_ + 1 < nodeseq_.subs()) {
+          subIdx_++;
+          nodeseq_.onSub(subIdx_);
+          subCountdown_ += subLen_;
+        }
+      }
+    }
     done += span;
   }
 }

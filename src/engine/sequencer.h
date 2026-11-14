@@ -2,7 +2,7 @@
 // into the parameter block, and sends note events to the lanes' instruments.
 // Port of webtracker src/audio/sequencer.js.
 //
-// Not ported yet: lane curves (automation), the Node Sequencer, and the messages a preset sends to nodes.
+// Not ported yet: lane curves (automation) and the messages a preset sends to nodes.
 #pragma once
 
 #include <cstdint>
@@ -12,6 +12,7 @@
 
 #include "engine/limiter.h"
 #include "engine/runtime.h"
+#include "nodeseq/nodeseq.h"
 #include "seq/lane.h"
 
 namespace wax {
@@ -34,6 +35,9 @@ public:
 
   void setSong(const SongSettings& song);
   void setLane(const PreparedLane& lane);
+  // The graph of the Node Sequencer (the song's `nodeseq`), with what its names mean on this machine.
+  void setNodeseq(const Json& graph, const nodeseq::Resolve& resolve);
+  const nodeseq::NodeSeq& nodeseq() const { return nodeseq_; }
 
   // From a tick. With `once`, the song is played one time: when its last row has had its full length the sequencer
   // stops (every note is released) instead of starting again from the top.
@@ -69,6 +73,10 @@ private:
   GraphRuntime& runtime_;
   float* params_;
   Limiter limiter_;
+  // the Node Sequencer runs on the same clock, subdividing each tick (the swing of a tick carries into its subticks)
+  nodeseq::NodeSeq nodeseq_;
+  int subIdx_ = 0;
+  double subLen_ = 0, subCountdown_ = 0;
   std::vector<float> scratchLeft_, scratchRight_;
 
   SongSettings song_;

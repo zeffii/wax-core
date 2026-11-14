@@ -1,0 +1,24 @@
+{
+  "song": "nodes.wax",
+  "version": "0.772.0",
+  "sampleRate": 44100,
+  "frames": 1699712,
+  "seconds": 38.542,
+  "peak": 0.904446,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "4eff6d3cfd61d80fc9141ab7b70db8ac7014a57c867351eacac81490a9638af1",
+  "nodeTypes": [
+    "bus-in",
+    "duette",
+    "env",
+    "gain",
+    "hat808",
+    "osc",
+    "out",
+    "squelch",
+    "subsynth",
+    "tempo",
+    "voices"
+  ]
+}

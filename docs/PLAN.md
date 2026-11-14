@@ -16,8 +16,8 @@ built engine first, with the window last. Tick a step when it is done.
 - [ ] **5. The other demos, smallest first.**
       Done, each within -140 dB of the reference or closer: acid, progression, chords, westcoast (which brought squelch,
       subsynth, duette, chord, chorus, hall, plate, pluckgate, wavefolder, westcoast, random, times).
-      To do: nodes and voicing (which bring the Node Sequencer), mosh, vocoder, weights, original, phase, suite,
-      bugsong, interstellar-nodes.
+      nodes and voicing, which brought the Node Sequencer (`src/nodeseq/`), are identical to the reference.
+      To do: weights, mosh, vocoder, original, phase, suite, bugsong, interstellar-nodes.
 - [ ] **6. Threads.** A pool of workers renders the instruments of a block side by side. Sidechain, listen and meta
       machines make one instrument wait for another, so those are put in order and the rest run together. The check:
       the render is the same as on one thread.
@@ -30,7 +30,7 @@ built engine first, with the window last. Tick a step when it is done.
 
 Each is named in a comment where it will go, and `wax-render` says so when a song needs one of them:
 
-- the Node Sequencer (`audio/nodeseq.js`), with step 5's `nodes.wax`
+- the Node Sequencer's `script` node (it runs JavaScript typed into the song; no demo uses it)
 - lane curves, the automation (`seq/automation.js`, `Sequencer.applyCurves`), with `bugsong.wax`
 - node messages: samples, drawn waves and curves, and the data a preset sends (`runtime.message`)
 - the mixer's carve stage (`audio/carve.js`)

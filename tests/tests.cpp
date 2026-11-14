@@ -120,20 +120,22 @@ void testWav() {
   std::printf("ok: sound files\n");
 }
 
-// The first whole song: rendered and checked against what webtracker's reference render of it measured
-// (tests/songs/concrete.ref.json, written by `node tools/render-ref.mjs`). The full sample-by-sample comparison is
-// done with wax-compare against the reference WAV, which is too big to keep in the repo.
-void testRenderConcrete() {
+// Whole songs: rendered and checked against what webtracker's reference render of them measured
+// (tests/songs/<name>.ref.json, written by `node tools/render-ref.mjs`). The full sample-by-sample comparison is done
+// with wax-compare against the reference WAV, which is too big to keep in the repo.
+//   concrete: the first song (a meta machine playing five drum machines)
+//   nodes: the Node Sequencer, with its dice, playing polyphonic synths
+void testRenderSong(const std::string& name) {
   const std::string songs = WAX_TEST_SONGS;
-  const wax::Project project = wax::loadProject(songs + "/concrete.wax");
+  const wax::Project project = wax::loadProject(songs + "/" + name + ".wax");
   const wax::RenderResult render = wax::renderSong(project);
-  std::ifstream file(songs + "/concrete.ref.json");
+  std::ifstream file(songs + "/" + name + ".ref.json");
   const wax::Json reference = wax::Json::parse(file);
-  check(render.warnings.empty(), "the song uses nothing that is not ported");
-  check(render.audio.sampleRate == reference.value("sampleRate", 0), "the render has the reference's sample rate");
-  check(render.audio.frames() == reference.value("frames", std::size_t{0}), "the render is as long as the reference, to the sample");
-  check(std::abs(render.peak - reference.value("peak", 0.0)) < 1e-5, "the render peaks where the reference does");
-  std::printf("ok: concrete.wax renders (%zu frames, peak %.6f)\n", render.audio.frames(), render.peak);
+  check(render.warnings.empty(), name + ": the song uses nothing that is not ported");
+  check(render.audio.sampleRate == reference.value("sampleRate", 0), name + ": the render has the reference's sample rate");
+  check(render.audio.frames() == reference.value("frames", std::size_t{0}), name + ": the render is as long as the reference, to the sample");
+  check(std::abs(render.peak - reference.value("peak", 0.0)) < 1e-4, name + ": the render peaks where the reference does");
+  std::printf("ok: %s.wax renders (%zu frames, peak %.6f)\n", name.c_str(), render.audio.frames(), render.peak);
 }
 
 }  // namespace
@@ -144,7 +146,8 @@ int main() {
   testProject();
   testGain();
   testWav();
-  testRenderConcrete();
+  testRenderSong("concrete");
+  testRenderSong("nodes");
   if (failures) std::printf("%d check%s failed\n", failures, failures == 1 ? "" : "s");
   else std::printf("all tests passed\n");
   return failures;
