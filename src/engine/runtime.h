@@ -2,7 +2,7 @@
 // instruments into the mix. It knows nothing about patterns (the sequencer drives it) or about sound cards.
 // Port of webtracker src/audio/runtime.js.
 //
-// Not ported yet (each is named where it would go): the carve stage of the mixer, node messages (samples, drawn curves),
+// Not ported yet (each is named where it would go): the carve stage of the mixer, node messages other than samples (drawn curves, tables),
 // and the things only the page uses (scopes, the Stream Manager's switches and meters).
 #pragma once
 
@@ -44,6 +44,9 @@ public:
 
   // A note for an instrument: to its arp when it has one, else to its voices (see deliver).
   void note(const std::string& instrument, const NoteEvent& event);
+
+  // A sample for one node (every copy of it): the sampler's. Kept, to be sent again when the instrument is rebuilt.
+  void sendSample(const std::string& instrument, const std::string& nodeId, std::shared_ptr<const SampleMessage> message);
 
   // Kill (the ^^^ cell): the instrument fades out quickly, is reset, and is not run until its next note-on.
   void kill(const std::string& instrument);
@@ -115,6 +118,7 @@ private:
   std::map<std::string, std::vector<std::string>> metaTargets_;
   std::optional<std::vector<std::string>> order_;
   std::optional<std::map<std::string, std::vector<Listener>>> followMap_;
+  std::map<std::string, std::shared_ptr<const SampleMessage>> samples_;   // the last sample sent to each node and slot, replayed on a rebuild
   std::map<std::string, int> instancesMade_;   // per kind of dice-rolling node (see NodeContext::nextInstance)
   struct Mix;
   std::map<std::string, std::unique_ptr<Mix>> mixes_;   // the added-together sound of a meta machine's machines, one for each way a sidechain asks for it

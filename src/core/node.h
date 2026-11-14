@@ -56,6 +56,20 @@ struct Clock {
   std::array<std::uint32_t, kParamCapacity> stamps{};   // how often a pattern has written each parameter slot
 };
 
+// A sample as the sampler node is sent it (the 'sample' message of the JS nodes): the audio of one or two channels,
+// the speed it was recorded at, and the levels, loops and slice markers that go with it. Positions are in frames.
+struct SampleMessage {
+  int slot = 0;                    // which of the node's samples this is
+  std::vector<float> data, right;  // `right` stays empty for a mono sample
+  double rate = 44100;
+  double volume = 1, globalVolume = 1, pan = 0;
+  std::vector<double> slices;      // marker frames, sorted
+  bool loopOn = true;              // (a loop only counts when it fits inside the sample)
+  double loopStart = 0, loopEnd = 0, loopXfade = 0;
+  bool susOn = true;
+  double susStart = 0, susEnd = 0, susXfade = 0;
+};
+
 // The whole mix so far in this block, for the master graph's bus-in node.
 struct Bus {
   const float* left = nullptr;
@@ -99,6 +113,9 @@ public:
 
   // A note for this node's instrument (or for its voice, when the instrument has several).
   virtual void note(const NoteEvent&) {}
+
+  // A sample for the node to play (sent when an instrument is loaded, and again if the instrument is rebuilt).
+  virtual void sample(const std::shared_ptr<const SampleMessage>&) {}
 
   // True while the node is still sounding although its output is silent for now (a pulse train between pulses),
   // so its voice is not switched off.

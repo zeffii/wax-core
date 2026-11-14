@@ -13,7 +13,7 @@ built engine first, with the window last. Tick a step when it is done.
 - [x] **4. First song: `concrete.wax`.** Its nodes: osc, env, gain, clap, combperc, hat808, out, bus-in, tempo and
       the hidden sum, fold and delay nodes. `wax-render song.wax out.wav` renders it, and the result is the same as
       the reference to the last bit (on Linux with GCC; other compilers' maths may differ in the last digits).
-- [ ] **5. The other demos, smallest first.** (14 of 15 done)
+- [x] **5. The other demos, smallest first.** (all 15 done)
       Done, each within -140 dB of the reference or closer: acid, progression, chords, westcoast (which brought squelch,
       subsynth, duette, chord, chorus, hall, plate, pluckgate, wavefolder, westcoast, random, times).
       nodes and voicing, which brought the Node Sequencer (`src/nodeseq/`), are identical to the reference.
@@ -21,7 +21,10 @@ built engine first, with the window last. Tick a step when it is done.
       mosh.wax is now sample for sample the same as well (see "Where the maths libraries matter").
       original, phase, suite and interstellar-nodes followed (19 more nodes: filter, noise, crusher, gater, multitap,
       freqshift, phaser, shimmer, shiva, woodblock, specpan, blur, addsynth, arp, tape, string, wavetable, fmsynth, piano),
-      all identical to the reference. To do: bugsong (lane automation curves, drawn data, a few more nodes).
+      all identical to the reference. bugsong, the last, needed lane automation curves (`seq/automation.cpp`), samples sent to
+      nodes (`project/samples.cpp`, `GraphRuntime::sendSample`) and nine more nodes: distortion, dcblock, mix,
+      compressor, flanger, filterpro, oberheim, fourpole and the sampler. It is identical to the reference too, and so
+      are variants of it that switch on the sampler's repeats, grains, filters, vibrato and slides.
 - [ ] **6. Threads.** A pool of workers renders the instruments of a block side by side. Sidechain, listen and meta
       machines make one instrument wait for another, so those are put in order and the rest run together. The check:
       the render is the same as on one thread.

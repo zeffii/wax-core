@@ -48,6 +48,7 @@ const NodeRegistry& builtinNodes() {
     registerFilterPro(r);
     registerOberheim(r);
     registerFourpole(r);
+    registerSampler(r);
     registerMix(r);
     registerDcBlock(r);
     registerDistortion(r);

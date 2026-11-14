@@ -602,7 +602,24 @@ int GraphRuntime::alignment() {
 void GraphRuntime::rebuild(const std::string& id) {
   const CompiledGraph copy = *graphs_.at(id);
   load(copy);
-  // (the samples and drawn curves a node was sent are replayed here, once node messages are ported)
+  for (const auto& [key, message] : samples_) {   // the samples it was sent are put back (drawn curves and the like are not ported yet)
+    const std::size_t first = key.find('\0'), second = key.find('\0', first + 1);
+    if (key.substr(0, first) == id) sendSample(id, key.substr(first + 1, second - first - 1), message);
+  }
+}
+
+void GraphRuntime::sendSample(const std::string& instrument, const std::string& nodeId, std::shared_ptr<const SampleMessage> message) {
+  samples_[instrument + '\0' + nodeId + '\0' + std::to_string(message->slot)] = message;
+  Instrument* inst = find(instrument);
+  if (!inst) return;
+  if (inst->sleep) inst->sleep->woken = true;
+  const auto copies = inst->byId.find(nodeId);
+  if (copies == inst->byId.end()) return;
+  for (RunNode* copy : copies->second) {
+    if (!copy) continue;
+    if (copy->node) copy->node->sample(message);
+    if (copy->rightNode) copy->rightNode->sample(message);
+  }
 }
 
 // Asleep this block? Wakes the machine when something could make it sound. A sleeping machine's buffers hold silence.

@@ -1,4 +1,5 @@
 #include "engine/offline.h"
+#include "project/samples.h"
 
 #include <algorithm>
 #include <cmath>
@@ -76,11 +77,22 @@ RenderResult renderSong(const Project& project, const RenderOptions& options) {
   ParamRegistry registry;
   GraphRuntime runtime(options.sampleRate, registry.values(), nodeTypes, kBlock);
   runtime.setDelayComp(false);
+  const auto samples = decodeSamples(project.samples);
   for (const Instrument& instrument : project.instruments) {
     try {
-      runtime.load(compileGraph(instrument.graph, instrument.id, nodeTypes, registry));
+      runtime.load(compileGraph(graphWithSamplerStereo(instrument, samples), instrument.id, nodeTypes, registry));
     } catch (const std::runtime_error& e) {
       throw std::runtime_error("instrument \"" + instrument.id + "\": " + e.what());
+    }
+    for (const GraphNode& node : instrument.graph.nodes) {   // the samples each node plays, one per slot
+      const std::vector<std::string> ids = sampleSlots(instrument, node.id);
+      for (std::size_t slot = 0; slot < ids.size(); slot++) {
+        const auto found = samples.find(ids[slot]);
+        if (found == samples.end()) continue;
+        auto message = std::make_shared<SampleMessage>(*found->second);
+        message->slot = static_cast<int>(slot);
+        runtime.sendSample(instrument.id, node.id, message);
+      }
     }
   }
   runtime.setMetaSources(metaSourcesOf(project));

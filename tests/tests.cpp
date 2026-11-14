@@ -155,6 +155,9 @@ int main() {
   testRenderSong("effects2");
   testRenderSong("oberheim");
   testRenderSong("fourpole");
+  testRenderSong("sampler-repeats");
+  testRenderSong("sampler-grains");
+  testRenderSong("bugsong");
   if (failures) std::printf("%d check%s failed\n", failures, failures == 1 ? "" : "s");
   else std::printf("all tests passed\n");
   return failures;

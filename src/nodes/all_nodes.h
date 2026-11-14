@@ -62,6 +62,7 @@ void registerFlanger(NodeRegistry& registry);   // flanger
 void registerFilterPro(NodeRegistry& registry);   // filterpro
 void registerOberheim(NodeRegistry& registry);   // oberheim
 void registerFourpole(NodeRegistry& registry);   // fourpole
+void registerSampler(NodeRegistry& registry);   // sampler
 void registerMix(NodeRegistry& registry);   // mix
 void registerDcBlock(NodeRegistry& registry);   // dcblock
 void registerDistortion(NodeRegistry& registry);   // distortion
