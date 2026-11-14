@@ -32,8 +32,8 @@ built engine first, with the window last. Tick a step when it is done.
       but the master is a task that waits for the instruments it hears through sidechains (and for a meta machine's
       machines); the mix is added up afterwards in the order of the file, and the master runs last on the sum. Byte for
       byte the same output on 1, 2, 4 and 8 threads (tests/tests.cpp, testThreads). A sidechain on an instrument that
-      runs later hears nothing, as on one thread. Not guaranteed to be the same on every run: two instruments that
-      both turn into NaN in one block (each is rebuilt, in file order, so it is still the same).
+      runs later hears nothing, as on one thread. The one thing the order of threads could still touch is a loop of
+      sidechains between meta machines (the sound of a meta machine is made once a block, by whoever asks first).
 - [ ] **7. Live sound and MIDI**: miniaudio and RtMidi, a player without a window, keyjazz from a controller.
 - [ ] **8. The window**: Dear ImGui on SDL3. The pattern editor first, then the sequence view, the mixer, parameter
       panels, and the drawn views (Bezier envelopes, the DX loader) last.
