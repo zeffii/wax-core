@@ -26,6 +26,9 @@ public:
   Engine& operator=(const Engine&) = delete;
 
   GraphRuntime& runtime() { return runtime_; }
+  const ParamRegistry& registry() const { return registry_; }
+  // A parameter's value now (the window thread; the audio thread picks it up in its next block). Unknown addresses are ignored.
+  void setParam(const std::string& address, double value);
   Sequencer& sequencer() { return sequencer_; }
   const std::vector<std::string>& warnings() const { return warnings_; }          // what the song uses that is not ported yet
   const std::vector<std::string>& instrumentIds() const { return instrumentIds_; }   // in the order of the file

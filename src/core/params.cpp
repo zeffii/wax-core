@@ -1,5 +1,7 @@
 #include "core/params.h"
 
+#include <atomic>
+
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
@@ -26,7 +28,8 @@ void ParamRegistry::set(const std::string& address, double value) {
   if (slot < 0) throw std::runtime_error("unknown parameter \"" + address + "\"");
   if (!std::isfinite(value)) return;
   const ParamMeta& m = meta(slot);
-  values_[static_cast<std::size_t>(slot)] = static_cast<float>(std::min(m.max, std::max(m.min, value)));
+  // (the window and the sequencer both write, the audio thread reads: a whole-float store, so it never sees half a value)
+  std::atomic_ref<float>(values_[static_cast<std::size_t>(slot)]).store(static_cast<float>(std::min(m.max, std::max(m.min, value))), std::memory_order_relaxed);
 }
 
 float ParamRegistry::get(const std::string& address) const {

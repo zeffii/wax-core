@@ -452,7 +452,34 @@ void testSave() {
   std::printf("ok: saving\n");
 }
 
+void testSetParam() {
+  const std::string songs = WAX_TEST_SONGS;
+  wax::Document doc(wax::loadProject(songs + "/jawharp.wax"));
+  const wax::Instrument& inst = doc.project().instruments[1];
+  const std::string iid = inst.id;
+  const wax::GraphNode* target = nullptr;
+  for (const auto& n : inst.graph.nodes) if (n.params.is_object() && !n.params.empty()) { target = &n; break; }
+  check(target != nullptr, "the song has a node with parameters");
+  const std::string nid = target->id, pname = target->params.begin().key();
+  const wax::Json original = target->params.begin().value();
+  auto value = [&]() { for (const auto& n : doc.project().instruments[1].graph.nodes) if (n.id == nid) return n.params[pname]; return wax::Json(); };
+  doc.apply(std::make_unique<wax::SetParam>(iid, nid, pname, 0.25));
+  for (double v : {0.3, 0.4, 0.5}) doc.apply(std::make_unique<wax::SetParam>(iid, nid, pname, v), true);
+  check(value() == 0.5, "the knob's last value is the one held");
+  check(doc.takeChangedParams().count(iid + "." + nid + "." + pname) == 1, "the change is reported by address");
+  doc.undo();
+  check(value() == original && !doc.canUndo(), "one undo takes the whole drag back");
+  doc.redo();
+  check(value() == 0.5, "redo puts it back");
+  const wax::Project reread = wax::parseProject(wax::serializeProject(doc.project()));
+  bool saved = false;
+  for (const auto& n : reread.instruments[1].graph.nodes) if (n.id == nid) saved = n.params[pname] == 0.5;
+  check(saved, "the edited value is in the saved file");
+  std::printf("ok: parameter edits\n");
+}
+
 int main() {
+  testSetParam();
   testSave();
   testNewPattern();
   testCellEditor();

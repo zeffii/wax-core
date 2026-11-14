@@ -14,4 +14,7 @@ namespace wax {
 // read): that lane keeps playing as it was, and is tried again at the next call.
 std::vector<std::string> syncLanes(Document& document, Engine& engine);
 
+// Sends every parameter changed since the last call to the engine (the value the song now holds for it).
+void syncParams(Document& document, Engine& engine);
+
 }  // namespace wax

@@ -18,6 +18,7 @@
 #include <string>
 #include <vector>
 
+#include "app/param_panel.h"
 #include "app/pattern_view.h"
 #include "app/theme.h"
 #include "imgui_impl_sdl3.h"
@@ -78,6 +79,7 @@ struct Session {
   int rowsRevision = -1;                 // the revision of `doc` that `rows` shows
   bool scrollToCursor = false;
   std::string editStatus;
+  app::ParamPanelState panel;
   std::string path;                      // the file this song was opened from, where Ctrl+S saves it
 
   Session(const std::string& filePath, const Options& options) : project(loadProject(filePath)), path(filePath) {
@@ -302,7 +304,10 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     }
   }
 
-  // The lanes.
+  // The lanes (the panel below them takes the bottom of the window).
+  const float panelHeight = 118 * ImGui::GetIO().FontGlobalScale + 3 * ImGui::GetTextLineHeightWithSpacing();
+  ImGui::BeginChild("lanesArea", ImVec2(0, -panelHeight), false);
+  std::string laneInstrument;
   if (ImGui::BeginTabBar("lanes")) {
     for (const Lane& lane : doc.project().lanes) {
       const std::string label = lane.id + (lane.instrument == lane.id ? "" : "  " + lane.instrument);
@@ -310,6 +315,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       if (!session->pickedTab && lane.id != kMaster) { tabFlags |= ImGuiTabItemFlags_SetSelected; session->pickedTab = true; }
       if (ImGui::BeginTabItem(label.c_str(), nullptr, tabFlags)) {
         selectedLane = lane.id;
+        laneInstrument = lane.instrument;
         editor.setLane(lane.id, session->player->engine().laneColumns(lane.id));
         app::CursorView cursor;
         cursor.show = session->edit;
@@ -327,6 +333,9 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     }
     ImGui::EndTabBar();
   }
+  ImGui::EndChild();
+  ImGui::Separator();
+  if (!laneInstrument.empty() && app::drawParamPanel(session->panel, doc, player.engine(), laneInstrument)) syncParams(doc, player.engine());
   ImGui::End();
 }
 

@@ -48,6 +48,18 @@ std::string serializeProject(const Project& project) {
   Json lanes = Json::array();
   for (const Lane& lane : project.lanes) lanes.push_back(laneJson(lane));
   out["lanes"] = std::move(lanes);
+  // node parameters as edited
+  for (const Instrument& instrument : project.instruments) {
+    if (!out.contains("instruments") || !out["instruments"].contains(instrument.id)) continue;
+    Json& graph = out["instruments"][instrument.id]["graph"];
+    if (!graph.is_object() || !graph.contains("nodes")) continue;
+    for (Json& node : graph["nodes"]) {
+      for (const GraphNode& edited : instrument.graph.nodes) {
+        if (edited.id != node.value("id", std::string())) continue;
+        if (edited.params.is_object() && (!edited.params.empty() || node.contains("params"))) node["params"] = edited.params;
+      }
+    }
+  }
   return out.dump(1);
 }
 

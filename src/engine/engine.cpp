@@ -121,6 +121,10 @@ Engine::Engine(const Project& project, double sampleRate, int threads)
 
 }
 
+void Engine::setParam(const std::string& address, double value) {
+  if (registry_.slotOf(address) >= 0) registry_.set(address, value);
+}
+
 bool Engine::sendLane(const Project& project, const std::string& laneId) {
   for (const Lane& source : project.lanes) {
     if (source.id != laneId) continue;

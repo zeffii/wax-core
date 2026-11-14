@@ -89,6 +89,45 @@ bool AddPattern::absorb(const Edit& next) {
   return true;
 }
 
+namespace {
+
+GraphNode& findGraphNode(Project& project, const std::string& instrumentId, const std::string& nodeId) {
+  for (Instrument& instrument : project.instruments) {
+    if (instrument.id != instrumentId) continue;
+    for (GraphNode& node : instrument.graph.nodes) if (node.id == nodeId) return node;
+  }
+  throw std::out_of_range("no node " + nodeId + " in " + instrumentId);
+}
+
+}  // namespace
+
+SetParam::SetParam(std::string instrument, std::string node, std::string param, double value)
+    : instrument_(std::move(instrument)), node_(std::move(node)), param_(std::move(param)), value_(value) {}
+
+void SetParam::apply(Project& project) {
+  GraphNode& node = findGraphNode(project, instrument_, node_);
+  if (!node.params.is_object()) node.params = Json::object();
+  if (!captured_) {
+    had_ = node.params.contains(param_);
+    if (had_) before_ = node.params[param_];
+    captured_ = true;
+  }
+  node.params[param_] = value_;
+}
+
+void SetParam::revert(Project& project) {
+  GraphNode& node = findGraphNode(project, instrument_, node_);
+  if (had_) node.params[param_] = before_;
+  else node.params.erase(param_);
+}
+
+bool SetParam::absorb(const Edit& next) {
+  const auto* other = dynamic_cast<const SetParam*>(&next);
+  if (!other || other->paramAddress() != paramAddress()) return false;
+  value_ = other->value_;
+  return true;
+}
+
 InsertRow::InsertRow(std::string lane, std::string pattern, int row, std::string blank)
     : lane_(std::move(lane)), pattern_(std::move(pattern)), row_(row), blank_(std::move(blank)) {}
 
@@ -125,6 +164,7 @@ void DeleteRow::revert(Project& project) {
 void Document::touched(const Edit& edit) {
   revision_++;
   if (!edit.lane().empty()) changed_.insert(edit.lane());
+  if (!edit.paramAddress().empty()) changedParams_.insert(edit.paramAddress());
 }
 
 void Document::apply(std::unique_ptr<Edit> edit, bool foldIntoPrevious) {
@@ -149,6 +189,12 @@ void Document::redo() {
   touched(*redo_.back());
   undo_.push_back(std::move(redo_.back()));
   redo_.pop_back();
+}
+
+std::set<std::string> Document::takeChangedParams() {
+  std::set<std::string> out;
+  out.swap(changedParams_);
+  return out;
 }
 
 std::set<std::string> Document::takeChangedLanes() {
