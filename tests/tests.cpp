@@ -175,6 +175,8 @@ int main() {
   testRenderSong("islands");
   testRenderSong("eqladdergate");
   testRenderSong("saturator");
+  testRenderSong("bongo");
+  testRenderSong("drumsynth");
   testRenderSong("waveshaper");
   testRenderSong("combringtransient");
   for (const char* name : {"concrete", "nodes", "mosh", "suite", "effects2", "bugsong", "cloves"}) testThreads(name);

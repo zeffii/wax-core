@@ -1,0 +1,19 @@
+{
+  "song": "drumsynth.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.666956,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "508c436252248e1aef2020f78f764debd2d473ae541f9ff374cc28a039d3fb10",
+  "nodeTypes": [
+    "bus-in",
+    "drumsynth",
+    "filterpro",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}

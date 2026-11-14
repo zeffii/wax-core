@@ -1,0 +1,19 @@
+{
+  "song": "bongo.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.398094,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "c8115f6cb443f3341f8490be9cc253bb33a360b2d8066316824c41c5e3f9ca33",
+  "nodeTypes": [
+    "bongo",
+    "bus-in",
+    "filterpro",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}

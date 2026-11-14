@@ -37,6 +37,8 @@ void registerIslands(NodeRegistry& registry);
 void registerGate(NodeRegistry& registry);
 void registerLadder(NodeRegistry& registry);
 void registerEq(NodeRegistry& registry);
+void registerBongo(NodeRegistry& registry);
+void registerDrumSynth(NodeRegistry& registry);
 void registerSaturator(NodeRegistry& registry);
 void registerWaveShaper(NodeRegistry& registry);
 void registerTransient(NodeRegistry& registry);

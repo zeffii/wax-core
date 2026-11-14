@@ -34,6 +34,8 @@ const NodeRegistry& builtinNodes() {
     registerGate(r);
     registerLadder(r);
     registerEq(r);
+    registerBongo(r);
+    registerDrumSynth(r);
     registerSaturator(r);
     registerWaveShaper(r);
     registerTransient(r);
