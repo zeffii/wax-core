@@ -49,6 +49,7 @@ const NodeRegistry& builtinNodes() {
     registerOberheim(r);
     registerFourpole(r);
     registerSampler(r);
+    registerGlsl(r);
     registerMix(r);
     registerDcBlock(r);
     registerDistortion(r);

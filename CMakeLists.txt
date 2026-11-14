@@ -79,6 +79,7 @@ add_library(waxcore
   src/nodes/oberheim.cpp
   src/nodes/fourpole.cpp
   src/nodes/sampler.cpp
+  src/nodes/glsl.cpp
   src/project/samples.cpp
   src/nodes/mix.cpp
   src/nodes/dcblock.cpp
