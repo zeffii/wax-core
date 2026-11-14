@@ -57,5 +57,11 @@ void registerPiano(NodeRegistry& registry);   // piano
 void registerShimmer(NodeRegistry& registry);   // shimmer
 void registerShiva(NodeRegistry& registry);   // shiva
 void registerWoodblock(NodeRegistry& registry);   // woodblock
+void registerCompressor(NodeRegistry& registry);   // compressor
+void registerFlanger(NodeRegistry& registry);   // flanger
+void registerFilterPro(NodeRegistry& registry);   // filterpro
+void registerMix(NodeRegistry& registry);   // mix
+void registerDcBlock(NodeRegistry& registry);   // dcblock
+void registerDistortion(NodeRegistry& registry);   // distortion
 
 }  // namespace wax

@@ -72,6 +72,12 @@ add_library(waxcore
   src/nodes/noise.cpp
   src/nodes/crusher.cpp
   src/nodes/gater.cpp
+  src/nodes/compressor.cpp
+  src/nodes/flanger.cpp
+  src/nodes/filterpro.cpp
+  src/nodes/mix.cpp
+  src/nodes/dcblock.cpp
+  src/nodes/distortion.cpp
   src/nodes/multitap.cpp
   src/nodes/freqshift.cpp
   src/nodes/phaser.cpp

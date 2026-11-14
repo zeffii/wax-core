@@ -43,6 +43,12 @@ const NodeRegistry& builtinNodes() {
     registerBlur(r);
     registerShiva(r);
     registerWoodblock(r);
+    registerCompressor(r);
+    registerFlanger(r);
+    registerFilterPro(r);
+    registerMix(r);
+    registerDcBlock(r);
+    registerDistortion(r);
     registerMosh(r);
     registerOsc(r);
     registerPlate(r);

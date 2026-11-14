@@ -1,0 +1,30 @@
+{
+  "song": "fx.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 1699712,
+  "seconds": 38.542,
+  "peak": 1.049394,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "c9f93a466f0cd5977fbf94fc8936da0486d87fc2207e8a9865cc9d93c5267d4e",
+  "nodeTypes": [
+    "bus-in",
+    "compressor",
+    "dcblock",
+    "distortion",
+    "duette",
+    "env",
+    "filterpro",
+    "flanger",
+    "gain",
+    "hat808",
+    "mix",
+    "osc",
+    "out",
+    "squelch",
+    "subsynth",
+    "tempo",
+    "voices"
+  ]
+}
