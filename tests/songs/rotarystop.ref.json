@@ -1,0 +1,19 @@
+{
+  "song": "rotarystop.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.286939,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "469866f492325fc3c918d2d2b380c10152fc915b797c1726f93593bfaa9fffe0",
+  "nodeTypes": [
+    "bus-in",
+    "lone",
+    "out",
+    "rotary",
+    "tempo",
+    "voices"
+  ]
+}

@@ -133,6 +133,7 @@ add_library(waxcore
   src/nodes/mbcomp.cpp
   src/nodes/specdyn.cpp
   src/nodes/xsynth.cpp
+  src/nodes/rotary.cpp
   src/nodes/sweep.cpp
   src/nodes/exciter.cpp
   src/nodes/cardinal.cpp

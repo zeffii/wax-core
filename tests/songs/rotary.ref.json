@@ -1,0 +1,19 @@
+{
+  "song": "rotary.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.278455,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "d83c57f8662a7418912cff66f33b9fc024ab47f2839aa2ac12af6ae2f9e6ff94",
+  "nodeTypes": [
+    "bus-in",
+    "lone",
+    "out",
+    "rotary",
+    "tempo",
+    "voices"
+  ]
+}
