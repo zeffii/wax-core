@@ -37,6 +37,8 @@ const NodeRegistry& builtinNodes() {
     registerPulsar(r);
     registerEnsemble(r);
     registerReflect(r);
+    registerSplit(r);
+    registerMbSat(r);
     registerSweep(r);
     registerExciter(r);
     registerCardinal(r);

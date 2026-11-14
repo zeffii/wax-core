@@ -183,6 +183,8 @@ int main() {
   testRenderSong("pulsetrain");
   testRenderSong("ensemble");
   testRenderSong("reflect");
+  testRenderSong("mbsat");
+  testRenderSong("split");
   testRenderSong("cardinal");
   testRenderSong("drumsynth");
   testRenderSong("waveshaper");

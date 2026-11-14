@@ -1,0 +1,19 @@
+{
+  "song": "mbsat.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.391507,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "f18a2ee444b01343771e67f97976eceb214b0471c3b84fa1f732850f0ecaf296",
+  "nodeTypes": [
+    "bus-in",
+    "lone",
+    "mbsat",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}

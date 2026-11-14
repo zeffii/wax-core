@@ -1,0 +1,19 @@
+{
+  "song": "split.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.285924,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "f869bcb33780de8d96c20686bc347d1036ba4d5d59ece52991e57a3bb2037442",
+  "nodeTypes": [
+    "bus-in",
+    "lone",
+    "out",
+    "split",
+    "tempo",
+    "voices"
+  ]
+}

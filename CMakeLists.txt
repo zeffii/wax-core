@@ -119,6 +119,8 @@ add_library(waxcore
   src/nodes/pulsar.cpp
   src/nodes/ensemble.cpp
   src/nodes/reflect.cpp
+  src/nodes/split.cpp
+  src/nodes/mbsat.cpp
   src/nodes/sweep.cpp
   src/nodes/exciter.cpp
   src/nodes/cardinal.cpp
