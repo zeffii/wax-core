@@ -49,6 +49,11 @@ void registerSpecPan(NodeRegistry& registry);   // specpan
 void registerBlur(NodeRegistry& registry);   // blur
 void registerAddSynth(NodeRegistry& registry);   // addsynth
 void registerArp(NodeRegistry& registry);   // arp
+void registerTape(NodeRegistry& registry);   // tape
+void registerString(NodeRegistry& registry);   // string
+void registerWavetable(NodeRegistry& registry);   // wavetable
+void registerFmSynth(NodeRegistry& registry);   // fmsynth
+void registerPiano(NodeRegistry& registry);   // piano
 void registerShimmer(NodeRegistry& registry);   // shimmer
 void registerShiva(NodeRegistry& registry);   // shiva
 void registerWoodblock(NodeRegistry& registry);   // woodblock

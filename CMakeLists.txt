@@ -75,6 +75,12 @@ add_library(waxcore
   src/nodes/freqshift.cpp
   src/nodes/phaser.cpp
   src/nodes/shimmer.cpp
+  src/nodes/fmsynth.cpp
+  src/nodes/piano.cpp
+  src/nodes/wave_table_data.cpp
+  src/nodes/tape.cpp
+  src/nodes/string.cpp
+  src/nodes/wavetable.cpp
   src/nodes/addsynth.cpp
   src/nodes/arp.cpp
   src/nodes/specpan.cpp

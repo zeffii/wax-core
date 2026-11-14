@@ -32,6 +32,11 @@ const NodeRegistry& builtinNodes() {
     registerFreqShift(r);
     registerPhaser(r);
     registerShimmer(r);
+    registerFmSynth(r);
+    registerPiano(r);
+    registerTape(r);
+    registerString(r);
+    registerWavetable(r);
     registerAddSynth(r);
     registerArp(r);
     registerSpecPan(r);
