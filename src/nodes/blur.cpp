@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdint>
 #include <map>
+#include <mutex>
 #include <vector>
 
 #include "core/js_math.h"
@@ -30,7 +31,9 @@ struct Twiddles {
 };
 
 const Twiddles& twiddles(int n) {
+  static std::mutex guard;   // (instruments are rendered on several threads)
   static std::map<int, Twiddles> tables;
+  const std::lock_guard<std::mutex> lock(guard);
   auto it = tables.find(n);
   if (it != tables.end()) return it->second;
   Twiddles t;
@@ -71,7 +74,9 @@ void fft(double* re, double* im, int n, bool inverse) {
 }
 
 const std::vector<double>& windowFor(int size) {
+  static std::mutex guard;
   static std::map<int, std::vector<double>> windows;
+  const std::lock_guard<std::mutex> lock(guard);
   auto it = windows.find(size);
   if (it != windows.end()) return it->second;
   std::vector<double> w(static_cast<std::size_t>(size));

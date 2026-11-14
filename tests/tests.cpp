@@ -138,6 +138,19 @@ void testRenderSong(const std::string& name) {
   std::printf("ok: %s.wax renders (%zu frames, peak %.6f)\n", name.c_str(), render.audio.frames(), render.peak);
 }
 
+// The same song on one thread and on four: not one sample may differ.
+void testThreads(const std::string& name) {
+  const std::string songs = WAX_TEST_SONGS;
+  const wax::Project project = wax::loadProject(songs + "/" + name + ".wax");
+  wax::RenderOptions options;
+  const wax::RenderResult single = wax::renderSong(project, options);
+  options.threads = 4;
+  const wax::RenderResult several = wax::renderSong(project, options);
+  const bool same = single.audio.left == several.audio.left && single.audio.right == several.audio.right;
+  check(same, name + ": four threads render the same samples as one");
+  std::printf("ok: %s.wax is the same on 1 and 4 threads\n", name.c_str());
+}
+
 }  // namespace
 
 int main() {
@@ -158,6 +171,7 @@ int main() {
   testRenderSong("sampler-repeats");
   testRenderSong("sampler-grains");
   testRenderSong("bugsong");
+  for (const char* name : {"concrete", "nodes", "mosh", "suite", "effects2", "bugsong"}) testThreads(name);
   if (failures) std::printf("%d check%s failed\n", failures, failures == 1 ? "" : "s");
   else std::printf("all tests passed\n");
   return failures;

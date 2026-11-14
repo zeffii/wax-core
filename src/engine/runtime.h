@@ -6,7 +6,9 @@
 // and the things only the page uses (scopes, the Stream Manager's switches and meters).
 #pragma once
 
+#include <atomic>
 #include <cstdint>
+#include <mutex>
 #include <map>
 #include <memory>
 #include <optional>
@@ -19,6 +21,7 @@
 #include "core/node_registry.h"
 #include "core/random.h"
 #include "engine/sleep.h"
+#include "engine/task_pool.h"
 #include "graph/compile.h"
 
 namespace wax {
@@ -56,6 +59,11 @@ public:
 
   void setDelayComp(bool on);
 
+  // How many threads render the instruments of a block (the calling thread counts). 1: all on this one. The sound is the
+  // same whatever the number: an instrument waits for the ones it hears through a sidechain, and the mix is added up in order.
+  void setThreads(int threads);
+  int threads() const { return pool_ ? pool_->threads() : 1; }
+
   // How many samples everything is held back by, with delay compensation on: the delay of the slowest instrument.
   int alignment();
 
@@ -90,8 +98,11 @@ private:
   void passOn(const std::string& instrument, const NoteEvent& event);
   std::vector<Listener>* listenersOf(const std::string& instrument);
   const std::vector<std::string>& runOrder();
-  std::optional<StereoView> tap(const std::string& id, const Json& parts);
-  std::optional<StereoView> tapMix(const std::string& id, const std::vector<std::string>& list);
+  std::optional<StereoView> tap(const std::string& caller, const std::string& id, const Json& parts);
+  std::optional<StereoView> tapMix(const std::string& caller, const std::string& id, const std::vector<std::string>& list);
+  bool renderInstrument(const std::string& id, int n);
+  bool hears(const std::string& caller, const std::string& other) const;
+  void resetOrder();
   void rebuild(const std::string& id);
   bool dozing(const std::string& id, Instrument& inst, int n);
   void settle(Instrument& inst, int n);
@@ -111,12 +122,18 @@ private:
   bool sleepIdle_ = true;
   bool delayComp_ = false;
   std::optional<int> maxDelay_;
-  std::uint64_t stamp_ = 0;            // counts note events, to find the oldest voice
+  std::atomic<std::uint64_t> stamp_{0};   // counts note events, to find the oldest voice (an arp plays notes while its instrument renders)
   std::set<std::string> killed_;       // faded out and reset: not run until a note-on
   std::set<std::string> dying_;        // their kill fade has just finished: reset at the start of the next block
   std::set<std::string> following_;    // instruments whose notes are being passed on right now (a loop of listeners stops where it closes)
   std::map<std::string, std::vector<std::string>> metaTargets_;
   std::optional<std::vector<std::string>> order_;
+  struct Plan;
+  std::unique_ptr<Plan> plan_;                                   // the order made into tasks for the pool (built with order_)
+  std::map<std::string, std::set<std::string>> deps_;             // for each instrument, the ones it hears that run before it (built with order_)
+  std::unique_ptr<TaskPool> pool_;
+  std::mutex mixMutex_;                                           // the added-together sound of a meta machine is made once per block, by whoever asks first
+  std::vector<char> mixesIn_;                                     // per instrument of the order: whether its sound goes into the mix this block
   std::optional<std::map<std::string, std::vector<Listener>>> followMap_;
   std::map<std::string, std::shared_ptr<const SampleMessage>> samples_;   // the last sample sent to each node and slot, replayed on a rebuild
   std::map<std::string, int> instancesMade_;   // per kind of dice-rolling node (see NodeContext::nextInstance)

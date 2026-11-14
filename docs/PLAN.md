@@ -25,9 +25,15 @@ built engine first, with the window last. Tick a step when it is done.
       nodes (`project/samples.cpp`, `GraphRuntime::sendSample`) and nine more nodes: distortion, dcblock, mix,
       compressor, flanger, filterpro, oberheim, fourpole and the sampler. It is identical to the reference too, and so
       are variants of it that switch on the sampler's repeats, grains, filters, vibrato and slides.
-- [ ] **6. Threads.** A pool of workers renders the instruments of a block side by side. Sidechain, listen and meta
+- [x] **6. Threads.** A pool of workers renders the instruments of a block side by side. Sidechain, listen and meta
       machines make one instrument wait for another, so those are put in order and the rest run together. The check:
       the render is the same as on one thread.
+      Done: `GraphRuntime::setThreads(n)` / `wax-render --threads n` (`engine/task_pool.cpp`). Each block, every instrument
+      but the master is a task that waits for the instruments it hears through sidechains (and for a meta machine's
+      machines); the mix is added up afterwards in the order of the file, and the master runs last on the sum. Byte for
+      byte the same output on 1, 2, 4 and 8 threads (tests/tests.cpp, testThreads). A sidechain on an instrument that
+      runs later hears nothing, as on one thread. Not guaranteed to be the same on every run: two instruments that
+      both turn into NaN in one block (each is rebuilt, in file order, so it is still the same).
 - [ ] **7. Live sound and MIDI**: miniaudio and RtMidi, a player without a window, keyjazz from a controller.
 - [ ] **8. The window**: Dear ImGui on SDL3. The pattern editor first, then the sequence view, the mixer, parameter
       panels, and the drawn views (Bezier envelopes, the DX loader) last.

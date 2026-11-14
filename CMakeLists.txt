@@ -34,6 +34,7 @@ add_library(waxcore
   src/seq/automation.cpp
   src/seq/lane.cpp
   src/engine/runtime.cpp
+  src/engine/task_pool.cpp
   src/engine/sleep.cpp
   src/engine/limiter.cpp
   src/engine/sequencer.cpp

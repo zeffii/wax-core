@@ -1,6 +1,7 @@
-// wax-render song.wax [out.wav] [--tail seconds]
+// wax-render song.wax [out.wav] [--tail seconds] [--threads n]
 // Renders a song offline to a 32-bit float WAV, the way webtracker's tools/render-ref.mjs does, so the two can be
 // compared with wax-compare.
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -18,6 +19,7 @@ int main(int argc, char** argv) {
   for (int i = 1; i < argc; i++) {
     const std::string arg = argv[i];
     if (arg == "--tail" && i + 1 < argc) options.tailSeconds = std::atof(argv[++i]);
+    else if (arg == "--threads" && i + 1 < argc) options.threads = std::max(1, std::atoi(argv[++i]));
     else paths.push_back(arg);
   }
   if (paths.empty()) {

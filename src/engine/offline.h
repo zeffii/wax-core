@@ -14,6 +14,7 @@ struct RenderOptions {
   double sampleRate = 44100;
   double tailSeconds = 6;       // rendered after the last row, so reverbs and delays can die out
   double maxSeconds = 7200;
+  int threads = 1;              // render the instruments of a block side by side on this many threads; the sound is the same
 };
 
 struct RenderResult {

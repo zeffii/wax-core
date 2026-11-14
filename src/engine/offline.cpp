@@ -77,6 +77,7 @@ RenderResult renderSong(const Project& project, const RenderOptions& options) {
   ParamRegistry registry;
   GraphRuntime runtime(options.sampleRate, registry.values(), nodeTypes, kBlock);
   runtime.setDelayComp(false);
+  runtime.setThreads(options.threads);
   const auto samples = decodeSamples(project.samples);
   for (const Instrument& instrument : project.instruments) {
     try {
