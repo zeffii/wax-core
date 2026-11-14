@@ -1,0 +1,22 @@
+{
+  "song": "exciter-sweep.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 2469632,
+  "seconds": 56.001,
+  "peak": 0.379365,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "4c909ddb6749f63aebd81991b2dcec9a4cd172bf1c1e07c374225d9cb263e90f",
+  "nodeTypes": [
+    "bus-in",
+    "chorus",
+    "exciter",
+    "out",
+    "shimmer",
+    "subsynth",
+    "sweep",
+    "tempo",
+    "voices"
+  ]
+}

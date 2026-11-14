@@ -178,6 +178,7 @@ int main() {
   testRenderSong("bongo");
   testRenderSong("membrane");
   testRenderSong("cardinal-eco");
+  testRenderSong("exciter-sweep");
   testRenderSong("cardinal");
   testRenderSong("drumsynth");
   testRenderSong("waveshaper");

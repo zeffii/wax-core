@@ -34,6 +34,8 @@ const NodeRegistry& builtinNodes() {
     registerGate(r);
     registerLadder(r);
     registerEq(r);
+    registerSweep(r);
+    registerExciter(r);
     registerCardinal(r);
     registerMembrane(r);
     registerBongo(r);
