@@ -49,7 +49,7 @@ public:
       note_ = event.note; velocity_ = event.vel;
       env_.on();
     } else if (event.type == NoteType::Off || event.type == NoteType::AllOff) env_.off();
-    else { env_.cut(); std::fill(live_, live_ + kMaxGrains, 0); nAct_ = 0; }
+    else { env_.cut(); std::fill(live_, live_ + kMaxGrains, std::uint8_t{0}); nAct_ = 0; }
   }
 
   void process(const float* const*, float* const* outputs, int n, const float* params, const int* slots) override {
@@ -58,7 +58,7 @@ public:
     if (env_.idle() || bank_.empty()) {
       std::fill(outL, outL + n, 0.0f);
       std::fill(outR, outR + n, 0.0f);
-      std::fill(live_, live_ + kMaxGrains, 0);
+      std::fill(live_, live_ + kMaxGrains, std::uint8_t{0});
       nAct_ = 0;
       return;
     }

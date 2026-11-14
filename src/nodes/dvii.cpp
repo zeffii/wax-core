@@ -51,12 +51,12 @@ public:
       prep();
       if (idle_) { std::fill(egL_, egL_ + kOps, 0.0); pL_ = 0; }
       if (v_->oks) std::fill(phase_, phase_ + kOps, 0.0);
-      std::fill(egStage_, egStage_ + kOps, 0); pStage_ = 0; hist0_ = hist1_ = 0;
+      std::fill(egStage_, egStage_ + kOps, std::uint8_t{0}); pStage_ = 0; hist0_ = hist1_ = 0;
       if (v_->lks || idle_) { lfoPhase_ = 0.25; lfoAge_ = 0; }
       sh_ = rnd() * 2 - 1;
       held_ = true; idle_ = false;
     } else if (event.type == NoteType::Off || event.type == NoteType::AllOff) {
-      if (held_) { held_ = false; std::fill(egStage_, egStage_ + kOps, 4); pStage_ = 4; }
+      if (held_) { held_ = false; std::fill(egStage_, egStage_ + kOps, std::uint8_t{4}); pStage_ = 4; }
     } else {
       held_ = false; idle_ = true; std::fill(egL_, egL_ + kOps, 0.0); std::fill(out_, out_ + kOps, 0.0);
     }
