@@ -165,6 +165,7 @@ Project parseProject(const std::string& fileText) {
     for (const auto& [id, def] : instruments.items()) project.instruments.push_back(readInstrument(id, def));
     for (const Json& lane : data.at("lanes")) project.lanes.push_back(readLane(lane));
     project.samples = data.value("samples", Json::object());
+    project.file = data;
   } catch (const Json::exception& e) {
     throw problem(std::string("The file is damaged: ") + e.what());
   }

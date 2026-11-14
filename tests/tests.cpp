@@ -18,6 +18,7 @@
 #include "engine/takes.h"
 #include "io/wav.h"
 #include "project/project.h"
+#include "project/save.h"
 
 namespace {
 
@@ -417,7 +418,42 @@ void testNewPattern() {
   std::printf("ok: new patterns\n");
 }
 
+
+void testSave() {
+  const std::string songs = WAX_TEST_SONGS;
+  // an untouched song saves as the same song: what is read back is what was read
+  for (const std::string name : {"jawharp", "dvii", "modchan", "convolver"}) {
+    const wax::Project first = wax::loadProject(songs + "/" + name + ".wax");
+    const std::string text = wax::serializeProject(first);
+    const wax::Project second = wax::parseProject(text);
+    check(second.file == first.file, name + ": saving and reading again gives the same file contents");
+    check(wax::serializeProject(second) == text, name + ": saving twice gives the same text");
+  }
+  // an edit is in the saved file, and nothing else changed
+  wax::Document doc(wax::loadProject(songs + "/jawharp.wax"));
+  const std::string pattern = doc.project().lanes[1].patterns[0].id;
+  doc.apply(std::make_unique<wax::SetRow>("lone", pattern, 0, "E-4 .. C-5 .. G-4 .. ... .. ... .. ... .. .. .. .. .. ......"));
+  const wax::Project reread = wax::parseProject(wax::serializeProject(doc.project()));
+  check(reread.lanes[1].patterns[0].rows[0].rfind("E-4", 0) == 0, "an edited row is in the saved file");
+  wax::Json before = doc.project().file, after = reread.file;
+  before["lanes"][1]["patterns"][pattern]["rows"][0] = after["lanes"][1]["patterns"][pattern]["rows"][0];
+  check(before == after, "and the rest of the file is as it was");
+  // a new pattern is saved too
+  wax::Document fresh(wax::loadProject(songs + "/jawharp.wax"));
+  wax::Pattern np; np.id = "9-0"; np.name = "pat99"; np.index = 99; np.rows = {"... .. ... .. ... .. ... .. ... .. ... .. .. .. .. .. ......"};
+  fresh.apply(std::make_unique<wax::AddPattern>("lone", np, wax::Placement{"9-0", 3, 1}));
+  const wax::Project again = wax::parseProject(wax::serializeProject(fresh.project()));
+  check(again.lanes[1].patterns.back().id == "9-0" && again.lanes[1].placements.back().start == 3, "a new pattern and its placement are saved");
+  // writing to disk
+  const std::string path = (std::filesystem::temp_directory_path() / "wax-save-test.wax").string();
+  wax::saveProject(fresh.project(), path);
+  check(wax::loadProject(path).lanes[1].patterns.back().id == "9-0", "a saved file loads");
+  std::filesystem::remove(path);
+  std::printf("ok: saving\n");
+}
+
 int main() {
+  testSave();
   testNewPattern();
   testCellEditor();
   testLiveEdit();

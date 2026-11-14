@@ -129,6 +129,7 @@ struct Project {
   std::vector<Instrument> instruments;
   std::vector<Lane> lanes;
   Json samples;            // as written (still encoded); decoded when the sampler is ported
+  Json file;               // the whole file as read: saving writes this back with the lanes as edited, so nothing else is lost
 
   const Instrument* findInstrument(const std::string& id) const;
 

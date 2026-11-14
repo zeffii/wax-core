@@ -14,6 +14,7 @@
 #include <map>
 #include <sstream>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -26,12 +27,31 @@
 #include "edit/document.h"
 #include "edit/sync.h"
 #include "live/audio_out.h"
+#include "project/save.h"
 #include "live/player.h"
 #include "project/project.h"
 
 namespace {
 
 using namespace wax;
+
+// File dialogs answer on another thread; the window picks the answer up between frames.
+struct DialogAnswer {
+  std::mutex mutex;
+  std::string path;
+  bool save = false, ready = false;
+};
+DialogAnswer gAnswer;
+enum class DialogRequest { None, Open, SaveAs };
+DialogRequest gRequest = DialogRequest::None;   // set by the keys, carried out by the main loop (it has the window)
+
+void SDLCALL dialogDone(void* userdata, const char* const* files, int) {
+  if (!files || !files[0]) return;   // cancelled or failed
+  std::lock_guard<std::mutex> lock(gAnswer.mutex);
+  gAnswer.path = files[0];
+  gAnswer.save = userdata != nullptr;
+  gAnswer.ready = true;
+}
 
 struct Options {
   std::string path, screenshot, press;   // press: keys to press one after another (for checking the window without a keyboard)
@@ -58,8 +78,9 @@ struct Session {
   int rowsRevision = -1;                 // the revision of `doc` that `rows` shows
   bool scrollToCursor = false;
   std::string editStatus;
+  std::string path;                      // the file this song was opened from, where Ctrl+S saves it
 
-  Session(const std::string& path, const Options& options) : project(loadProject(path)) {
+  Session(const std::string& filePath, const Options& options) : project(loadProject(filePath)), path(filePath) {
     for (const Instrument& inst : project.instruments) if (inst.id != kMaster && !inst.isMeta) playable.push_back(inst.id);
     keyjazzInstrument = playable.empty() ? std::string() : playable.front();
     player = std::make_unique<Player>(project, options.rate, options.threads, keyjazzInstrument, true);
@@ -221,6 +242,17 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) session->edit = !session->edit;
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Z)) { if (io.KeyShift) doc.redo(); else doc.undo(); edited = true; }
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Y)) { doc.redo(); edited = true; }
+    if (ctrl && ImGui::IsKeyPressed(ImGuiKey_O, false)) gRequest = DialogRequest::Open;
+    if (ctrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S, false)) gRequest = DialogRequest::SaveAs;
+    else if (ctrl && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
+      try {
+        saveProject(doc.project(), session->path);
+        doc.markSaved();
+        session->editStatus = "saved " + session->path;
+      } catch (const std::exception& e) {
+        session->editStatus = e.what();
+      }
+    }
     const bool typing = session->edit && !ctrl && !io.KeyAlt;
     if (typing) {
       const int before = editor.tick() * 4096 + editor.cell();
@@ -396,6 +428,7 @@ int main(int argc, char** argv) {
   if (!options.path.empty()) open(options.path);
 
   float meterL = 0, meterR = 0;
+  bool titleUnsaved = false;
   std::map<ImGuiKey, int> held;
   int octave = 4, playFromRequest = -1, frame = 0;
   std::string selectedLane;
@@ -416,6 +449,42 @@ int main(int argc, char** argv) {
     if (!options.press.empty() && frame >= 4) feedKeys(options.press, frame - 4);   // (the first frames let the window settle)
     ImGui::NewFrame();
     drawFrame(session.get(), options, status, meterL, meterR, held, octave, selectedLane, follow, playFromRequest);
+    if (gRequest != DialogRequest::None) {
+      static const SDL_DialogFileFilter filters[] = {{"Wax songs", "wax"}, {"All files", "*"}};
+      if (gRequest == DialogRequest::Open) SDL_ShowOpenFileDialog(dialogDone, nullptr, window, filters, 2, nullptr, false);
+      else if (session) SDL_ShowSaveFileDialog(dialogDone, &gAnswer, window, filters, 2, session->path.c_str());   // (non-null: a save)
+      gRequest = DialogRequest::None;
+    }
+    {
+      std::string chosen;
+      bool save = false;
+      {
+        std::lock_guard<std::mutex> lock(gAnswer.mutex);
+        if (gAnswer.ready) { chosen = gAnswer.path; save = gAnswer.save; gAnswer.ready = false; }
+      }
+      if (!chosen.empty()) {
+        if (!save) open(chosen);
+        else if (session) {
+          if (chosen.size() < 4 || chosen.substr(chosen.size() - 4) != ".wax") chosen += ".wax";
+          try {
+            saveProject(session->doc->project(), chosen);
+            session->path = chosen;
+            session->doc->markSaved();
+            session->editStatus = "saved " + chosen;
+          } catch (const std::exception& e) {
+            session->editStatus = e.what();
+          }
+        }
+      }
+    }
+    if (session) {   // an asterisk in the title while the song has changes that are not saved
+      const bool unsaved = session->doc->modified();
+      if (unsaved != titleUnsaved) {
+        titleUnsaved = unsaved;
+        const std::string title = "Wax - " + session->project.song.name + (unsaved ? " *" : "");
+        SDL_SetWindowTitle(window, title.c_str());
+      }
+    }
     if (session && playFromRequest >= 0) {
       session->player->ring().push({LiveCommand::Play, playFromRequest, 1});
       playFromRequest = -1;

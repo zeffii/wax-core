@@ -155,6 +155,7 @@ add_library(waxcore
   src/nodes/tap.cpp
   src/engine/takes.cpp
   src/edit/document.cpp
+  src/project/save.cpp
   src/edit/sync.cpp
   src/edit/cell_editor.cpp
   src/nodes/sweep.cpp
