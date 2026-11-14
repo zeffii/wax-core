@@ -1,0 +1,19 @@
+{
+  "song": "waveseqonce.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.688331,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "1f7134acafd4f19d0bd5d549d5ba95043e9f10efae153459f0fa49b98f9963b0",
+  "nodeTypes": [
+    "bus-in",
+    "out",
+    "prismacanyon",
+    "tempo",
+    "voices",
+    "waveseq"
+  ]
+}

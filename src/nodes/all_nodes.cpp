@@ -60,6 +60,10 @@ const NodeRegistry& builtinNodes() {
     registerDvii(r);
     registerSpecSynth(r);
     registerModChan(r);
+    registerWaveSeq(r);
+    registerVecMix(r);
+    registerVecPath(r);
+    registerCompass(r);
     registerSweep(r);
     registerExciter(r);
     registerCardinal(r);

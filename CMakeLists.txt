@@ -142,6 +142,10 @@ add_library(waxcore
   src/nodes/dvii.cpp
   src/nodes/specsynth.cpp
   src/nodes/modchan.cpp
+  src/nodes/waveseq.cpp
+  src/nodes/vecmix.cpp
+  src/nodes/vecpath.cpp
+  src/nodes/compass.cpp
   src/nodes/sweep.cpp
   src/nodes/exciter.cpp
   src/nodes/cardinal.cpp

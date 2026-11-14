@@ -1,0 +1,21 @@
+{
+  "song": "vecmixonce.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.667982,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "11e05da6ad4642b7a6fba7be8a4c0cdef9a02bfc3b899f59a8cdc71d6a92e309",
+  "nodeTypes": [
+    "bus-in",
+    "out",
+    "prismacanyon",
+    "tempo",
+    "vecmix",
+    "vecpath",
+    "voices",
+    "waveseq"
+  ]
+}

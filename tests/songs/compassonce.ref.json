@@ -1,0 +1,19 @@
+{
+  "song": "compassonce.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.273688,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "247a8e14791ac8af44ef907662c807239612fe63b02ae7f26d6e6714a42d676d",
+  "nodeTypes": [
+    "bus-in",
+    "compass",
+    "out",
+    "prismacanyon",
+    "tempo",
+    "voices"
+  ]
+}
