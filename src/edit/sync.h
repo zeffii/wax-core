@@ -1,0 +1,17 @@
+// Gets the edits of a Document to the engine that plays it.
+#pragma once
+
+#include <string>
+#include <vector>
+
+#include "edit/document.h"
+#include "engine/engine.h"
+
+namespace wax {
+
+// Sends every lane changed since the last call to the engine, which plays it from the start of its next block. Call it from
+// the window thread after edits, undo and redo. Returns a message for each lane that could not be sent (a row the engine cannot
+// read): that lane keeps playing as it was, and is tried again at the next call.
+std::vector<std::string> syncLanes(Document& document, Engine& engine);
+
+}  // namespace wax

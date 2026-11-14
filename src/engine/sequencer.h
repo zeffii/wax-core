@@ -35,6 +35,11 @@ public:
 
   void setSong(const SongSettings& song);
   void setLane(const PreparedLane& lane);
+  // The same in two steps, so a lane can be edited while the song plays. buildLane does the slow part (any thread, touches
+  // nothing that plays). installLane swaps it in at the start of a block (audio thread) and hands back the lane it replaced,
+  // which the caller should destroy somewhere else; its notes keep sounding and their note-offs still find them.
+  std::shared_ptr<void> buildLane(const PreparedLane& lane);
+  std::shared_ptr<void> installLane(std::shared_ptr<void> built);
   // The graph of the Node Sequencer (the song's `nodeseq`), with what its names mean on this machine.
   void setNodeseq(const Json& graph, const nodeseq::Resolve& resolve);
   const nodeseq::NodeSeq& nodeseq() const { return nodeseq_; }
@@ -83,7 +88,7 @@ private:
 
   SongSettings song_;
   bool songSet_ = false;
-  std::vector<std::unique_ptr<LaneState>> lanes_;   // in the order they were first set
+  std::vector<std::shared_ptr<LaneState>> lanes_;   // in the order they were first set
   int nextColumnKey_ = 0;
 
   int tick_ = 0;

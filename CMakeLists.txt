@@ -154,6 +154,7 @@ add_library(waxcore
   src/nodes/tap.cpp
   src/engine/takes.cpp
   src/edit/document.cpp
+  src/edit/sync.cpp
   src/nodes/sweep.cpp
   src/nodes/exciter.cpp
   src/nodes/cardinal.cpp

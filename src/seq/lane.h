@@ -28,6 +28,10 @@ struct PreparedLane {
   std::vector<AutoCurve> curves;   // the lane's drawn curves, baked
 };
 
+// One lane of the project made ready (the same as its entry in prepareSong). Used when a lane is edited while the song plays.
+// Throws std::runtime_error with the lane and row when a pattern cannot be read.
+PreparedLane prepareLane(const Project& project, const Lane& source, const ParamRegistry& registry);
+
 // Instruments must already be compiled, so their parameter slots exist.
 // Throws std::runtime_error with the lane and row when a pattern cannot be read.
 std::vector<PreparedLane> prepareSong(const Project& project, const ParamRegistry& registry);

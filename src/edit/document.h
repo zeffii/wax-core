@@ -99,6 +99,7 @@ public:
 
   // The lanes changed since the last call, for the engine to rebuild.
   std::set<std::string> takeChangedLanes();
+  void markLaneChanged(const std::string& lane) { changed_.insert(lane); }   // to try again later
 
 private:
   Project project_;

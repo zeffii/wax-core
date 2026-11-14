@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "core/params.h"
+#include "core/spsc.h"
 #include "engine/runtime.h"
 #include "engine/sequencer.h"
 #include "project/project.h"
@@ -30,8 +31,17 @@ public:
   // Short headings for the cells of a lane's rows ("N1", "V1", "T2", the parameter's name, "CMD"); empty for an unknown lane.
   const std::vector<std::string>& columnLabels(const std::string& laneId) const;
 
+  // Changing a lane while the song plays. The window thread builds the lane from the edited project (slow; throws
+  // std::runtime_error when a pattern cannot be read, and then nothing changes), and sends it; the audio thread takes
+  // what has been sent at the start of its next block and swaps it in. The replaced lanes are collected on the window
+  // thread, so nothing is freed while sound is being made.
+  bool sendLane(const Project& project, const std::string& laneId);   // window thread; false when the queue is full: try again
+  void applySentLanes();                                              // audio thread, at the start of a block
+  void collectRetired();                                              // window thread, now and then
+
 private:
   ParamRegistry registry_;
+  SpscQueue<std::shared_ptr<void>, 64> sent_, retired_;
   GraphRuntime runtime_;
   Sequencer sequencer_;
   std::vector<std::string> warnings_;

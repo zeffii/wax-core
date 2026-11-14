@@ -119,8 +119,8 @@ Sequencer::Tempo Sequencer::tempo() const {
   };
 }
 
-void Sequencer::setLane(const PreparedLane& prepared) {
-  auto fresh = std::make_unique<LaneState>();
+std::shared_ptr<void> Sequencer::buildLane(const PreparedLane& prepared) {
+  auto fresh = std::make_shared<LaneState>();
   LaneState& lane = *fresh;
   lane.id = prepared.id;
   lane.instrument = prepared.instrument;
@@ -135,7 +135,7 @@ void Sequencer::setLane(const PreparedLane& prepared) {
     if (c.kind == ColumnKind::Note) {
       lane.noteCols++;
       lane.noteTargets.push_back(c.target.empty() ? lane.instrument : c.target);
-      lane.columnKeys.push_back(nextColumnKey_++);
+      lane.columnKeys.push_back(-1);   // given its number when it is installed
     }
     if (c.kind == ColumnKind::Trig) lane.trigCols.push_back(&c);
     if (!c.target.empty() && std::find(lane.targets.begin(), lane.targets.end(), c.target) == lane.targets.end()) lane.targets.push_back(c.target);
@@ -144,7 +144,12 @@ void Sequencer::setLane(const PreparedLane& prepared) {
   lane.notes.assign(static_cast<std::size_t>(lane.noteCols), kEmpty);
   lane.vels.assign(static_cast<std::size_t>(lane.noteCols), 1.0f);
   lane.trigs.assign(lane.trigCols.size(), kEmpty);
+  return fresh;
+}
 
+std::shared_ptr<void> Sequencer::installLane(std::shared_ptr<void> built) {
+  std::shared_ptr<LaneState> fresh = std::static_pointer_cast<LaneState>(built);
+  LaneState& lane = *fresh;
   // A lane that is replaced while it plays keeps what it was sounding, so the note-offs still find their notes;
   // with a different set of note columns everything of that machine is let go instead.
   for (auto& existing : lanes_) {
@@ -159,11 +164,17 @@ void Sequencer::setLane(const PreparedLane& prepared) {
         allOff(*existing);
       }
     }
+    for (int& key : lane.columnKeys) if (key < 0) key = nextColumnKey_++;
+    std::shared_ptr<void> old = existing;
     existing = std::move(fresh);
-    return;
+    return old;
   }
+  for (int& key : lane.columnKeys) if (key < 0) key = nextColumnKey_++;
   lanes_.push_back(std::move(fresh));
+  return nullptr;
 }
+
+void Sequencer::setLane(const PreparedLane& prepared) { installLane(buildLane(prepared)); }
 
 void Sequencer::play(int from, bool once) {
   if (playing_) releaseAll();   // jumping while playing: what rings is let go first

@@ -112,30 +112,32 @@ std::vector<std::uint8_t> buildMask(const Lane& lane, int length) {
 
 }  // namespace
 
+PreparedLane prepareLane(const Project& project, const Lane& source, const ParamRegistry& registry) {
+  const Instrument& instrument = *project.findInstrument(source.instrument);
+  PreparedLane lane;
+  lane.id = source.id;
+  lane.instrument = source.instrument;
+  lane.columns = buildColumns(instrument, project, registry);
+  lane.channels = channelCount(lane.columns);
+
+  std::map<std::string, ParsedPattern> patterns;
+  try {
+    for (const Pattern& p : source.patterns) patterns[p.id] = parsePattern(p, lane.columns);
+  } catch (const std::runtime_error& e) {
+    throw std::runtime_error("lane \"" + source.id + "\": " + e.what());
+  }
+  Row blank;
+  for (const Column& c : lane.columns) blank.push_back(tokenBlank(c.token));
+  const std::vector<const Row*> rows = flattenLane(source, patterns, blank, project.song.length);
+  lane.pages = buildPages(rows, lane.columns, lane.channels);
+  lane.mask = buildMask(source, project.song.length);
+  lane.curves = buildAutomation(source.raw.value("curves", Json::array()), lane.columns, lane.instrument, registry, project.song.length);
+  return lane;
+}
+
 std::vector<PreparedLane> prepareSong(const Project& project, const ParamRegistry& registry) {
   std::vector<PreparedLane> prepared;
-  for (const Lane& source : project.lanes) {
-    const Instrument& instrument = *project.findInstrument(source.instrument);
-    PreparedLane lane;
-    lane.id = source.id;
-    lane.instrument = source.instrument;
-    lane.columns = buildColumns(instrument, project, registry);
-    lane.channels = channelCount(lane.columns);
-
-    std::map<std::string, ParsedPattern> patterns;
-    try {
-      for (const Pattern& p : source.patterns) patterns[p.id] = parsePattern(p, lane.columns);
-    } catch (const std::runtime_error& e) {
-      throw std::runtime_error("lane \"" + source.id + "\": " + e.what());
-    }
-    Row blank;
-    for (const Column& c : lane.columns) blank.push_back(tokenBlank(c.token));
-    const std::vector<const Row*> rows = flattenLane(source, patterns, blank, project.song.length);
-    lane.pages = buildPages(rows, lane.columns, lane.channels);
-    lane.mask = buildMask(source, project.song.length);
-    lane.curves = buildAutomation(source.raw.value("curves", Json::array()), lane.columns, lane.instrument, registry, project.song.length);
-    prepared.push_back(std::move(lane));
-  }
+  for (const Lane& source : project.lanes) prepared.push_back(prepareLane(project, source, registry));
   return prepared;
 }
 

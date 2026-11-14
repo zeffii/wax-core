@@ -12,6 +12,8 @@
 #include "core/random.h"
 #include "engine/offline.h"
 #include "edit/document.h"
+#include "edit/sync.h"
+#include "engine/engine.h"
 #include "engine/takes.h"
 #include "io/wav.h"
 #include "project/project.h"
@@ -266,7 +268,56 @@ void testDocument() {
   std::printf("ok: document and undo\n");
 }
 
+
+// An edit sent to a playing engine sounds the same as the edited song played from the start.
+void testLiveEdit() {
+  const std::string songs = WAX_TEST_SONGS;
+  const wax::Project original = wax::loadProject(songs + "/jawharp.wax");
+  const std::string lane = "lone";
+  const std::string pattern = original.lanes[1].patterns[0].id;   // [0] is the master lane
+  check(original.lanes[1].id == lane, "the live edit test finds the lane it expects");
+
+  wax::Document doc(original);
+  const std::string edited = "E-4 .. C-5 .. G-4 .. ... .. ... .. ... .. .. .. .. .. ......";
+  wax::Document reference(original);
+  reference.apply(std::make_unique<wax::SetRow>(lane, pattern, 0, edited));
+
+  constexpr int kBlocks = 600, kBefore = 100;
+  const auto play = [&](wax::Engine& engine, wax::Document* during, bool edit) {
+    std::vector<float> out;
+    engine.sequencer().play(500);
+    std::vector<float> l(wax::kEngineBlock), r(wax::kEngineBlock);
+    for (int b = 0; b < kBlocks; b++) {
+      if (edit && b == kBefore) {   // the window thread edits while the song plays (tick 500 is before the first placement at 512)
+        during->apply(std::make_unique<wax::SetRow>(lane, pattern, 0, edited));
+        const auto problems = wax::syncLanes(*during, engine);
+        check(problems.empty(), "the edited lane is sent without a problem");
+      }
+      engine.applySentLanes();
+      engine.sequencer().process(l.data(), r.data(), wax::kEngineBlock);
+      out.insert(out.end(), l.begin(), l.end());
+      out.insert(out.end(), r.begin(), r.end());
+    }
+    return out;
+  };
+  wax::Engine live(original, 44100);
+  wax::Engine fresh(reference.project(), 44100);
+  const std::vector<float> a = play(live, &doc, true);
+  const std::vector<float> b = play(fresh, nullptr, false);
+  check(a == b, "a lane edited while the song plays sounds exactly like the edited song from the start");
+  double peak = 0;
+  for (float v : a) peak = std::max(peak, static_cast<double>(std::fabs(v)));
+  check(peak > 0.01, "the live edit test hears something");
+  // and the same with the edit undone: back to the original
+  doc.undo();
+  check(wax::syncLanes(doc, live).empty(), "an undo is sent like any other edit");
+  live.applySentLanes();
+  live.collectRetired();
+  std::printf("ok: live edits\n");
+}
+
 int main() {
+  testLiveEdit();
   testDocument();
   testTap();
   testParams();

@@ -120,6 +120,27 @@ Engine::Engine(const Project& project, double sampleRate, int threads)
 
 }
 
+bool Engine::sendLane(const Project& project, const std::string& laneId) {
+  for (const Lane& source : project.lanes) {
+    if (source.id != laneId) continue;
+    return sent_.push(sequencer_.buildLane(prepareLane(project, source, registry_)));
+  }
+  return true;   // a lane the project does not have: nothing to send
+}
+
+void Engine::applySentLanes() {
+  std::shared_ptr<void> built;
+  while (sent_.pop(built)) {
+    std::shared_ptr<void> old = sequencer_.installLane(std::move(built));
+    if (old) retired_.push(std::move(old));   // when the queue is full it is freed here instead; rare, and only once the window stops collecting
+  }
+}
+
+void Engine::collectRetired() {
+  std::shared_ptr<void> old;
+  while (retired_.pop(old)) old.reset();
+}
+
 const std::vector<std::string>& Engine::columnLabels(const std::string& laneId) const {
   static const std::vector<std::string> none;
   const auto found = labels_.find(laneId);

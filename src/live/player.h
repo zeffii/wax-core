@@ -82,6 +82,7 @@ public:
 
 private:
   void renderBlock() {
+    engine_.applySentLanes();   // lanes edited in the window start to play from this block
     LiveCommand c;
     while (ring_.pop(c)) {
       switch (c.kind) {
