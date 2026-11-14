@@ -43,7 +43,9 @@ built engine first, with the window last. Tick a step when it is done.
       insert and delete row) and the sync that sends an edited lane to the playing engine (checked: an edit made while playing sounds
       exactly like the edited song from the start). In the window, Enter turns editing on; arrows, PageUp/PageDown, piano keys or
       hex digits, = for note off, ` for note cut, Delete/Backspace, Insert and Shift+Delete for rows, Ctrl+Z/Ctrl+Y.
-      `wax-app --press "enter,pagedown,z,ctrl+z"` drives the window from a script for screenshots. Next: saving, then panels.
+      `wax-app --press "enter,pagedown,z,ctrl+z"` drives the window from a script for screenshots. 
+      Saving: `project/save.cpp` writes the file as it was read with the lanes as edited (nothing else in it changes); Ctrl+S saves,
+      Ctrl+Shift+S saves as, Ctrl+O opens, and the title shows * while there are unsaved changes. Next: panels.
 - [x] **9. The long tail**: the nodes no demo uses, the genexpr node (its compiler has to be ported) and the glsl node.
       So far: cloves.wax (a user's song: 136 bpm, 1552 ticks, 7 instruments) is sample for sample identical to the web render. It
       needed 12 more nodes: haas, env2, hat2, drumsynth2, clang, urugraVerb, sympathy, kaleidoscope, pogue and lone (shared code:
