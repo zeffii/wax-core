@@ -43,6 +43,7 @@ const NodeRegistry& builtinNodes() {
     registerHeadPan(r);
     registerFollower(r);
     registerRange(r);
+    registerEnvFx(r);
     registerSweep(r);
     registerExciter(r);
     registerCardinal(r);

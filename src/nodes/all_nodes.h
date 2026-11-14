@@ -46,6 +46,7 @@ void registerPan(NodeRegistry& registry);
 void registerHeadPan(NodeRegistry& registry);
 void registerFollower(NodeRegistry& registry);
 void registerRange(NodeRegistry& registry);
+void registerEnvFx(NodeRegistry& registry);
 void registerSweep(NodeRegistry& registry);
 void registerExciter(NodeRegistry& registry);
 void registerCardinal(NodeRegistry& registry);

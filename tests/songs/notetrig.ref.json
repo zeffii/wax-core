@@ -1,0 +1,20 @@
+{
+  "song": "notetrig.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.431302,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "0aff6b001461542becb2ded809d6ea86ba52229c0bf71e04e3deb33d1d0bf179",
+  "nodeTypes": [
+    "bus-in",
+    "envfx",
+    "lone",
+    "notetrig",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}

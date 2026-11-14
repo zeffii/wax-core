@@ -190,6 +190,8 @@ int main() {
   testRenderSong("follower");
   testRenderSong("range");
   testRenderSong("rangeknob");
+  testRenderSong("envfx");
+  testRenderSong("notetrig");
   testRenderSong("cardinal");
   testRenderSong("drumsynth");
   testRenderSong("waveshaper");
