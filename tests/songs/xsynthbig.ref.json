@@ -1,0 +1,20 @@
+{
+  "song": "xsynthbig.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.24878,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "0d1aa6819207043e12c60e7b899f08657f92b8264f645b8f9ca93f7e0ca67d61",
+  "nodeTypes": [
+    "bus-in",
+    "lone",
+    "out",
+    "ringmod",
+    "tempo",
+    "voices",
+    "xsynth"
+  ]
+}
