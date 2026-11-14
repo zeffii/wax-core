@@ -1,0 +1,19 @@
+{
+  "song": "khufuone.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.215715,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "7d35b4eb7daf0bccdbffdb102cf3a2e949accb15a8d401d7b4e865ac0e595c4c",
+  "nodeTypes": [
+    "bus-in",
+    "khufu",
+    "out",
+    "prismacanyon",
+    "tempo",
+    "voices"
+  ]
+}

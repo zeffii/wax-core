@@ -52,6 +52,8 @@ const NodeRegistry& builtinNodes() {
     registerSpecDyn(r);
     registerXSynth(r);
     registerRotary(r);
+    registerJawHarp(r);
+    registerKhufu(r);
     registerSweep(r);
     registerExciter(r);
     registerCardinal(r);

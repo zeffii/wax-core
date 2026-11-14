@@ -55,6 +55,8 @@ void registerMbComp(NodeRegistry& registry);
 void registerSpecDyn(NodeRegistry& registry);
 void registerXSynth(NodeRegistry& registry);
 void registerRotary(NodeRegistry& registry);
+void registerJawHarp(NodeRegistry& registry);
+void registerKhufu(NodeRegistry& registry);
 void registerSweep(NodeRegistry& registry);
 void registerExciter(NodeRegistry& registry);
 void registerCardinal(NodeRegistry& registry);

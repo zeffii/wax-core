@@ -134,6 +134,8 @@ add_library(waxcore
   src/nodes/specdyn.cpp
   src/nodes/xsynth.cpp
   src/nodes/rotary.cpp
+  src/nodes/jawharp.cpp
+  src/nodes/khufu.cpp
   src/nodes/sweep.cpp
   src/nodes/exciter.cpp
   src/nodes/cardinal.cpp

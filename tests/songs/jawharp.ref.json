@@ -1,0 +1,19 @@
+{
+  "song": "jawharp.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 1.440618,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "7e20f24873843bc163853ea254664eb1c18277605ffa8d0f3b3c668902bc6f6c",
+  "nodeTypes": [
+    "bus-in",
+    "jawharp",
+    "out",
+    "prismacanyon",
+    "tempo",
+    "voices"
+  ]
+}
