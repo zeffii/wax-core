@@ -5,6 +5,8 @@
 #include <sstream>
 #include <stdexcept>
 
+#include "project/master.h"
+
 namespace wax {
 namespace {
 
@@ -12,6 +14,8 @@ constexpr const char* kFormat = "webtracker";
 constexpr int kVersion = 1;
 
 std::runtime_error problem(const std::string& message) { return std::runtime_error(message); }
+
+std::string text(const Json& object, const char* key) { return object.value(key, std::string()); }
 
 Song readSong(const Json& data) {
   Song song;
@@ -25,22 +29,29 @@ Song readSong(const Json& data) {
   return song;
 }
 
+GraphNode readNode(const Json& n) {
+  GraphNode node;
+  node.id = n.at("id").get<std::string>();
+  node.type = n.at("type").get<std::string>();
+  if (node.type == "busin") node.type = "bus-in";   // build 748 called it busin
+  node.params = n.value("params", Json::object());
+  node.ports = n.value("ports", std::vector<std::string>());
+  node.stereo = n.value("stereo", false);
+  node.alias = text(n, "alias");
+  node.source = text(n, "source");
+  node.parts = n.value("parts", Json());
+  node.data = n.value("data", Json());
+  return node;
+}
+
 Graph readGraph(const Json& data) {
   Graph graph;
-  for (const Json& n : data.value("nodes", Json::array())) {
-    GraphNode node;
-    node.id = n.at("id").get<std::string>();
-    node.type = n.at("type").get<std::string>();
-    if (node.type == "busin") node.type = "bus-in";   // build 748 called it busin
-    node.params = n.value("params", Json::object());
-    node.raw = n;
-    graph.nodes.push_back(std::move(node));
-  }
+  for (const Json& n : data.value("nodes", Json::array())) graph.nodes.push_back(readNode(n));
   for (const Json& c : data.value("connections", Json::array())) {
     graph.connections.push_back({c.at(0).get<std::string>(), c.at(1).get<std::string>()});
   }
   graph.voices = data.value("voices", 1);
-  graph.neverSleeps = data.value("sleep", std::string()) == "never";
+  graph.neverSleeps = text(data, "sleep") == "never";
   return graph;
 }
 
@@ -50,6 +61,42 @@ Instrument readInstrument(const std::string& id, const Json& data) {
   instrument.raw = data;
   instrument.graph = readGraph(data.value("graph", Json::object()));
   instrument.noteColumns = data.value("noteColumns", 1);
+  instrument.noVel = data.value("noVel", false);
+
+  for (const Json& e : data.value("exposed", Json::array())) {
+    instrument.exposed.push_back({text(e, "node"), text(e, "param"), e.value("bits", 8), text(e, "scale") == "log"});
+  }
+  for (const Json& c : data.value("commands", Json::array())) {
+    Command command;
+    command.id = c.value("id", 0);
+    command.node = text(c, "node");
+    command.param = text(c, "param");
+    command.log = text(c, "scale") == "log";
+    if (c.contains("fixed") && c["fixed"].is_number()) command.fixed = c["fixed"].get<double>();
+    command.reset = c.value("reset", 0);
+    command.setting = text(c, "setting");
+    instrument.commands.push_back(std::move(command));
+  }
+  const Json triggers = data.value("triggers", Json::array());
+  for (std::size_t i = 0; i < triggers.size(); i++) {
+    instrument.triggers.push_back({triggers[i].value("note", static_cast<int>(i))});
+  }
+  if (data.contains("meta")) {
+    instrument.isMeta = true;
+    for (const Json& m : data["meta"].value("columns", Json::array())) {
+      MetaColumn column;
+      column.id = text(m, "id");
+      column.instrument = text(m, "instrument");
+      column.role = text(m, "role");
+      column.nc = m.value("nc", 0);
+      column.tc = m.value("tc", 0);
+      column.node = text(m, "node");
+      column.param = text(m, "param");
+      column.bits = m.value("bits", 0);
+      column.root = m.value("root", 60);
+      instrument.metaColumns.push_back(std::move(column));
+    }
+  }
   return instrument;
 }
 
@@ -70,10 +117,21 @@ Lane readLane(const Json& data) {
   for (const Json& p : data.value("placements", Json::array())) {
     lane.placements.push_back({p.at("puid").get<std::string>(), p.value("start", 0), p.value("length", 0)});
   }
+  lane.mutes = data.value("mutes", std::vector<int>());
+  lane.offs = data.value("offs", std::vector<int>());
+  lane.silenced = data.value("silenced", false);
   return lane;
 }
 
 }  // namespace
+
+double GraphNode::param(const std::string& name, double fallback) const {
+  const auto found = params.find(name);
+  if (found == params.end()) return fallback;
+  if (found->is_number()) return found->get<double>();
+  if (found->is_boolean()) return found->get<bool>() ? 1.0 : 0.0;
+  return fallback;
+}
 
 const Instrument* Project::findInstrument(const std::string& id) const {
   for (const Instrument& instrument : instruments) if (instrument.id == id) return &instrument;
@@ -86,24 +144,26 @@ std::vector<std::string> Project::nodeTypes() const {
   return {types.begin(), types.end()};
 }
 
-Project parseProject(const std::string& text) {
+Project parseProject(const std::string& fileText) {
   Json data;
   try {
-    data = Json::parse(text);
+    data = Json::parse(fileText);
   } catch (const Json::parse_error&) {
     throw problem("Not a webtracker file (invalid JSON).");
   }
-  if (!data.is_object() || data.value("format", std::string()) != kFormat) throw problem("Not a webtracker file.");
+  if (!data.is_object() || text(data, "format") != kFormat) throw problem("Not a webtracker file.");
   if (const int version = data.value("version", 0); version != kVersion) {
     throw problem("Unsupported file version " + std::to_string(version) + "; this build reads version " + std::to_string(kVersion) + ".");
   }
 
   Project project;
   try {
+    if (!data.contains("instruments")) data["instruments"] = Json::object();
+    ensureMaster(data);
     project.song = readSong(data.at("song"));
     const Json& instruments = data.at("instruments");
     for (const auto& [id, def] : instruments.items()) project.instruments.push_back(readInstrument(id, def));
-    for (const Json& lane : data.value("lanes", Json::array())) project.lanes.push_back(readLane(lane));
+    for (const Json& lane : data.at("lanes")) project.lanes.push_back(readLane(lane));
     project.samples = data.value("samples", Json::object());
   } catch (const Json::exception& e) {
     throw problem(std::string("The file is damaged: ") + e.what());
@@ -120,9 +180,9 @@ Project parseProject(const std::string& text) {
 Project loadProject(const std::string& path) {
   std::ifstream file(path, std::ios::binary);
   if (!file) throw problem("Cannot open \"" + path + "\".");
-  std::ostringstream text;
-  text << file.rdbuf();
-  return parseProject(text.str());
+  std::ostringstream contents;
+  contents << file.rdbuf();
+  return parseProject(contents.str());
 }
 
 }  // namespace wax

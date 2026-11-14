@@ -24,16 +24,40 @@ add_library(waxcore
   src/core/params.cpp
   src/core/node_registry.cpp
   src/core/random.cpp
-  src/nodes/all_nodes.cpp
-  src/nodes/gain.cpp
   src/project/project.cpp
-  src/io/wav.cpp)
+  src/project/master.cpp
+  src/graph/compile.cpp
+  src/seq/cells.cpp
+  src/seq/columns.cpp
+  src/seq/lane.cpp
+  src/engine/runtime.cpp
+  src/engine/sleep.cpp
+  src/engine/limiter.cpp
+  src/engine/sequencer.cpp
+  src/engine/offline.cpp
+  src/io/wav.cpp
+  src/nodes/all_nodes.cpp
+  src/nodes/waves.cpp
+  src/nodes/plumbing.cpp
+  src/nodes/out.cpp
+  src/nodes/busin.cpp
+  src/nodes/tempo.cpp
+  src/nodes/voices.cpp
+  src/nodes/clap.cpp
+  src/nodes/combperc.cpp
+  src/nodes/env.cpp
+  src/nodes/gain.cpp
+  src/nodes/hat808.cpp
+  src/nodes/osc.cpp)
 target_include_directories(waxcore PUBLIC src)
 target_link_libraries(waxcore PUBLIC nlohmann_json::nlohmann_json)
 
 # Command-line tools.
 add_executable(wax-info tools/wax_info.cpp)
 target_link_libraries(wax-info PRIVATE waxcore)
+
+add_executable(wax-render tools/wax_render.cpp)
+target_link_libraries(wax-render PRIVATE waxcore)
 
 add_executable(wax-compare tools/wax_compare.cpp)
 target_link_libraries(wax-compare PRIVATE waxcore)

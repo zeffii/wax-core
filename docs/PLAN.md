@@ -7,12 +7,12 @@ built engine first, with the window last. Tick a step when it is done.
       32-bit float render and a `.json` of facts; every later step is checked against it.
 - [x] **2. Skeleton.** CMake, C++20, the `.wax` reader, the parameter block, the node interface, the first node (gain),
       `wax-info`, `wax-compare`, tests, and a build on Windows and Linux for every push.
-- [ ] **3. Sequencer and graph runtime**, on one thread: the graph compiler (`graph/compile.js`), the runtime
-      (`audio/runtime.js`: voices, sleep, delay compensation), the pattern reader (`seq/lane.js`, `seq/cells.js`) and
-      the sequencer (`audio/sequencer.js`). Also the master machine every project gets when it is loaded
-      (`ensureMaster`: the `bus-in` and `tempo` nodes).
-- [ ] **4. First song: `concrete.wax`.** Its nodes: osc, env, gain, clap, combperc, hat808, out (and bus-in, tempo
-      for the master). A new `wax-render song.wax out.wav`, compared with the reference.
+- [x] **3. Sequencer and graph runtime**, on one thread: the graph compiler (`graph/compile.cpp`), the runtime
+      (`engine/runtime.cpp`: voices, sleep, kill, delay compensation), the pattern reader (`seq/`), the sequencer
+      (`engine/sequencer.cpp`), the limiter, and the master machine every project gets when it is loaded.
+- [x] **4. First song: `concrete.wax`.** Its nodes: osc, env, gain, clap, combperc, hat808, out, bus-in, tempo and
+      the hidden sum, fold and delay nodes. `wax-render song.wax out.wav` renders it, and the result is the same as
+      the reference to the last bit (on Linux with GCC; other compilers' maths may differ in the last digits).
 - [ ] **5. The other demos, smallest first**: acid, progression, chords, westcoast, then nodes and voicing (which bring
       the Node Sequencer), mosh, vocoder, weights, original, phase, suite, bugsong, interstellar-nodes.
 - [ ] **6. Threads.** A pool of workers renders the instruments of a block side by side. Sidechain, listen and meta
@@ -22,6 +22,16 @@ built engine first, with the window last. Tick a step when it is done.
 - [ ] **8. The window**: Dear ImGui on SDL3. The pattern editor first, then the sequence view, the mixer, parameter
       panels, and the drawn views (Bezier envelopes, the DX loader) last.
 - [ ] **9. The long tail**: the nodes no demo uses, the genexpr node (its compiler has to be ported) and the glsl node.
+
+## Parts of the engine still to come
+
+Each is named in a comment where it will go, and `wax-render` says so when a song needs one of them:
+
+- the Node Sequencer (`audio/nodeseq.js`), with step 5's `nodes.wax`
+- lane curves, the automation (`seq/automation.js`, `Sequencer.applyCurves`), with `bugsong.wax`
+- node messages: samples, drawn waves and curves, and the data a preset sends (`runtime.message`)
+- the mixer's carve stage (`audio/carve.js`)
+- the arp's note input and the sidechain's tap (the hooks are in `core/node.h` and the run order already honours sidechains)
 
 ## What counts as ported
 

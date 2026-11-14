@@ -3,12 +3,14 @@
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
 #include "core/node_registry.h"
 #include "core/params.h"
 #include "core/random.h"
+#include "engine/offline.h"
 #include "io/wav.h"
 #include "project/project.h"
 
@@ -53,13 +55,13 @@ void testProject() {
   const std::string path = std::string(WAX_TEST_SONGS) + "/concrete.wax";
   const wax::Project project = wax::loadProject(path);
   check(project.song.bpm == 134 && project.song.length == 64 && project.song.ticksPerBeat == 4, "the song's tempo and length are read");
-  check(project.instruments.size() == 6 && project.instruments.front().id == "kick" && project.instruments.back().id == "grid", "the instruments keep the order of the file");
+  check(project.instruments.size() == 7 && project.instruments.front().id == "master" && project.instruments[1].id == "kick" && project.instruments.back().id == "grid", "the instruments keep the order of the file, after the master");
   const wax::Instrument* kick = project.findInstrument("kick");
   check(kick && kick->graph.nodes.size() == 5 && kick->graph.nodes[0].type == "env" && kick->graph.nodes[0].params.value("decay", 0.0) == 70, "a graph's nodes and parameters are read");
   check(kick && kick->graph.connections.size() == 4 && kick->graph.connections[0].from == "pitchEnv.out" && kick->graph.connections[0].to == "osc.fm", "a graph's connections are read");
   check(project.findInstrument("hat")->noteColumns == 0 && kick->noteColumns == 1, "note columns default to one");
-  check(project.lanes.size() == 1 && !project.lanes[0].patterns.empty() && !project.lanes[0].patterns[0].rows.empty() && project.lanes[0].placements[1].start == 4, "lanes, patterns and placements are read");
-  const std::vector<std::string> expected = {"clap", "combperc", "env", "gain", "hat808", "osc", "out"};
+  check(project.lanes.size() == 2 && project.lanes[0].id == "master" && !project.lanes[1].patterns.empty() && !project.lanes[1].patterns[0].rows.empty() && project.lanes[1].placements[1].start == 4, "lanes, patterns and placements are read");
+  const std::vector<std::string> expected = {"bus-in", "clap", "combperc", "env", "gain", "hat808", "osc", "out", "tempo"};
   check(project.nodeTypes() == expected, "the song's node types are listed");
 
   check(throws([] { wax::parseProject("not json"); }), "text that is not JSON is refused");
@@ -80,11 +82,14 @@ void testGain() {
   float params[] = {2.0f};
   const int slots[] = {0};
 
-  auto plain = gain->create({.connected = {true, false}});
+  wax::NodeContext context;
+  context.connected = {true, false};
+  auto plain = gain->create(context);
   plain->process(inputs, outputs, n, params, slots);
   check(out[0] == 1.0f && out[n - 1] == 1.0f, "without cv the output is in * gain");
 
-  auto vca = gain->create({.connected = {true, true}});
+  context.connected = {true, true};
+  auto vca = gain->create(context);
   vca->process(inputs, outputs, n, params, slots);
   check(out[n - 1] == 0.5f, "with cv connected the output is in * gain * cv");
 
@@ -115,6 +120,22 @@ void testWav() {
   std::printf("ok: sound files\n");
 }
 
+// The first whole song: rendered and checked against what webtracker's reference render of it measured
+// (tests/songs/concrete.ref.json, written by `node tools/render-ref.mjs`). The full sample-by-sample comparison is
+// done with wax-compare against the reference WAV, which is too big to keep in the repo.
+void testRenderConcrete() {
+  const std::string songs = WAX_TEST_SONGS;
+  const wax::Project project = wax::loadProject(songs + "/concrete.wax");
+  const wax::RenderResult render = wax::renderSong(project);
+  std::ifstream file(songs + "/concrete.ref.json");
+  const wax::Json reference = wax::Json::parse(file);
+  check(render.warnings.empty(), "the song uses nothing that is not ported");
+  check(render.audio.sampleRate == reference.value("sampleRate", 0), "the render has the reference's sample rate");
+  check(render.audio.frames() == reference.value("frames", std::size_t{0}), "the render is as long as the reference, to the sample");
+  check(std::abs(render.peak - reference.value("peak", 0.0)) < 1e-5, "the render peaks where the reference does");
+  std::printf("ok: concrete.wax renders (%zu frames, peak %.6f)\n", render.audio.frames(), render.peak);
+}
+
 }  // namespace
 
 int main() {
@@ -123,6 +144,7 @@ int main() {
   testProject();
   testGain();
   testWav();
+  testRenderConcrete();
   if (failures) std::printf("%d check%s failed\n", failures, failures == 1 ? "" : "s");
   else std::printf("all tests passed\n");
   return failures;

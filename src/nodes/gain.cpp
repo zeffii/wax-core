@@ -39,7 +39,8 @@ void registerGain(NodeRegistry& registry) {
   type.inputs = {"in", "cv"};
   type.outputs = {"out"};
   type.params = {{"gain", 0, 4, 1}};
-  type.dual = true;
+  type.kinds = {{"cv", PortKind::Control}};   // ports are audio unless listed
+  type.dual = true;                           // runs as a left/right pair when a stereo signal arrives
   type.create = [](const NodeContext& context) { return std::make_unique<Gain>(context); };
   registry.add(std::move(type));
 }

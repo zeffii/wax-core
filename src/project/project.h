@@ -5,14 +5,13 @@
 // in that order (and the JS engine walks its objects in the order they were written).
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
-#include <nlohmann/json.hpp>
+#include "core/node.h"   // Json
 
 namespace wax {
-
-using Json = nlohmann::ordered_json;   // keeps the keys of an object in file order
 
 struct Song {
   std::string name = "untitled";
@@ -27,8 +26,16 @@ struct Song {
 struct GraphNode {
   std::string id;
   std::string type;
-  Json params;             // { name: value } as written (empty object when the node has none)
-  Json raw;                // the whole node (data, init, ...), for nodes that carry more than parameters
+  Json params;                       // { name: value } as written (empty object when the node has none)
+  std::vector<std::string> ports;    // parameters that have been given an input port (named "@param" in connections)
+  bool stereo = false;               // e.g. a sampler whose sample has two channels
+  std::string alias;                 // a copy of a range node keeps the original's parameters under this id
+  std::string source;                // sidechain, listen: the instrument it hears
+  Json parts;                        // sidechain on a meta machine: which of its machines (null: all)
+  Json data;                         // what a node carries besides parameters (a drawn wave, a chord list, ...), or null
+
+  // The value the graph sets for a parameter, or `fallback` when it sets none.
+  double param(const std::string& name, double fallback) const;
 };
 
 struct Connection {
@@ -43,11 +50,54 @@ struct Graph {
   bool neverSleeps = false;
 };
 
+// A parameter shown as a pattern column.
+struct Exposed {
+  std::string node;
+  std::string param;
+  int bits = 8;            // 16: a four-digit column, 4: one digit, otherwise two
+  bool log = false;        // the column runs across the range on a log scale
+};
+
+// An entry of the command column's table (CCXXYY): command id -> a parameter.
+struct Command {
+  int id = 0;
+  std::string node;
+  std::string param;
+  bool log = false;
+  std::optional<double> fixed;   // writes this one value whatever the value cell says
+  int reset = 0;                 // a group mask: the command puts those groups back to their starting values
+  std::string setting;           // "save" or "load": the command stores or recalls a set of values
+};
+
+// A trigger column (the hi-hat's Cl and Op): each filled cell is a hit with this note number.
+struct Trigger {
+  int note = 0;
+};
+
+// One column of a meta machine: a proxy for one thing of another instrument (see seq/columns.cpp).
+struct MetaColumn {
+  std::string id;
+  std::string instrument;
+  std::string role;        // note, rnote, vel, trig, spacer, param
+  int nc = 0;
+  int tc = 0;
+  std::string node;
+  std::string param;
+  int bits = 0;            // 0: as wide as the instrument shows it
+  int root = 60;           // rnote: the MIDI number of the root note
+};
+
 struct Instrument {
   std::string id;
   Graph graph;
   int noteColumns = 1;
-  Json raw;                // exposed, commands, triggers, meta, samples: read by the sequencer when it is ported
+  bool noVel = false;
+  std::vector<Exposed> exposed;
+  std::vector<Command> commands;
+  std::vector<Trigger> triggers;
+  bool isMeta = false;
+  std::vector<MetaColumn> metaColumns;
+  Json raw;                // presets, commandGroups, samples: read when the nodes that need them are ported
 };
 
 struct Pattern {
@@ -68,7 +118,10 @@ struct Lane {
   std::string instrument;
   std::vector<Pattern> patterns;
   std::vector<Placement> placements;
-  Json raw;                // mutes, offs, silenced, curves
+  std::vector<int> mutes;  // the ticks where the lane flips between playing and muted
+  std::vector<int> offs;   // the ticks where the lane lets go of its notes
+  bool silenced = false;
+  Json raw;                // curves: read when automation is ported
 };
 
 struct Project {
@@ -82,6 +135,9 @@ struct Project {
   // Every node type the project's instruments use, sorted, each once.
   std::vector<std::string> nodeTypes() const;
 };
+
+// The master machine and its lane: every project gets them when it is loaded, first in the lists (see project/master.cpp).
+inline const std::string kMaster = "master";
 
 // Both throw std::runtime_error with a message meant for the user when the text is not a project this build can read.
 Project parseProject(const std::string& text);

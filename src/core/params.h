@@ -15,21 +15,21 @@ inline constexpr std::size_t kParamCapacity = 4096;
 
 struct ParamMeta {
   std::string address;   // "instrument.node.param"
-  float min = 0;
-  float max = 1;
+  double min = 0;         // the range is kept as doubles, as in JS: a value on a log scale is worked out from them
+  double max = 1;
   bool isInt = false;
 };
 
 class ParamRegistry {
 public:
   // Allocating an address that is already known returns its slot and keeps the current value.
-  int allocate(const std::string& address, float def, float min, float max, bool isInt = false);
+  int allocate(const std::string& address, double def, double min, double max, bool isInt = false);
 
   // Returns -1 when the address is not known.
   int slotOf(const std::string& address) const;
 
   // Clamps to the parameter's range. A value that is not finite is ignored (it would silence everything downstream).
-  void set(const std::string& address, float value);
+  void set(const std::string& address, double value);
   float get(const std::string& address) const;
 
   const ParamMeta& meta(int slot) const { return meta_[static_cast<std::size_t>(slot)]; }

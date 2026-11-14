@@ -23,8 +23,11 @@ The programs land in `build\Release\`. Or open the folder in Visual Studio (File
 | path | what it is |
 | --- | --- |
 | `src/core/` | the parameter block, what a node is, the list of node types, the dice |
+| `src/graph/` | the graph compiler: an instrument's nodes and wires become a list of nodes to run and the buffers between them |
+| `src/engine/` | the runtime (runs the graphs, voices, sleep), the sequencer (plays the patterns), the limiter, offline rendering |
+| `src/seq/` | pattern cells and columns, and laying a lane's patterns out along the song |
 | `src/nodes/` | the machines' DSP, one file per node, each a translation of `webtracker/src/audio/nodes/<name>.js` |
-| `src/project/` | reading `.wax` files |
+| `src/project/` | reading `.wax` files, and the master machine every project gets |
 | `src/io/` | sound files, and comparing two renders |
 | `tools/` | the command-line programs |
 | `tests/` | the tests (`ctest`), and the songs they use |
@@ -32,6 +35,7 @@ The programs land in `build\Release\`. Or open the folder in Visual Studio (File
 ## The tools
 
     wax-info song.wax                        what a song is made of, and which of its node types are ported
+    wax-render song.wax out.wav              renders a song offline to a 32-bit float WAV
     wax-compare reference.wav native.wav     how far two renders are apart (passes under -90 dB)
 
 A reference render comes from the web app's repo: `node tools/render-ref.mjs song.wax`.

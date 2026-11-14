@@ -6,6 +6,19 @@
 
 namespace wax {
 
+// plumbing the compiler and the runtime rely on
+void registerPlumbing(NodeRegistry& registry);   // sum, sumst, fold, compdelay (inserted by the compiler)
+void registerOut(NodeRegistry& registry);
+void registerBusIn(NodeRegistry& registry);
+void registerTempo(NodeRegistry& registry);
+void registerVoices(NodeRegistry& registry);
+
+// the machines
+void registerClap(NodeRegistry& registry);
+void registerCombPerc(NodeRegistry& registry);
+void registerEnv(NodeRegistry& registry);
 void registerGain(NodeRegistry& registry);
+void registerHat808(NodeRegistry& registry);
+void registerOsc(NodeRegistry& registry);
 
 }  // namespace wax
