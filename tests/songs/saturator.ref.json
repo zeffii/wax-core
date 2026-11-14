@@ -1,0 +1,21 @@
+{
+  "song": "saturator.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 2469632,
+  "seconds": 56.001,
+  "peak": 0.392583,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "dc4b2def723fc8d7cc024c7794fe62c224b6a3f342acad3f8d766a24d0e00697",
+  "nodeTypes": [
+    "bus-in",
+    "chorus",
+    "out",
+    "saturator",
+    "shimmer",
+    "subsynth",
+    "tempo",
+    "voices"
+  ]
+}

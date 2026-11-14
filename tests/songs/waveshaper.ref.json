@@ -1,0 +1,21 @@
+{
+  "song": "waveshaper.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 2469632,
+  "seconds": 56.001,
+  "peak": 0.851937,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "d9a4535a09f7e1467dd0e6c2fd3865e011a713f23242fca198eced0dd5bcd166",
+  "nodeTypes": [
+    "bus-in",
+    "chorus",
+    "out",
+    "shimmer",
+    "subsynth",
+    "tempo",
+    "voices",
+    "waveshaper"
+  ]
+}

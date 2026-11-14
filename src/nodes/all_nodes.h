@@ -37,6 +37,11 @@ void registerIslands(NodeRegistry& registry);
 void registerGate(NodeRegistry& registry);
 void registerLadder(NodeRegistry& registry);
 void registerEq(NodeRegistry& registry);
+void registerSaturator(NodeRegistry& registry);
+void registerWaveShaper(NodeRegistry& registry);
+void registerTransient(NodeRegistry& registry);
+void registerRingMod(NodeRegistry& registry);
+void registerComb(NodeRegistry& registry);
 void registerGain(NodeRegistry& registry);
 void registerHall(NodeRegistry& registry);
 std::unique_ptr<Node> makeHall(const NodeContext& context);   // a hall reverb on its own, for the shimmer to run inside

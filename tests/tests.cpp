@@ -174,6 +174,9 @@ int main() {
   testRenderSong("cloves");
   testRenderSong("islands");
   testRenderSong("eqladdergate");
+  testRenderSong("saturator");
+  testRenderSong("waveshaper");
+  testRenderSong("combringtransient");
   for (const char* name : {"concrete", "nodes", "mosh", "suite", "effects2", "bugsong", "cloves"}) testThreads(name);
   if (failures) std::printf("%d check%s failed\n", failures, failures == 1 ? "" : "s");
   else std::printf("all tests passed\n");

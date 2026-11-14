@@ -1,0 +1,23 @@
+{
+  "song": "combringtransient.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 2469632,
+  "seconds": 56.001,
+  "peak": 0.624661,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "85bccbea56edd57f40a38dd4b1d4484b506b1fe590f0e616263d3c4d1253caad",
+  "nodeTypes": [
+    "bus-in",
+    "chorus",
+    "comb",
+    "out",
+    "ringmod",
+    "shimmer",
+    "subsynth",
+    "tempo",
+    "transient",
+    "voices"
+  ]
+}

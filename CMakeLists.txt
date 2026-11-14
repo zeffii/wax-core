@@ -116,6 +116,11 @@ add_library(waxcore
   src/nodes/gate.cpp
   src/nodes/ladder.cpp
   src/nodes/eq.cpp
+  src/nodes/saturator.cpp
+  src/nodes/waveshaper.cpp
+  src/nodes/transient.cpp
+  src/nodes/ringmod.cpp
+  src/nodes/comb.cpp
   src/nodes/shiva.cpp
   src/nodes/woodblock.cpp
   src/nodes/mosh.cpp
