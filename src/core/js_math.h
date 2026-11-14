@@ -31,6 +31,24 @@ inline double jsHypot(double a, double b) {
   return std::sqrt(sum) * largest;
 }
 
+// Math.hypot for three numbers, the same way.
+inline double jsHypot(double a, double b, double c) {
+  a = std::abs(a);
+  b = std::abs(b);
+  c = std::abs(c);
+  const double largest = a > b ? (a > c ? a : c) : (b > c ? b : c);
+  if (largest == 0) return 0;
+  double sum = 0, compensation = 0;
+  for (const double value : {a, b, c}) {
+    const double n = value / largest;
+    const double summand = n * n - compensation;
+    const double preliminary = sum + summand;
+    compensation = (preliminary - sum) - summand;
+    sum = preliminary;
+  }
+  return std::sqrt(sum) * largest;
+}
+
 // Math.sin and friends as the web app's engine computes them (fdlibm, vendored in third_party/v8-ieee754). The system
 // maths library differs from it in the last digit now and then, and a node that decides on a value (mosh, the spectral
 // ones) can fall the other way, so every node goes through these rather than std::sin and the rest.

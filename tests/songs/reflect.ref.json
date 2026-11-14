@@ -1,0 +1,19 @@
+{
+  "song": "reflect.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.425513,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "df7cc5198fbdfa5dc910772278a853600f2f61f4d6eb50754378f4e577842419",
+  "nodeTypes": [
+    "bus-in",
+    "lone",
+    "out",
+    "reflect",
+    "tempo",
+    "voices"
+  ]
+}

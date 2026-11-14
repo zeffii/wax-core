@@ -181,6 +181,8 @@ int main() {
   testRenderSong("exciter-sweep");
   testRenderSong("pulsar");
   testRenderSong("pulsetrain");
+  testRenderSong("ensemble");
+  testRenderSong("reflect");
   testRenderSong("cardinal");
   testRenderSong("drumsynth");
   testRenderSong("waveshaper");

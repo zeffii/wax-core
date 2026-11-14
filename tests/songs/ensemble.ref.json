@@ -1,0 +1,19 @@
+{
+  "song": "ensemble.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.257393,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "e14b2d0d4ac68f02fc778182cd8bfd90c22fd88b6cfd50584df66bd1b4dbed6a",
+  "nodeTypes": [
+    "bus-in",
+    "ensemble",
+    "lone",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}

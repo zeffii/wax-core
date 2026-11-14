@@ -41,4 +41,27 @@ std::vector<int> wantedStrings(const std::vector<int>& bag, double partials, dou
   return out;
 }
 
+Room reflections(double w, double d, double h, double sFracX, double sFracY, double lFracX, double lFracY, double absorb, double taps) {
+  constexpr int kOrder = 3;
+  const double z = std::min(1.5, h / 2), sx = sFracX * w, sy = sFracY * d, lx = lFracX * w, ly = lFracY * d;
+  const double dist0 = std::max(0.3, jsHypot(sx - lx, sy - ly));
+  const double keep = 1 - std::min(0.98, std::max(0.0, absorb));
+  std::vector<Tap> list;
+  auto axis = [](int n, double size, double at) { return n % 2 == 0 ? n * size + at : n * size + size - at; };
+  for (int nx = -kOrder; nx <= kOrder; nx++)
+    for (int ny = -kOrder; ny <= kOrder; ny++)
+      for (int nz = -kOrder; nz <= kOrder; nz++) {
+        const int order = std::abs(nx) + std::abs(ny) + std::abs(nz);
+        if (order == 0 || order > kOrder) continue;
+        const double x = axis(nx, w, sx), y = axis(ny, d, sy), zz = axis(nz, h, z);
+        const double dx = x - lx, dy = y - ly, dz = zz - z, dist = std::max(0.3, jsHypot(dx, dy, dz));
+        const double flat = jsHypot(dx, dy);
+        list.push_back({dist / kSpeed, dist0 / dist * js::pow(keep, order), flat < 1e-6 ? 0 : dx / flat, order});
+      }
+  std::stable_sort(list.begin(), list.end(), [](const Tap& a, const Tap& b) { return a.delay < b.delay; });
+  const int count = std::max(1, std::min(kMaxTaps, jsRoundInt(taps)));
+  list.resize(std::min<size_t>(list.size(), count));
+  return {dist0 / kSpeed, list};
+}
+
 }  // namespace wax::space
