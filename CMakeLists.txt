@@ -45,10 +45,13 @@ add_library(waxcore
   src/nodes/voices.cpp
   src/nodes/clap.cpp
   src/nodes/combperc.cpp
+  src/nodes/duette.cpp
   src/nodes/env.cpp
   src/nodes/gain.cpp
   src/nodes/hat808.cpp
-  src/nodes/osc.cpp)
+  src/nodes/osc.cpp
+  src/nodes/squelch.cpp
+  src/nodes/subsynth.cpp)
 target_include_directories(waxcore PUBLIC src)
 target_link_libraries(waxcore PUBLIC nlohmann_json::nlohmann_json)
 

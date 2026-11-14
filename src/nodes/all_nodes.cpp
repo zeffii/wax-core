@@ -13,10 +13,13 @@ const NodeRegistry& builtinNodes() {
 
     registerClap(r);
     registerCombPerc(r);
+    registerDuette(r);
     registerEnv(r);
     registerGain(r);
     registerHat808(r);
     registerOsc(r);
+    registerSquelch(r);
+    registerSubSynth(r);
     return r;
   }();
   return registry;

@@ -16,9 +16,12 @@ void registerVoices(NodeRegistry& registry);
 // the machines
 void registerClap(NodeRegistry& registry);
 void registerCombPerc(NodeRegistry& registry);
+void registerDuette(NodeRegistry& registry);
 void registerEnv(NodeRegistry& registry);
 void registerGain(NodeRegistry& registry);
 void registerHat808(NodeRegistry& registry);
 void registerOsc(NodeRegistry& registry);
+void registerSquelch(NodeRegistry& registry);
+void registerSubSynth(NodeRegistry& registry);
 
 }  // namespace wax
