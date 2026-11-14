@@ -1,0 +1,19 @@
+{
+  "song": "genexprstress.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.261523,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "fd77a77f6c0e1665b5a9466871c62b19ce6713e43a0aa10880ca112a1e57ebc4",
+  "nodeTypes": [
+    "bus-in",
+    "genexpr",
+    "lone",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}

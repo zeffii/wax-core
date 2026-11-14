@@ -1,0 +1,19 @@
+{
+  "song": "genexprstressvoice.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.468219,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "16c46d7d6a7b45d2f50e8f9403e42e192fc73c0883d39f4538058e7435e8b1c3",
+  "nodeTypes": [
+    "bus-in",
+    "genexpr",
+    "out",
+    "prismacanyon",
+    "tempo",
+    "voices"
+  ]
+}

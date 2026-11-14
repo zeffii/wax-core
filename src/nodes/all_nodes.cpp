@@ -68,6 +68,7 @@ const NodeRegistry& builtinNodes() {
     registerAdd(r);
     registerRoute(r);
     registerAmp(r);
+    registerGenExpr(r);
     registerSweep(r);
     registerExciter(r);
     registerCardinal(r);

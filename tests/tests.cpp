@@ -246,6 +246,15 @@ int main() {
   testRenderSong("ampclean");
   testRenderSong("route");
   testRenderSong("add");
+  testRenderSong("genexpr");
+  testRenderSong("genexprfm");
+  testRenderSong("genexprpluck");
+  testRenderSong("genexprecho");
+  testRenderSong("genexprcrush");
+  testRenderSong("genexprstress");
+  testRenderSong("genexprstressvoice");
+  testRenderSong("genexprdefault");
+  testRenderSong("genexprbad");
   for (const char* name : {"concrete", "nodes", "mosh", "suite", "effects2", "bugsong", "cloves"}) testThreads(name);
   if (failures) std::printf("%d check%s failed\n", failures, failures == 1 ? "" : "s");
   else std::printf("all tests passed\n");

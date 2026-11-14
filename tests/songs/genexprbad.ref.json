@@ -1,0 +1,19 @@
+{
+  "song": "genexprbad.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "81b6249182cdf5ea2ac71be2e3bab37f25be484f8a0a941b8d8ac7a5e0dea1aa",
+  "nodeTypes": [
+    "bus-in",
+    "genexpr",
+    "lone",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}

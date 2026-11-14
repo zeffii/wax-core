@@ -1,0 +1,19 @@
+{
+  "song": "genexprpluck.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.75569,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "706746712d7383e8aef23bb4ab636b986fa3b4889f3355cbe19ded5331824d93",
+  "nodeTypes": [
+    "bus-in",
+    "genexpr",
+    "out",
+    "prismacanyon",
+    "tempo",
+    "voices"
+  ]
+}
