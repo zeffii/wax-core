@@ -108,6 +108,7 @@ private:
   std::map<std::string, std::vector<std::string>> metaTargets_;
   std::optional<std::vector<std::string>> order_;
   std::optional<std::map<std::string, std::vector<Listener>>> followMap_;
+  std::map<std::string, int> instancesMade_;   // per kind of dice-rolling node (see NodeContext::nextInstance)
   std::int64_t blockNo_ = 0;
   bool sawUnported_ = false;
 };

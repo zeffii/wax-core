@@ -11,15 +11,23 @@ const NodeRegistry& builtinNodes() {
     registerTempo(r);
     registerVoices(r);
 
+    registerChord(r);
+    registerChorus(r);
     registerClap(r);
     registerCombPerc(r);
+    registerControlNodes(r);
     registerDuette(r);
     registerEnv(r);
     registerGain(r);
+    registerHall(r);
     registerHat808(r);
     registerOsc(r);
+    registerPlate(r);
+    registerPluckGate(r);
     registerSquelch(r);
     registerSubSynth(r);
+    registerWaveFolder(r);
+    registerWestCoast(r);
     return r;
   }();
   return registry;

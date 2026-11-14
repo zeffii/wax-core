@@ -73,6 +73,9 @@ struct NodeContext {
   const Clock* clock = nullptr;
   const Bus* bus = nullptr;              // only in the master instrument; nullptr elsewhere
   std::function<void(const NoteEvent&)> deliver;   // plays a note on this node's own instrument (the arp does)
+  // How many nodes of a kind this engine has made so far, counting this one (1, 2, 3 ...). The nodes that roll dice seed
+  // their generator from it, so every node and every voice wanders its own way, the same in every render.
+  std::function<int(const std::string& kind)> nextInstance;
 };
 
 // One running copy of a node. All memory is taken in the constructor: process() never allocates.

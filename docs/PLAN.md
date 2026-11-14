@@ -13,8 +13,11 @@ built engine first, with the window last. Tick a step when it is done.
 - [x] **4. First song: `concrete.wax`.** Its nodes: osc, env, gain, clap, combperc, hat808, out, bus-in, tempo and
       the hidden sum, fold and delay nodes. `wax-render song.wax out.wav` renders it, and the result is the same as
       the reference to the last bit (on Linux with GCC; other compilers' maths may differ in the last digits).
-- [ ] **5. The other demos, smallest first**: acid, progression, chords, westcoast, then nodes and voicing (which bring
-      the Node Sequencer), mosh, vocoder, weights, original, phase, suite, bugsong, interstellar-nodes.
+- [ ] **5. The other demos, smallest first.**
+      Done, each within -140 dB of the reference or closer: acid, progression, chords, westcoast (which brought squelch,
+      subsynth, duette, chord, chorus, hall, plate, pluckgate, wavefolder, westcoast, random, times).
+      To do: nodes and voicing (which bring the Node Sequencer), mosh, vocoder, weights, original, phase, suite,
+      bugsong, interstellar-nodes.
 - [ ] **6. Threads.** A pool of workers renders the instruments of a block side by side. Sidechain, listen and meta
       machines make one instrument wait for another, so those are put in order and the rest run together. The check:
       the render is the same as on one thread.

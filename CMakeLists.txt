@@ -28,6 +28,7 @@ add_library(waxcore
   src/project/master.cpp
   src/graph/compile.cpp
   src/seq/cells.cpp
+  src/seq/chordname.cpp
   src/seq/columns.cpp
   src/seq/lane.cpp
   src/engine/runtime.cpp
@@ -43,15 +44,23 @@ add_library(waxcore
   src/nodes/busin.cpp
   src/nodes/tempo.cpp
   src/nodes/voices.cpp
+  src/nodes/chord.cpp
+  src/nodes/chorus.cpp
   src/nodes/clap.cpp
   src/nodes/combperc.cpp
+  src/nodes/control_nodes.cpp
   src/nodes/duette.cpp
   src/nodes/env.cpp
   src/nodes/gain.cpp
+  src/nodes/hall.cpp
   src/nodes/hat808.cpp
   src/nodes/osc.cpp
+  src/nodes/plate.cpp
+  src/nodes/pluckgate.cpp
   src/nodes/squelch.cpp
-  src/nodes/subsynth.cpp)
+  src/nodes/subsynth.cpp
+  src/nodes/wavefolder.cpp
+  src/nodes/westcoast.cpp)
 target_include_directories(waxcore PUBLIC src)
 target_link_libraries(waxcore PUBLIC nlohmann_json::nlohmann_json)
 

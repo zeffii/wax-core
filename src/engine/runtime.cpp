@@ -156,6 +156,7 @@ std::unique_ptr<GraphRuntime::RunNode> GraphRuntime::makeNode(const CompiledNode
   context.clock = &clock_;
   context.bus = instrument == "master" ? &bus_ : nullptr;
   context.deliver = [this, instrument](const NoteEvent& event) { deliver(instrument, event); };
+  context.nextInstance = [this](const std::string& kind) { return ++instancesMade_[kind]; };
 
   auto run = std::make_unique<RunNode>();
   run->id = compiled.id;

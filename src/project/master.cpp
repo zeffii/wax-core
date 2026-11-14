@@ -75,7 +75,8 @@ void ensureMaster(Json& data) {
     // A saved master machine starts at the song's own tempo, and gets what later builds added to it.
     if (Json* tempo = findNode(master, "id", "m")) {
       if (!tempo->contains("params")) (*tempo)["params"] = Json::object();
-      for (const auto& [name, value] : tempoParams(song).items()) (*tempo)["params"][name] = value;
+      const Json fromSong = tempoParams(song);   // (named, so it outlives the loop over its items)
+      for (const auto& [name, value] : fromSong.items()) (*tempo)["params"][name] = value;
     }
     if (!findNode(master, "type", "bus-in")) {
       const char* id = findNode(master, "id", "bus") ? "bus-in" : "bus";
