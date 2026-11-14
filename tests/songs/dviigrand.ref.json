@@ -1,0 +1,19 @@
+{
+  "song": "dviigrand.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.296457,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "5b8f0d260c8ec057b1b1c3fe7f51c2312ddad97720eb782641961ea8ac895fd6",
+  "nodeTypes": [
+    "bus-in",
+    "dvii",
+    "out",
+    "prismacanyon",
+    "tempo",
+    "voices"
+  ]
+}

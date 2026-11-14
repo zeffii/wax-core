@@ -1,0 +1,19 @@
+{
+  "song": "dviisolo.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.146003,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "474039bad760839bf598bf23cc5aa6d9b932f10b2bbe37793e0bf951f6c7d6c5",
+  "nodeTypes": [
+    "bus-in",
+    "dvii",
+    "out",
+    "prismacanyon",
+    "tempo",
+    "voices"
+  ]
+}

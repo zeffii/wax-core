@@ -1,0 +1,19 @@
+{
+  "song": "dviilfo.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.147925,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "7ce1e1450a959e7621cc7febda60b8ad4019434f26fbb4486436fb57d0562947",
+  "nodeTypes": [
+    "bus-in",
+    "dvii",
+    "out",
+    "prismacanyon",
+    "tempo",
+    "voices"
+  ]
+}
