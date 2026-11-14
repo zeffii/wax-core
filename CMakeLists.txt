@@ -106,6 +106,12 @@ add_library(waxcore
   src/nodes/drumsynth2.cpp
   src/nodes/clang.cpp
   src/nodes/urugraverb.cpp
+  src/nodes/spacecore.cpp
+  src/nodes/sympathy.cpp
+  src/nodes/kalcore.cpp
+  src/nodes/kaleidoscope.cpp
+  src/nodes/pogue.cpp
+  src/nodes/lone.cpp
   src/nodes/shiva.cpp
   src/nodes/woodblock.cpp
   src/nodes/mosh.cpp

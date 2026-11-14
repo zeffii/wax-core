@@ -29,6 +29,10 @@ void registerHat2(NodeRegistry& registry);
 void registerDrumSynth2(NodeRegistry& registry);
 void registerClang(NodeRegistry& registry);
 void registerUrugraVerb(NodeRegistry& registry);
+void registerSympathy(NodeRegistry& registry);
+void registerKaleidoscope(NodeRegistry& registry);
+void registerPogue(NodeRegistry& registry);
+void registerLone(NodeRegistry& registry);
 void registerGain(NodeRegistry& registry);
 void registerHall(NodeRegistry& registry);
 std::unique_ptr<Node> makeHall(const NodeContext& context);   // a hall reverb on its own, for the shimmer to run inside

@@ -190,6 +190,8 @@ private:
 
 }  // namespace
 
+const std::vector<float>& bundledWaveFrames() { return bundledFrames(); }
+
 void registerWavetable(NodeRegistry& registry) {
   NodeType type;
   type.type = "wavetable";

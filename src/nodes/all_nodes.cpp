@@ -26,6 +26,10 @@ const NodeRegistry& builtinNodes() {
     registerDrumSynth2(r);
     registerClang(r);
     registerUrugraVerb(r);
+    registerSympathy(r);
+    registerKaleidoscope(r);
+    registerPogue(r);
+    registerLone(r);
     registerGain(r);
     registerHall(r);
     registerHat808(r);

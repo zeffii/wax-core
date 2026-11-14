@@ -25,6 +25,7 @@ public:
   }
 
   bool idle() const { return stage_ == Stage::Idle; }
+  bool held() const { return stage_ == Stage::Attacking || stage_ == Stage::Decaying; }   // stage 1 or 2 of the JS
   void on() { stage_ = Stage::Attacking; }
   void off() { if (stage_ == Stage::Attacking || stage_ == Stage::Decaying) stage_ = Stage::Releasing; }
   void cut() { stage_ = Stage::Idle; level_ = 0; }
