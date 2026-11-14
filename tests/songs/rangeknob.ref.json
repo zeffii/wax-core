@@ -1,0 +1,20 @@
+{
+  "song": "rangeknob.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.38456,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "74af198c4b48dd5ee616a3e5cfd498baf740afc785a0a28497d3efe61262f0e1",
+  "nodeTypes": [
+    "bus-in",
+    "ensemble",
+    "lone",
+    "out",
+    "range",
+    "tempo",
+    "voices"
+  ]
+}

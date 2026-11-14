@@ -187,6 +187,9 @@ int main() {
   testRenderSong("split");
   testRenderSong("headpan");
   testRenderSong("pan");
+  testRenderSong("follower");
+  testRenderSong("range");
+  testRenderSong("rangeknob");
   testRenderSong("cardinal");
   testRenderSong("drumsynth");
   testRenderSong("waveshaper");

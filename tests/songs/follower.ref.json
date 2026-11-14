@@ -1,0 +1,20 @@
+{
+  "song": "follower.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.365405,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "788ed0721e9e89e91a4c34d0ffec5386488ce70da776f4093fe804d5edf2c1d0",
+  "nodeTypes": [
+    "bus-in",
+    "ensemble",
+    "follower",
+    "lone",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}

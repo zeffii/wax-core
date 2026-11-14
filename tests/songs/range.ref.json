@@ -1,0 +1,21 @@
+{
+  "song": "range.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.374115,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "f81c5a5082bc888ce8b178af8cfc8231be35e074e046cbba1e31b8d848ba94d5",
+  "nodeTypes": [
+    "bus-in",
+    "ensemble",
+    "lfo",
+    "lone",
+    "out",
+    "range",
+    "tempo",
+    "voices"
+  ]
+}

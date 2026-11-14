@@ -170,6 +170,7 @@ std::unique_ptr<GraphRuntime::RunNode> GraphRuntime::makeNode(const CompiledNode
   context.stereo = compiled.stereo;
   context.data = compiled.data.is_null() ? nullptr : &compiled.data;
   context.init = compiled.init;
+  context.target = compiled.target;
   context.clock = &clock_;
   context.bus = instrument == "master" ? &bus_ : nullptr;
   context.deliver = [this, instrument](const NoteEvent& event) { deliver(instrument, event); };

@@ -123,6 +123,8 @@ add_library(waxcore
   src/nodes/mbsat.cpp
   src/nodes/pan.cpp
   src/nodes/headpan.cpp
+  src/nodes/follower.cpp
+  src/nodes/range.cpp
   src/nodes/sweep.cpp
   src/nodes/exciter.cpp
   src/nodes/cardinal.cpp

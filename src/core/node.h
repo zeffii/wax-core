@@ -83,12 +83,21 @@ struct StereoView {
 };
 
 // What a node is told when it is made (the argument of create() in the JS nodes). It grows as nodes that need more are ported.
+// The limits of the port a range node feeds, so the node can speak in real values.
+struct RangeTarget {
+  double min = 0;
+  double max = 1;
+  bool log = false;
+  bool isInt = false;
+};
+
 struct NodeContext {
   double sampleRate = 44100;
   int maxBlock = 512;
   std::vector<bool> connected;           // one flag per input port
   bool stereo = false;                   // the node's own `stereo` flag in the graph
   const Json* data = nullptr;            // the node's `data` in the graph, when it has any
+  std::optional<RangeTarget> target;     // a range node: the port it feeds
   std::optional<double> init;            // where a node feeding a parameter port should start (0..1)
   const Clock* clock = nullptr;
   const Bus* bus = nullptr;              // only in the master instrument; nullptr elsewhere

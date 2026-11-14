@@ -36,14 +36,6 @@ struct ParamPort {
   bool isInt = false;
 };
 
-// The limits of the port a range node feeds, so the node can speak in real values.
-struct RangeTarget {
-  double min = 0;
-  double max = 1;
-  bool log = false;
-  bool isInt = false;
-};
-
 struct CompiledNode {
   std::string id;
   std::string type;
