@@ -1,0 +1,19 @@
+{
+  "song": "groovesim.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.228423,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "ea53f6ec7a08b3eec30194935ca538513f8c1bfbf920a0ea2aee3c3f84db9a34",
+  "nodeTypes": [
+    "bus-in",
+    "groove",
+    "lone",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}

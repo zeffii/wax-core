@@ -1,0 +1,19 @@
+{
+  "song": "groove.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.432774,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "9151992672daa4161a2746e977d50f058953534a7a0ffab7a539605a3f047c35",
+  "nodeTypes": [
+    "bus-in",
+    "groove",
+    "lone",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}

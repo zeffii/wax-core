@@ -1,0 +1,19 @@
+{
+  "song": "groovewarp.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.200071,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "01bec9e960ffe020822b3e924512e59e767e0b9d35f99603bfc677271f90c419",
+  "nodeTypes": [
+    "bus-in",
+    "groove",
+    "lone",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}

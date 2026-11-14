@@ -1,0 +1,19 @@
+{
+  "song": "granular.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.074819,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "c3179caae33838f06885b320b920604ac4dd284926fc2fa321e83950eb8c28a7",
+  "nodeTypes": [
+    "bus-in",
+    "granular",
+    "out",
+    "prismacanyon",
+    "tempo",
+    "voices"
+  ]
+}
