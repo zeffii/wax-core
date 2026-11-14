@@ -175,6 +175,10 @@ std::unique_ptr<GraphRuntime::RunNode> GraphRuntime::makeNode(const CompiledNode
   context.clock = &clock_;
   context.bus = instrument == "master" ? &bus_ : nullptr;
   context.deliver = [this, instrument](const NoteEvent& event) { deliver(instrument, event); };
+  context.emit = [this, instrument, nodeId = compiled.id](const TakeMessage& message) {
+    std::lock_guard<std::mutex> lock(takeMutex_);
+    takes_.push_back({instrument, nodeId, message});
+  };
   context.nextInstance = [this](const std::string& kind) { return ++instancesMade_[kind]; };
   if (!compiled.source.empty()) {
     const std::string source = compiled.source;
@@ -675,6 +679,13 @@ void GraphRuntime::rebuild(const std::string& id) {
     const std::size_t first = key.find('\0'), second = key.find('\0', first + 1);
     if (key.substr(0, first) == id) sendSample(id, key.substr(first + 1, second - first - 1), message);
   }
+}
+
+std::vector<TakeEvent> GraphRuntime::drainTakes() {
+  std::lock_guard<std::mutex> lock(takeMutex_);
+  std::vector<TakeEvent> out;
+  out.swap(takes_);
+  return out;
 }
 
 void GraphRuntime::sendSample(const std::string& instrument, const std::string& nodeId, std::shared_ptr<const SampleMessage> message) {

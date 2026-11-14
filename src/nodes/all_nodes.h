@@ -72,6 +72,7 @@ void registerAdd(NodeRegistry& registry);
 void registerRoute(NodeRegistry& registry);
 void registerAmp(NodeRegistry& registry);
 void registerGenExpr(NodeRegistry& registry);
+void registerTap(NodeRegistry& registry);
 void registerSweep(NodeRegistry& registry);
 void registerExciter(NodeRegistry& registry);
 void registerCardinal(NodeRegistry& registry);

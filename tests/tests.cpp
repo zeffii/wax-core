@@ -11,6 +11,7 @@
 #include "core/params.h"
 #include "core/random.h"
 #include "engine/offline.h"
+#include "engine/takes.h"
 #include "io/wav.h"
 #include "project/project.h"
 
@@ -153,7 +154,59 @@ void testThreads(const std::string& name) {
 
 }  // namespace
 
+
+void testTap() {
+  const wax::NodeType* tap = wax::builtinNodes().find("tap");
+  check(tap && tap->params.size() >= 7 && tap->params[6].name == "copy", "the tap node is registered with its seven parameters");
+  if (!tap) return;
+  wax::Clock clock;
+  clock.playing = true;
+  std::vector<wax::TakeEvent> events;
+  wax::NodeContext context;
+  context.sampleRate = 48000;
+  context.clock = &clock;
+  context.emit = [&](const wax::TakeMessage& m) { events.push_back({"inst", "tap1", m}); };
+  auto node = tap->create(context);
+
+  constexpr int n = 64;
+  std::vector<float> inL(n), inR(n), outL(n), outR(n);
+  const float* inputs[] = {inL.data(), inR.data()};
+  float* outputs[] = {outL.data(), outR.data()};
+  // trig len smp ch fade fadein copy, in slots 0..6
+  float params[] = {0, 2, 3, 2, 0, 1, 0};
+  const int slots[] = {0, 1, 2, 3, 4, 5, 6};
+  auto block = [&](int base) {
+    for (int i = 0; i < n; i++) { inL[i] = 0.25f + 0.001f * static_cast<float>(base + i); inR[i] = -0.5f + 0.002f * static_cast<float>(base + i); }
+    node->process(inputs, outputs, n, params, slots);
+  };
+  block(0);
+  check(events.empty() && outL == inL && outR == inR, "tap passes the audio through and records nothing until its trig cell is written");
+  params[0] = 1;
+  clock.stamps[0] = 1;   // the pattern wrote trig = 1
+  clock.tickId = 5;
+  block(64);
+  check(events.size() == 1 && events[0].message.phase == wax::TakeMessage::Phase::Start && events[0].message.smp == 3 && events[0].message.ticks == 2, "a trig write starts a take in the slot asked for");
+  block(128);
+  clock.tickId = 7;   // two ticks have passed: the take ends before this block is recorded
+  block(192);
+  check(events.size() == 3 && events[2].message.phase == wax::TakeMessage::Phase::End, "a take of len ticks ends on the tick boundary");
+  check(outL == inL && outR == inR, "the audio still passes through while recording");
+
+  wax::TakeAssembler assembler;
+  std::optional<wax::FinishedTake> done;
+  for (const auto& e : events) { auto r = assembler.feed(e); if (r) done = r; }
+  check(done && done->smp == 3 && done->left.size() == 2 * n && done->right.size() == 2 * n, "the assembler joins the chunks of a take");
+  if (done) {
+    check(wax::tapPoolId(done->smp) == "tap03", "pool slots are named tap01 to tap16");
+    // fadein 1 ms at 48 kHz is 48 frames of raised cosine, 0 at the first frame and half way up at the middle
+    check(done->left[0] == 0.0f && std::fabs(done->left[24] - 0.5f * (0.25f + 0.001f * 88.0f)) < 1e-6f, "the start of a take is faded in");
+    check(std::fabs(done->left[100] - (0.25f + 0.001f * 164.0f)) < 1e-6f, "the middle of a take is untouched (fade out is 0)");
+  }
+  std::printf("ok: tap node\n");
+}
+
 int main() {
+  testTap();
   testParams();
   testRandom();
   testProject();
@@ -255,6 +308,7 @@ int main() {
   testRenderSong("genexprstressvoice");
   testRenderSong("genexprdefault");
   testRenderSong("genexprbad");
+  testRenderSong("tap");
   for (const char* name : {"concrete", "nodes", "mosh", "suite", "effects2", "bugsong", "cloves"}) testThreads(name);
   if (failures) std::printf("%d check%s failed\n", failures, failures == 1 ? "" : "s");
   else std::printf("all tests passed\n");

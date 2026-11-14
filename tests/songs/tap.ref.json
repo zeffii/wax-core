@@ -1,0 +1,19 @@
+{
+  "song": "tap.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.431302,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "a7d6bea09a50b2bf16f9999eb7a10668e9a5279f9858015ba0eee7d406bd243d",
+  "nodeTypes": [
+    "bus-in",
+    "lone",
+    "out",
+    "tap",
+    "tempo",
+    "voices"
+  ]
+}

@@ -37,6 +37,12 @@ struct MasterSlots {
   bool present() const { return bpm >= 0; }
 };
 
+// One message of a tap node, with where it came from.
+struct TakeEvent {
+  std::string instrument, node;
+  TakeMessage message;
+};
+
 class GraphRuntime {
 public:
   GraphRuntime(double sampleRate, float* params, const NodeRegistry& nodeTypes, int maxBlock = 512);
@@ -58,6 +64,9 @@ public:
   void setMetaSources(const std::map<std::string, std::vector<std::string>>& map);
 
   void setDelayComp(bool on);
+
+  // What the tap nodes have recorded since the last call, in order (see engine/takes.h for turning it into samples).
+  std::vector<TakeEvent> drainTakes();
 
   // How many threads render the instruments of a block (the calling thread counts). 1: all on this one. The sound is the
   // same whatever the number: an instrument waits for the ones it hears through a sidechain, and the mix is added up in order.
@@ -132,6 +141,8 @@ private:
   std::unique_ptr<Plan> plan_;                                   // the order made into tasks for the pool (built with order_)
   std::map<std::string, std::set<std::string>> deps_;             // for each instrument, the ones it hears that run before it (built with order_)
   std::unique_ptr<TaskPool> pool_;
+  std::mutex takeMutex_;
+  std::vector<TakeEvent> takes_;                                  // what the tap nodes have sent, until the host drains it
   std::mutex mixMutex_;                                           // the added-together sound of a meta machine is made once per block, by whoever asks first
   std::vector<char> mixesIn_;                                     // per instrument of the order: whether its sound goes into the mix this block
   std::optional<std::map<std::string, std::vector<Listener>>> followMap_;

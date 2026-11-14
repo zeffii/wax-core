@@ -70,6 +70,16 @@ struct SampleMessage {
   double susStart = 0, susEnd = 0, susXfade = 0;
 };
 
+// What the tap node sends out while it records: a take starts, blocks of its audio follow, and it ends (the page of the web
+// app assembles the sample from them; see engine/takes.h).
+struct TakeMessage {
+  enum class Phase { Start, Chunk, End } phase = Phase::Start;
+  int take = 0;                    // which take of this node
+  int smp = 0, ch = 2, ticks = 0, copy = 0;   // Start: the pool slot (1 to 16), channels, length in ticks (0: until stopped), copy target
+  double rate = 44100, fade = 0, fadeIn = 0;  // Start: the sample rate and the fade lengths in ms
+  std::vector<float> l, r;         // Chunk: the audio (r is empty for one channel)
+};
+
 // The whole mix so far in this block, for the master graph's bus-in node.
 struct Bus {
   const float* left = nullptr;
@@ -110,6 +120,8 @@ struct NodeContext {
   // The sound of the instrument this node listens to (its `source` in the graph), when that instrument has already run
   // in this block; nothing otherwise. Empty for a node with no source.
   std::function<std::optional<StereoView>()> tap;
+  // Where the tap node sends what it records. Empty when nothing listens.
+  std::function<void(const TakeMessage&)> emit;
 };
 
 // One running copy of a node. All memory is taken in the constructor: process() never allocates.

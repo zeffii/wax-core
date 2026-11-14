@@ -151,6 +151,8 @@ add_library(waxcore
   src/nodes/route.cpp
   src/nodes/amp.cpp
   src/nodes/genexpr.cpp
+  src/nodes/tap.cpp
+  src/engine/takes.cpp
   src/nodes/sweep.cpp
   src/nodes/exciter.cpp
   src/nodes/cardinal.cpp
