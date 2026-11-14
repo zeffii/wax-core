@@ -39,7 +39,7 @@ built engine first, with the window last. Tick a step when it is done.
       panels, and the drawn views (Bezier envelopes, the DX loader) last.
       First slice done (`wax-app`): transport, a pattern table per lane that follows the playhead, level meters, keyjazz from the
       computer keyboard and MIDI, drop a .wax on the window to open it. See docs/BUILDING.md. Next: editing cells.
-- [ ] **9. The long tail**: the nodes no demo uses, the genexpr node (its compiler has to be ported) and the glsl node.
+- [x] **9. The long tail**: the nodes no demo uses, the genexpr node (its compiler has to be ported) and the glsl node.
       So far: cloves.wax (a user's song: 136 bpm, 1552 ticks, 7 instruments) is sample for sample identical to the web render. It
       needed 12 more nodes: haas, env2, hat2, drumsynth2, clang, urugraVerb, sympathy, kaleidoscope, pogue and lone (shared code:
       `bezier`, `spacecore`, `kalcore`). Pogue's onset detector and step pattern, and the lone's sync, fold, sub-sine and
