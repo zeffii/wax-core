@@ -97,6 +97,7 @@ Engine::Engine(const Project& project, double sampleRate, int threads)
   sequencer_.setSong(song);
   for (const PreparedLane& lane : prepareSong(project, registry_)) {
     sequencer_.setLane(lane);
+    columns_[lane.id] = lane.columns;
     std::vector<std::string>& names = labels_[lane.id];
     for (const Column& column : lane.columns) {
       switch (column.kind) {
@@ -139,6 +140,12 @@ void Engine::applySentLanes() {
 void Engine::collectRetired() {
   std::shared_ptr<void> old;
   while (retired_.pop(old)) old.reset();
+}
+
+const std::vector<Column>& Engine::laneColumns(const std::string& laneId) const {
+  static const std::vector<Column> none;
+  const auto found = columns_.find(laneId);
+  return found == columns_.end() ? none : found->second;
 }
 
 const std::vector<std::string>& Engine::columnLabels(const std::string& laneId) const {

@@ -12,6 +12,7 @@
 #include "engine/runtime.h"
 #include "engine/sequencer.h"
 #include "project/project.h"
+#include "seq/columns.h"
 
 namespace wax {
 
@@ -30,6 +31,8 @@ public:
   const std::vector<std::string>& instrumentIds() const { return instrumentIds_; }   // in the order of the file
   // Short headings for the cells of a lane's rows ("N1", "V1", "T2", the parameter's name, "CMD"); empty for an unknown lane.
   const std::vector<std::string>& columnLabels(const std::string& laneId) const;
+  // The columns of a lane (their kinds say what each cell holds); empty for an unknown lane.
+  const std::vector<Column>& laneColumns(const std::string& laneId) const;
 
   // Changing a lane while the song plays. The window thread builds the lane from the edited project (slow; throws
   // std::runtime_error when a pattern cannot be read, and then nothing changes), and sends it; the audio thread takes
@@ -47,6 +50,7 @@ private:
   std::vector<std::string> warnings_;
   std::vector<std::string> instrumentIds_;
   std::map<std::string, std::vector<std::string>> labels_;
+  std::map<std::string, std::vector<Column>> columns_;
 };
 
 }  // namespace wax

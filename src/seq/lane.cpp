@@ -112,6 +112,28 @@ std::vector<std::uint8_t> buildMask(const Lane& lane, int length) {
 
 }  // namespace
 
+std::vector<RowOwner> rowOwners(const Lane& lane, int songLength) {
+  std::vector<RowOwner> owners(static_cast<std::size_t>(std::max(0, songLength)));
+  std::vector<Placement> placements = uniqueStarts(lane.placements);
+  std::stable_sort(placements.begin(), placements.end(), [](const Placement& a, const Placement& b) { return a.start < b.start; });
+  const auto blankLine = [](const std::string& line) { return line.find_first_not_of(" \t\r\n") == std::string::npos; };
+  for (const Placement& pl : placements) {
+    int index = -1;
+    for (std::size_t i = 0; i < lane.patterns.size(); i++) if (lane.patterns[i].id == pl.pattern) index = static_cast<int>(i);
+    if (index < 0) continue;
+    const std::vector<std::string>& rows = lane.patterns[static_cast<std::size_t>(index)].rows;
+    int first = 0, last = static_cast<int>(rows.size()) - 1;   // parsePattern trims blank text off both ends
+    while (first <= last && blankLine(rows[static_cast<std::size_t>(first)])) first++;
+    while (last >= first && blankLine(rows[static_cast<std::size_t>(last)])) last--;
+    const int count = std::max(1, last - first + 1);
+    const int n = std::min(pl.length, count);
+    for (int t = 0; t < n && pl.start + t < songLength; t++) {
+      if (pl.start + t >= 0) owners[static_cast<std::size_t>(pl.start + t)] = RowOwner{index, std::min(first + t, std::max(0, static_cast<int>(rows.size()) - 1))};
+    }
+  }
+  return owners;
+}
+
 PreparedLane prepareLane(const Project& project, const Lane& source, const ParamRegistry& registry) {
   const Instrument& instrument = *project.findInstrument(source.instrument);
   PreparedLane lane;

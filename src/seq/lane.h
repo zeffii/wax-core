@@ -28,6 +28,15 @@ struct PreparedLane {
   std::vector<AutoCurve> curves;   // the lane's drawn curves, baked
 };
 
+// Which row of which pattern is sounding at each tick of the song, by the same rules the sequencer flattens a lane with
+// (patterns are overlays; the one that starts later wins; a pattern's length counts, and rows of blank text at the ends of a
+// pattern are not rows). `pattern` is an index into Lane::patterns, -1 where nothing plays; `row` indexes Pattern::rows.
+struct RowOwner {
+  int pattern = -1;
+  int row = 0;
+};
+std::vector<RowOwner> rowOwners(const Lane& lane, int songLength);
+
 // One lane of the project made ready (the same as its entry in prepareSong). Used when a lane is edited while the song plays.
 // Throws std::runtime_error with the lane and row when a pattern cannot be read.
 PreparedLane prepareLane(const Project& project, const Lane& source, const ParamRegistry& registry);

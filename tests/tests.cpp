@@ -11,6 +11,7 @@
 #include "core/params.h"
 #include "core/random.h"
 #include "engine/offline.h"
+#include "edit/cell_editor.h"
 #include "edit/document.h"
 #include "edit/sync.h"
 #include "engine/engine.h"
@@ -316,7 +317,71 @@ void testLiveEdit() {
   std::printf("ok: live edits\n");
 }
 
+
+void testCellEditor() {
+  wax::Project project;
+  project.song.length = 8;
+  wax::Lane lane;
+  lane.id = "L1";
+  wax::Pattern pattern;
+  pattern.id = "p01";
+  pattern.rows = {"... .. .... ......", "... .. .... ......", "... .. .... ......", "... .. .... ......"};
+  lane.patterns.push_back(pattern);
+  lane.placements.push_back({"p01", 2, 4});   // the pattern plays on ticks 2 to 5
+  project.lanes.push_back(lane);
+  std::vector<wax::Column> columns(4);
+  columns[0].kind = wax::ColumnKind::Note;  columns[0].token = wax::Token::Note;
+  columns[1].kind = wax::ColumnKind::Vel;   columns[1].token = wax::Token::Hex2;
+  columns[2].kind = wax::ColumnKind::Param; columns[2].token = wax::Token::Hex4;
+  columns[3].kind = wax::ColumnKind::Cmd;   columns[3].token = wax::Token::Cmd;
+
+  wax::Document doc(project);
+  wax::CellEditor ed(doc);
+  ed.setLane("L1", columns);
+  const auto row = [&](int i) { return doc.project().lanes[0].patterns[0].rows[static_cast<std::size_t>(i)]; };
+
+  ed.moveTo(0, 0);
+  check(!ed.onPattern() && !ed.typeNote(60), "nothing can be typed where no pattern plays");
+  ed.moveTo(2, 0);
+  check(ed.onPattern() && ed.onNoteCell(), "the cursor finds the pattern and the kind of cell");
+  check(ed.typeNote(61) && row(0) == "C#4 .. .... ......" && ed.tick() == 3, "a note is written and the cursor steps down");
+  ed.move(-1, 1);
+  check(ed.onHexCell() && ed.tick() == 2 && ed.cell() == 1, "the cursor moves to the next cell");
+  check(ed.typeHexDigit(4) && row(0) == "C#4 40 .... ......" && ed.tick() == 2, "the first digit of a hex cell fills it with zeros");
+  check(ed.typeHexDigit(7) && row(0) == "C#4 47 .... ......" && ed.tick() == 3, "the second completes it and the cursor steps down");
+  doc.undo();
+  check(row(0) == "C#4 .. .... ......", "a two-digit entry is one undo");
+  doc.undo();
+  check(row(0) == "... .. .... ......" && !doc.canUndo(), "and the note is another");
+
+  ed.moveTo(3, 2);
+  for (int d : {1, 2, 15, 0}) ed.typeHexDigit(d);
+  check(row(1) == "... .. 12F0 ......" && ed.tick() == 4, "four digits fill a four-digit cell");
+  ed.moveTo(3, 0);
+  check(ed.typeNoteOff() && row(1) == "=== .. 12F0 ......", "note off writes the off mark");
+  ed.moveTo(4, 0);
+  check(ed.typeNoteCut() && row(2).substr(0, 3) == "^^^", "note cut writes its mark");
+  ed.moveTo(3, 1);
+  check(!ed.typeNoteCut() && !ed.typeNote(60), "notes are not typed into a hex cell");
+  ed.moveTo(3, 2);
+  check(ed.clearCell(false) && row(1) == "=== .. .... ......", "clearing puts the blank back");
+
+  ed.moveTo(2, 0);
+  ed.setStep(0);
+  ed.typeNote(60);
+  ed.moveTo(3, 0);
+  const std::string below = row(1);
+  check(ed.insertRow() && row(1) == "... .. .... ......" && row(2) == below, "insert pushes the rows down");
+  check(ed.deleteRow() && row(1) == below, "delete pulls them back up");
+  ed.moveTo(6, 0);
+  check(!ed.onPattern(), "the ticks after the pattern are not a pattern");
+  ed.move(100, 100);
+  check(ed.tick() == 7 && ed.cell() == 3, "the cursor stays inside the song and the lane");
+  std::printf("ok: cell editor\n");
+}
+
 int main() {
+  testCellEditor();
   testLiveEdit();
   testDocument();
   testTap();
