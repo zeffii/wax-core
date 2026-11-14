@@ -1,0 +1,21 @@
+{
+  "song": "islands.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 2469632,
+  "seconds": 56.001,
+  "peak": 0.249043,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "9d2ca93604ad406a1d4894ddf56737fe577cba60c9ad054bd9b5d9f2fe4c7647",
+  "nodeTypes": [
+    "bus-in",
+    "chorus",
+    "islands",
+    "out",
+    "shimmer",
+    "subsynth",
+    "tempo",
+    "voices"
+  ]
+}

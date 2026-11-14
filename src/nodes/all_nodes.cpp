@@ -30,6 +30,10 @@ const NodeRegistry& builtinNodes() {
     registerKaleidoscope(r);
     registerPogue(r);
     registerLone(r);
+    registerIslands(r);
+    registerGate(r);
+    registerLadder(r);
+    registerEq(r);
     registerGain(r);
     registerHall(r);
     registerHat808(r);

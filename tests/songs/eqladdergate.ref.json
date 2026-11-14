@@ -1,0 +1,23 @@
+{
+  "song": "eqladdergate.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 2469632,
+  "seconds": 56.001,
+  "peak": 0.406054,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "7b590a56e05576966dab83890bfe2dc09c6dd83d073257c34c25ab2fdb45720f",
+  "nodeTypes": [
+    "bus-in",
+    "chorus",
+    "eq",
+    "gate",
+    "ladder",
+    "out",
+    "shimmer",
+    "subsynth",
+    "tempo",
+    "voices"
+  ]
+}

@@ -112,6 +112,10 @@ add_library(waxcore
   src/nodes/kaleidoscope.cpp
   src/nodes/pogue.cpp
   src/nodes/lone.cpp
+  src/nodes/islands.cpp
+  src/nodes/gate.cpp
+  src/nodes/ladder.cpp
+  src/nodes/eq.cpp
   src/nodes/shiva.cpp
   src/nodes/woodblock.cpp
   src/nodes/mosh.cpp

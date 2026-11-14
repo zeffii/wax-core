@@ -43,8 +43,8 @@ built engine first, with the window last. Tick a step when it is done.
       So far: cloves.wax (a user's song: 136 bpm, 1552 ticks, 7 instruments) is sample for sample identical to the web render. It
       needed 12 more nodes: haas, env2, hat2, drumsynth2, clang, urugraVerb, sympathy, kaleidoscope, pogue and lone (shared code:
       `bezier`, `spacecore`, `kalcore`). Pogue's onset detector and step pattern, and the lone's sync, fold, sub-sine and
-      slide, are ported but not yet exercised by a song. Still unported: about 60 node types (islands, cardinal, bongo, drumsynth,
-      membrane, eq, gate, ladder, saturator, genexpr ...); `wax-info song.wax` lists what a song is missing.
+      slide, are ported but not yet exercised by a song. Then islands, gate, ladder and eq (tests/songs/islands, eqladdergate). Still unported: about 55 node types (cardinal, bongo,
+      drumsynth, membrane, saturator, genexpr ...); `wax-info song.wax` lists what a song is missing.
 
 ## Parts of the engine still to come
 
