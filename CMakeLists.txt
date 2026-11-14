@@ -52,21 +52,29 @@ add_library(waxcore
   src/nodes/busin.cpp
   src/nodes/tempo.cpp
   src/nodes/voices.cpp
+  src/nodes/canyon.cpp
   src/nodes/chord.cpp
   src/nodes/chorus.cpp
   src/nodes/clap.cpp
   src/nodes/combperc.cpp
   src/nodes/control_nodes.cpp
+  src/nodes/delay.cpp
   src/nodes/duette.cpp
   src/nodes/env.cpp
+  src/nodes/fft.cpp
   src/nodes/gain.cpp
   src/nodes/hall.cpp
   src/nodes/hat808.cpp
+  src/nodes/lfo.cpp
+  src/nodes/mosh.cpp
   src/nodes/osc.cpp
   src/nodes/plate.cpp
   src/nodes/pluckgate.cpp
+  src/nodes/sidechain.cpp
   src/nodes/squelch.cpp
+  src/nodes/stft.cpp
   src/nodes/subsynth.cpp
+  src/nodes/vocoder.cpp
   src/nodes/wavefolder.cpp
   src/nodes/westcoast.cpp)
 target_include_directories(waxcore PUBLIC src)

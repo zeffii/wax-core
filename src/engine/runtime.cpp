@@ -121,6 +121,12 @@ struct GraphRuntime::Instrument {
   std::vector<RunNode*> keep;          // the free-running modulators outside the voices: they keep time while it sleeps
 };
 
+// The sound of several instruments added together, worked out once per block however many nodes ask.
+struct GraphRuntime::Mix {
+  std::vector<float> left, right;
+  std::int64_t block = -1;
+};
+
 // A listen node that hears the notes of another instrument (see the listen node).
 struct GraphRuntime::Listener {
   std::string id;              // the instrument the listen node is in
@@ -157,6 +163,11 @@ std::unique_ptr<GraphRuntime::RunNode> GraphRuntime::makeNode(const CompiledNode
   context.bus = instrument == "master" ? &bus_ : nullptr;
   context.deliver = [this, instrument](const NoteEvent& event) { deliver(instrument, event); };
   context.nextInstance = [this](const std::string& kind) { return ++instancesMade_[kind]; };
+  if (!compiled.source.empty()) {
+    const std::string source = compiled.source;
+    const Json parts = compiled.parts;
+    context.tap = [this, source, parts] { return tap(source, parts); };
+  }
 
   auto run = std::make_unique<RunNode>();
   run->id = compiled.id;
@@ -481,8 +492,53 @@ void GraphRuntime::deliver(const std::string& instrument, const NoteEvent& event
   }
 }
 
+// The sound of an instrument that has already run in this block, for a sidechain node; nothing when it does not exist or
+// has not run yet (so a loop of listeners, should one get in, hears silence instead of looping). A meta machine has no
+// sound of its own: what is heard is the machines it plays added together (or, with `parts`, the ones listed).
+std::optional<StereoView> GraphRuntime::tap(const std::string& id, const Json& parts) {
+  const auto played = metaTargets_.find(id);
+  if (played != metaTargets_.end()) {
+    if (!parts.is_array()) return tapMix(id, played->second);
+    std::vector<std::string> chosen;
+    for (const std::string& target : played->second) {
+      const bool listed = std::any_of(parts.begin(), parts.end(), [&](const Json& p) { return p.is_string() && p.get<std::string>() == target; });
+      if (listed) chosen.push_back(target);
+    }
+    return tapMix(id, chosen);
+  }
+  const Instrument* inst = find(id);
+  if (!inst || inst->block != blockNo_) return std::nullopt;
+  return StereoView{inst->left, inst->right};
+}
+
+std::optional<StereoView> GraphRuntime::tapMix(const std::string& id, const std::vector<std::string>& list) {
+  std::string key = id + "|";
+  for (std::size_t i = 0; i < list.size(); i++) key += (i ? "," : "") + list[i];
+  std::unique_ptr<Mix>& mix = mixes_[key];
+  if (!mix) {
+    mix = std::make_unique<Mix>();
+    mix->left.assign(static_cast<std::size_t>(maxBlock_), 0.0f);
+    mix->right.assign(static_cast<std::size_t>(maxBlock_), 0.0f);
+  }
+  if (mix->block != blockNo_) {
+    mix->block = blockNo_;
+    std::fill(mix->left.begin(), mix->left.end(), 0.0f);
+    std::fill(mix->right.begin(), mix->right.end(), 0.0f);
+    for (const std::string& target : list) {
+      const Instrument* inst = find(target);
+      if (!inst || inst->block != blockNo_) continue;
+      for (int i = 0; i < blockSize_; i++) {
+        mix->left[static_cast<std::size_t>(i)] += inst->left[i];
+        mix->right[static_cast<std::size_t>(i)] += inst->right[i];
+      }
+    }
+  }
+  return StereoView{mix->left.data(), mix->right.data()};
+}
+
 void GraphRuntime::setMetaSources(const std::map<std::string, std::vector<std::string>>& map) {
   metaTargets_.clear();
+  mixes_.clear();
   for (const auto& [id, list] : map) if (!list.empty()) metaTargets_[id] = list;
   order_.reset();
 }
@@ -593,6 +649,7 @@ void GraphRuntime::process(float* left, float* right, int n) {
     dying_.clear();
   }
   blockNo_++;
+  blockSize_ = n;
   bus_ = {left, right};   // what the master graph's bus-in node hears: everything added so far
   if (masterSlots.carve >= 0 && params_[masterSlots.carve] >= 0.5f) sawUnported_ = true;   // the carve stage would go here
 

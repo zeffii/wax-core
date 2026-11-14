@@ -17,7 +17,9 @@ built engine first, with the window last. Tick a step when it is done.
       Done, each within -140 dB of the reference or closer: acid, progression, chords, westcoast (which brought squelch,
       subsynth, duette, chord, chorus, hall, plate, pluckgate, wavefolder, westcoast, random, times).
       nodes and voicing, which brought the Node Sequencer (`src/nodeseq/`), are identical to the reference.
-      To do: weights, mosh, vocoder, original, phase, suite, bugsong, interstellar-nodes.
+      weights and vocoder followed (prismacanyon, lfo, delay, sidechain, vocoder), within -140 dB and identical.
+      mosh.wax plays, but is not the same sample for sample: see "Where the maths libraries matter" below.
+      To do: original, phase, suite, bugsong, interstellar-nodes.
 - [ ] **6. Threads.** A pool of workers renders the instruments of a block side by side. Sidechain, listen and meta
       machines make one instrument wait for another, so those are put in order and the rest run together. The check:
       the render is the same as on one thread.
@@ -41,6 +43,16 @@ Each is named in a comment where it will go, and `wax-render` says so when a son
 A node is ported when the songs that use it render within -90 dB of the reference (`wax-compare`). The renders cannot
 be identical bit for bit: the JS and C++ maths libraries differ in the last digits of sin, exp and tan. Reverbs and the
 nodes that roll dice are compared more loosely. The dice themselves are the same on both sides (`core/random.h`).
+
+## Where the maths libraries matter
+
+sin, cos, atan2, log10 and pow give a last digit that differs between the JS engine and the C library in 1 to 18 of
+every 100 calls (measured). In most nodes that stays 140 dB or more below the sound. The mosh node is different: it
+makes yes-or-no decisions from those numbers (which way the spectrum moved, whether a bin is loud enough to count), so
+sooner or later one decision falls the other way and the two renders part company. mosh.wax is the same to -100 dB
+for its first 9 seconds and then differs audibly in detail, though not in character. The other spectral nodes are
+likely to behave the same way. The cure, if exact agreement is wanted there, is to use the JS engine's own maths
+functions (they are open source) instead of the C library's; that would also make Windows and Linux agree exactly.
 
 ## Rules for a ported node
 

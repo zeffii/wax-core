@@ -62,6 +62,12 @@ struct Bus {
   const float* right = nullptr;
 };
 
+// The finished sound of another instrument in this block, for a sidechain node.
+struct StereoView {
+  const float* left = nullptr;
+  const float* right = nullptr;
+};
+
 // What a node is told when it is made (the argument of create() in the JS nodes). It grows as nodes that need more are ported.
 struct NodeContext {
   double sampleRate = 44100;
@@ -76,6 +82,9 @@ struct NodeContext {
   // How many nodes of a kind this engine has made so far, counting this one (1, 2, 3 ...). The nodes that roll dice seed
   // their generator from it, so every node and every voice wanders its own way, the same in every render.
   std::function<int(const std::string& kind)> nextInstance;
+  // The sound of the instrument this node listens to (its `source` in the graph), when that instrument has already run
+  // in this block; nothing otherwise. Empty for a node with no source.
+  std::function<std::optional<StereoView>()> tap;
 };
 
 // One running copy of a node. All memory is taken in the constructor: process() never allocates.

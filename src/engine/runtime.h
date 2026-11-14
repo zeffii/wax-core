@@ -87,6 +87,8 @@ private:
   void passOn(const std::string& instrument, const NoteEvent& event);
   std::vector<Listener>* listenersOf(const std::string& instrument);
   const std::vector<std::string>& runOrder();
+  std::optional<StereoView> tap(const std::string& id, const Json& parts);
+  std::optional<StereoView> tapMix(const std::string& id, const std::vector<std::string>& list);
   void rebuild(const std::string& id);
   bool dozing(const std::string& id, Instrument& inst, int n);
   void settle(Instrument& inst, int n);
@@ -114,7 +116,10 @@ private:
   std::optional<std::vector<std::string>> order_;
   std::optional<std::map<std::string, std::vector<Listener>>> followMap_;
   std::map<std::string, int> instancesMade_;   // per kind of dice-rolling node (see NodeContext::nextInstance)
+  struct Mix;
+  std::map<std::string, std::unique_ptr<Mix>> mixes_;   // the added-together sound of a meta machine's machines, one for each way a sidechain asks for it
   std::int64_t blockNo_ = 0;
+  int blockSize_ = 0;
   bool sawUnported_ = false;
 };
 

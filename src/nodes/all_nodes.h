@@ -14,21 +14,27 @@ void registerTempo(NodeRegistry& registry);
 void registerVoices(NodeRegistry& registry);
 
 // the machines
+void registerCanyon(NodeRegistry& registry);   // prismacanyon
 void registerChord(NodeRegistry& registry);
 void registerChorus(NodeRegistry& registry);
 void registerClap(NodeRegistry& registry);
 void registerCombPerc(NodeRegistry& registry);
 void registerControlNodes(NodeRegistry& registry);   // random, times
+void registerDelay(NodeRegistry& registry);
 void registerDuette(NodeRegistry& registry);
 void registerEnv(NodeRegistry& registry);
 void registerGain(NodeRegistry& registry);
 void registerHall(NodeRegistry& registry);
 void registerHat808(NodeRegistry& registry);
+void registerLfo(NodeRegistry& registry);
+void registerMosh(NodeRegistry& registry);
 void registerOsc(NodeRegistry& registry);
 void registerPlate(NodeRegistry& registry);
 void registerPluckGate(NodeRegistry& registry);
+void registerSidechain(NodeRegistry& registry);
 void registerSquelch(NodeRegistry& registry);
 void registerSubSynth(NodeRegistry& registry);
+void registerVocoder(NodeRegistry& registry);
 void registerWaveFolder(NodeRegistry& registry);
 void registerWestCoast(NodeRegistry& registry);
 
