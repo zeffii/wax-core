@@ -185,6 +185,8 @@ int main() {
   testRenderSong("reflect");
   testRenderSong("mbsat");
   testRenderSong("split");
+  testRenderSong("headpan");
+  testRenderSong("pan");
   testRenderSong("cardinal");
   testRenderSong("drumsynth");
   testRenderSong("waveshaper");

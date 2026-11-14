@@ -28,4 +28,11 @@ struct Tap { double delay, gain, pan; int order; };
 struct Room { double direct; std::vector<Tap> list; };
 Room reflections(double w, double d, double h, double sx, double sy, double lx, double ly, double absorb, double taps);
 
+// Head pan: how a source at `angle` degrees (0 in front, 90 on the right, 180 behind) and `distance` m reaches the two ears,
+// for a head of `head` cm and the head shadow at `shadow` 0..1. `farLeft`: the left ear is the one away from the source;
+// itd is how late it is (s), farGain and farCut (Hz) how quiet and dull; rearCut (Hz) the lowpass both ears get from behind.
+inline constexpr double kHeadMaxIld = 7;   // dB, the far ear at 90 degrees with the head shadow all the way up
+struct Head { bool farLeft; double itd, farGain, farCut, rearCut, gain; };
+Head headOf(double angle, double distance, double head, double shadow);
+
 }  // namespace wax::space

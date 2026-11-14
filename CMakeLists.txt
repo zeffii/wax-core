@@ -121,6 +121,8 @@ add_library(waxcore
   src/nodes/reflect.cpp
   src/nodes/split.cpp
   src/nodes/mbsat.cpp
+  src/nodes/pan.cpp
+  src/nodes/headpan.cpp
   src/nodes/sweep.cpp
   src/nodes/exciter.cpp
   src/nodes/cardinal.cpp

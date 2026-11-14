@@ -1,0 +1,20 @@
+{
+  "song": "pan.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.567556,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "0679162767a50ceb80e4bea8031a364e999bec9b651c1525423e2580d4f024ad",
+  "nodeTypes": [
+    "bus-in",
+    "lfo",
+    "lone",
+    "out",
+    "pan",
+    "tempo",
+    "voices"
+  ]
+}

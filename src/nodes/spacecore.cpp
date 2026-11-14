@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "core/js_math.h"
+#include "nodes/shared_dsp.h"
 
 namespace wax::space {
 namespace {
@@ -62,6 +63,16 @@ Room reflections(double w, double d, double h, double sFracX, double sFracY, dou
   const int count = std::max(1, std::min(kMaxTaps, jsRoundInt(taps)));
   list.resize(std::min<size_t>(list.size(), count));
   return {dist0 / kSpeed, list};
+}
+
+Head headOf(double angle, double distance, double head, double shadow) {
+  const double th = angle * kPi / 180, side = js::sin(th), phi = js::asin(std::min(1.0, std::abs(side)));
+  const double a = head / 200;
+  const double itd = (a / kSpeed) * (phi + js::sin(phi));
+  const double s = shadow * std::abs(side);
+  const double behind = std::max(0.0, -js::cos(th));
+  return {side >= 0, itd, js::pow(10, -kHeadMaxIld * s / 20), 20000 * (1 - s) + 1700 * s,
+          20000 * (1 - behind * shadow) + 5000 * behind * shadow, 1 / std::min(20.0, std::max(0.5, distance))};
 }
 
 }  // namespace wax::space

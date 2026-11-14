@@ -42,6 +42,8 @@ void registerEnsemble(NodeRegistry& registry);
 void registerReflect(NodeRegistry& registry);
 void registerSplit(NodeRegistry& registry);
 void registerMbSat(NodeRegistry& registry);
+void registerPan(NodeRegistry& registry);
+void registerHeadPan(NodeRegistry& registry);
 void registerSweep(NodeRegistry& registry);
 void registerExciter(NodeRegistry& registry);
 void registerCardinal(NodeRegistry& registry);

@@ -1,0 +1,19 @@
+{
+  "song": "headpan.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.107541,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "76875ac8a6e7f969e4b58d8bc5638301330e95cf5c233cbc23e37a61a8c52da0",
+  "nodeTypes": [
+    "bus-in",
+    "headpan",
+    "lone",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}

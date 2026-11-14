@@ -39,6 +39,8 @@ const NodeRegistry& builtinNodes() {
     registerReflect(r);
     registerSplit(r);
     registerMbSat(r);
+    registerPan(r);
+    registerHeadPan(r);
     registerSweep(r);
     registerExciter(r);
     registerCardinal(r);
