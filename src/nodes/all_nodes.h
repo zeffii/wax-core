@@ -67,6 +67,7 @@ void registerWaveSeq(NodeRegistry& registry);
 void registerVecMix(NodeRegistry& registry);
 void registerVecPath(NodeRegistry& registry);
 void registerCompass(NodeRegistry& registry);
+void registerConvolver(NodeRegistry& registry);
 void registerSweep(NodeRegistry& registry);
 void registerExciter(NodeRegistry& registry);
 void registerCardinal(NodeRegistry& registry);

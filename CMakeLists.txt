@@ -146,6 +146,7 @@ add_library(waxcore
   src/nodes/vecmix.cpp
   src/nodes/vecpath.cpp
   src/nodes/compass.cpp
+  src/nodes/convolver.cpp
   src/nodes/sweep.cpp
   src/nodes/exciter.cpp
   src/nodes/cardinal.cpp

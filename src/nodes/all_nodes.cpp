@@ -64,6 +64,7 @@ const NodeRegistry& builtinNodes() {
     registerVecMix(r);
     registerVecPath(r);
     registerCompass(r);
+    registerConvolver(r);
     registerSweep(r);
     registerExciter(r);
     registerCardinal(r);

@@ -1,0 +1,19 @@
+{
+  "song": "convolverlong.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.180701,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "6754348b93cf372badb0bdbe61a0d10076deb84430383449365789f51ae1b3f1",
+  "nodeTypes": [
+    "bus-in",
+    "convolver",
+    "lone",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}
