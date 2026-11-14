@@ -116,6 +116,7 @@ add_library(waxcore
   src/nodes/gate.cpp
   src/nodes/ladder.cpp
   src/nodes/eq.cpp
+  src/nodes/pulsar.cpp
   src/nodes/sweep.cpp
   src/nodes/exciter.cpp
   src/nodes/cardinal.cpp

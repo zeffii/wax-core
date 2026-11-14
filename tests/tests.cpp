@@ -179,6 +179,8 @@ int main() {
   testRenderSong("membrane");
   testRenderSong("cardinal-eco");
   testRenderSong("exciter-sweep");
+  testRenderSong("pulsar");
+  testRenderSong("pulsetrain");
   testRenderSong("cardinal");
   testRenderSong("drumsynth");
   testRenderSong("waveshaper");

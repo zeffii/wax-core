@@ -1,0 +1,19 @@
+{
+  "song": "pulsetrain.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.245286,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "d6cfa57493bffbe14e896a516fee913d864b26554d2c7c1d98893822287fa3e8",
+  "nodeTypes": [
+    "bus-in",
+    "out",
+    "prismacanyon",
+    "pulsetrain",
+    "tempo",
+    "voices"
+  ]
+}

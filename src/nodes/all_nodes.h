@@ -37,6 +37,7 @@ void registerIslands(NodeRegistry& registry);
 void registerGate(NodeRegistry& registry);
 void registerLadder(NodeRegistry& registry);
 void registerEq(NodeRegistry& registry);
+void registerPulsar(NodeRegistry& registry);
 void registerSweep(NodeRegistry& registry);
 void registerExciter(NodeRegistry& registry);
 void registerCardinal(NodeRegistry& registry);

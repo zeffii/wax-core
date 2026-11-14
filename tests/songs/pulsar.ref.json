@@ -1,0 +1,19 @@
+{
+  "song": "pulsar.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.299382,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "4c257ecd31516f63927a7143b26ee19461df26b1002c7baaaf83b5758b144760",
+  "nodeTypes": [
+    "bus-in",
+    "out",
+    "prismacanyon",
+    "pulsar",
+    "tempo",
+    "voices"
+  ]
+}
