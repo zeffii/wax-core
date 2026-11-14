@@ -61,6 +61,7 @@ void registerGranular(NodeRegistry& registry);
 void registerGroove(NodeRegistry& registry);
 void registerSnarl(NodeRegistry& registry);
 void registerDvii(NodeRegistry& registry);
+void registerSpecSynth(NodeRegistry& registry);
 void registerSweep(NodeRegistry& registry);
 void registerExciter(NodeRegistry& registry);
 void registerCardinal(NodeRegistry& registry);

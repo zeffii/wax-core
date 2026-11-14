@@ -58,6 +58,7 @@ const NodeRegistry& builtinNodes() {
     registerGroove(r);
     registerSnarl(r);
     registerDvii(r);
+    registerSpecSynth(r);
     registerSweep(r);
     registerExciter(r);
     registerCardinal(r);

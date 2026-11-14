@@ -140,6 +140,7 @@ add_library(waxcore
   src/nodes/groove.cpp
   src/nodes/snarl.cpp
   src/nodes/dvii.cpp
+  src/nodes/specsynth.cpp
   src/nodes/sweep.cpp
   src/nodes/exciter.cpp
   src/nodes/cardinal.cpp

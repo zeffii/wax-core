@@ -1,0 +1,19 @@
+{
+  "song": "specsynthroot.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.285425,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "3033345c50609f24a7f8ea39af5d6146727265b767880a71312ca1a53dec60ac",
+  "nodeTypes": [
+    "bus-in",
+    "out",
+    "prismacanyon",
+    "specsynth",
+    "tempo",
+    "voices"
+  ]
+}
