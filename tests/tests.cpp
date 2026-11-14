@@ -176,6 +176,7 @@ int main() {
   testRenderSong("eqladdergate");
   testRenderSong("saturator");
   testRenderSong("bongo");
+  testRenderSong("membrane");
   testRenderSong("drumsynth");
   testRenderSong("waveshaper");
   testRenderSong("combringtransient");

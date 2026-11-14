@@ -116,6 +116,7 @@ add_library(waxcore
   src/nodes/gate.cpp
   src/nodes/ladder.cpp
   src/nodes/eq.cpp
+  src/nodes/membrane.cpp
   src/nodes/bongo.cpp
   src/nodes/drumsynth.cpp
   src/nodes/saturator.cpp

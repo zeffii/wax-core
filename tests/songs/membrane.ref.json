@@ -1,0 +1,19 @@
+{
+  "song": "membrane.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.552054,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "e7634b3bd40e594aa57ae9770d71d8538308228a2978b68f60701e595de1b22d",
+  "nodeTypes": [
+    "bus-in",
+    "filterpro",
+    "membrane",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}
