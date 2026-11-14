@@ -136,6 +136,8 @@ add_library(waxcore
   src/nodes/rotary.cpp
   src/nodes/jawharp.cpp
   src/nodes/khufu.cpp
+  src/nodes/granular.cpp
+  src/nodes/groove.cpp
   src/nodes/sweep.cpp
   src/nodes/exciter.cpp
   src/nodes/cardinal.cpp

@@ -54,6 +54,8 @@ const NodeRegistry& builtinNodes() {
     registerRotary(r);
     registerJawHarp(r);
     registerKhufu(r);
+    registerGranular(r);
+    registerGroove(r);
     registerSweep(r);
     registerExciter(r);
     registerCardinal(r);

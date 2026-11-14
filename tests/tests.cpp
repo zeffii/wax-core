@@ -216,6 +216,11 @@ int main() {
   testRenderSong("jawharpsoft");
   testRenderSong("khufu");
   testRenderSong("khufuone");
+  testRenderSong("granular");
+  testRenderSong("granularshort");
+  testRenderSong("groove");
+  testRenderSong("groovesim");
+  testRenderSong("groovewarp");
   for (const char* name : {"concrete", "nodes", "mosh", "suite", "effects2", "bugsong", "cloves"}) testThreads(name);
   if (failures) std::printf("%d check%s failed\n", failures, failures == 1 ? "" : "s");
   else std::printf("all tests passed\n");
