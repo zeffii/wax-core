@@ -8,6 +8,7 @@
 
 #include "core/params.h"
 #include "project/project.h"
+#include "seq/automation.h"
 #include "seq/columns.h"
 
 namespace wax {
@@ -24,6 +25,7 @@ struct PreparedLane {
   // For each tick: 0 plays, 1 muted by the lane's flips, 2 silenced as a whole; bit 4 marks a tick where the lane's
   // notes are let go.
   std::vector<std::uint8_t> mask;
+  std::vector<AutoCurve> curves;   // the lane's drawn curves, baked
 };
 
 // Instruments must already be compiled, so their parameter slots exist.

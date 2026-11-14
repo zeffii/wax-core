@@ -31,6 +31,7 @@ add_library(waxcore
   src/seq/cells.cpp
   src/seq/chordname.cpp
   src/seq/columns.cpp
+  src/seq/automation.cpp
   src/seq/lane.cpp
   src/engine/runtime.cpp
   src/engine/sleep.cpp

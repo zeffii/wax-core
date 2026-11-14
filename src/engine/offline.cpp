@@ -103,9 +103,6 @@ RenderResult renderSong(const Project& project, const RenderOptions& options) {
       result.warnings.push_back("the Node Sequencer's \"" + type + "\" node is not in this engine: what it does is missing");
     }
   }
-  for (const Lane& lane : project.lanes) {
-    if (!lane.raw.value("curves", Json::array()).empty()) { result.warnings.push_back("lane curves (automation) are not ported yet: they are not applied"); break; }
-  }
 
   // With delay compensation on, the whole mix comes out late by `lag` samples: the start is trimmed off below.
   const int lag = runtime.alignment() + runtime.carveLatency();

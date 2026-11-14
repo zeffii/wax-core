@@ -133,6 +133,7 @@ std::vector<PreparedLane> prepareSong(const Project& project, const ParamRegistr
     const std::vector<const Row*> rows = flattenLane(source, patterns, blank, project.song.length);
     lane.pages = buildPages(rows, lane.columns, lane.channels);
     lane.mask = buildMask(source, project.song.length);
+    lane.curves = buildAutomation(source.raw.value("curves", Json::array()), lane.columns, lane.instrument, registry, project.song.length);
     prepared.push_back(std::move(lane));
   }
   return prepared;

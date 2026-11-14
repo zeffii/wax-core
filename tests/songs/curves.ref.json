@@ -1,0 +1,24 @@
+{
+  "song": "curves.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 1699712,
+  "seconds": 38.542,
+  "peak": 1.126102,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "fa19d7eb24df4f0ff623d9a5cb263186e0d88836b34614a962ce9b6673d653aa",
+  "nodeTypes": [
+    "bus-in",
+    "duette",
+    "env",
+    "gain",
+    "hat808",
+    "osc",
+    "out",
+    "squelch",
+    "subsynth",
+    "tempo",
+    "voices"
+  ]
+}

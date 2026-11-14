@@ -2,7 +2,7 @@
 // into the parameter block, and sends note events to the lanes' instruments.
 // Port of webtracker src/audio/sequencer.js.
 //
-// Not ported yet: lane curves (automation) and the messages a preset sends to nodes.
+// Not ported yet: the messages a preset sends to nodes.
 #pragma once
 
 #include <cstdint>
@@ -66,6 +66,8 @@ private:
   void release(LaneState& lane, int noteColumn, bool implied = false);
   void allOff(LaneState& lane);
   void releaseAll();
+  void restoreAmp(LaneState& lane);
+  void applyCurves(int span);
   void writeParam(int slot, double min, double max, bool log, double x);
   void touch(int slot);
 

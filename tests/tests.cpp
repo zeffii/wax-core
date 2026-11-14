@@ -150,6 +150,7 @@ int main() {
   testRenderSong("nodes");
   testRenderSong("mosh");
   testRenderSong("suite");
+  testRenderSong("curves");
   if (failures) std::printf("%d check%s failed\n", failures, failures == 1 ? "" : "s");
   else std::printf("all tests passed\n");
   return failures;

@@ -16,7 +16,7 @@ int notePairs(const Instrument& instrument) {
   return instrument.noteColumns == 0 ? 0 : std::max(1, std::min(8, instrument.noteColumns));   // none for the master lane
 }
 
-Column paramColumn(int slot, const ParamRegistry& registry, int bits, bool log) {
+Column paramColumn(int slot, const ParamRegistry& registry, int bits, bool log, const std::string& node, const std::string& param) {
   const ParamMeta& meta = registry.meta(slot);
   Column column;
   column.kind = ColumnKind::Param;
@@ -27,6 +27,8 @@ Column paramColumn(int slot, const ParamRegistry& registry, int bits, bool log) 
   column.isInt = meta.isInt;
   column.denom = denomOf(column.token);
   column.log = log;
+  column.node = node;
+  column.param = param;
   return column;
 }
 
@@ -140,7 +142,7 @@ std::vector<Column> metaColumns(const Instrument& self, const Project& project, 
       const auto shown = std::find_if(target.exposed.begin(), target.exposed.end(), [&](const Exposed& e) { return e.node == spec.node && e.param == spec.param; });
       const int slot = registry.slotOf(spec.instrument + "." + spec.node + "." + spec.param);
       if (shown == target.exposed.end() || slot < 0) continue;
-      column = paramColumn(slot, registry, spec.bits ? spec.bits : shown->bits, shown->log);
+      column = paramColumn(slot, registry, spec.bits ? spec.bits : shown->bits, shown->log, spec.node, spec.param);
       column.target = spec.instrument;
     } else {
       continue;
@@ -180,7 +182,7 @@ std::vector<Column> ownColumns(const Instrument& instrument, const ParamRegistry
   for (const Exposed& e : instrument.exposed) {
     const int slot = registry.slotOf(instrument.id + "." + e.node + "." + e.param);
     if (slot < 0) throw std::runtime_error("\"" + instrument.id + "\" does not expose " + e.node + "." + e.param);
-    columns.push_back(paramColumn(slot, registry, e.bits, e.log));
+    columns.push_back(paramColumn(slot, registry, e.bits, e.log, e.node, e.param));
   }
   const bool hasPresets = !instrument.raw.value("presets", Json::array()).empty();
   if (!instrument.commands.empty() || hasPresets) columns.push_back(commandColumn(instrument, registry));

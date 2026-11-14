@@ -55,6 +55,8 @@ struct Sequencer::LaneState {
   std::vector<std::uint8_t> mask;
   bool muted = false;
   std::vector<Column> columns;
+  std::vector<AutoCurve> curves;          // lane curves, baked: the value (0..1) at kAutoRes samples a tick
+  std::vector<float> autoCur;             // where each curve's parameter is (0..1), NaN before it has acted
   std::vector<std::unique_ptr<CommandTable>> tables;   // one per column, nullptr where the column is not a command column
   int channels = 0;
   int noteCols = 0;
@@ -125,6 +127,8 @@ void Sequencer::setLane(const PreparedLane& prepared) {
   lane.pages = prepared.pages;
   lane.mask = prepared.mask;
   lane.columns = prepared.columns;
+  lane.curves = prepared.curves;
+  lane.autoCur.assign(lane.curves.size(), std::numeric_limits<float>::quiet_NaN());
   for (const Column& c : lane.columns) {
     lane.tables.push_back(c.kind == ColumnKind::Cmd ? std::make_unique<CommandTable>(c) : nullptr);
     lane.channels = std::max(lane.channels, c.ch + (c.kind == ColumnKind::Cmd ? 2 : 1));
@@ -170,6 +174,7 @@ void Sequencer::play(int from, bool once) {
   subIdx_ = 0;
   subLen_ = 0;
   subCountdown_ = 0;
+  for (auto& lane : lanes_) { restoreAmp(*lane); std::fill(lane->autoCur.begin(), lane->autoCur.end(), std::numeric_limits<float>::quiet_NaN()); }
   nodeseq_.start();
   once_ = once;
   wrapped_ = false;
@@ -178,9 +183,46 @@ void Sequencer::play(int from, bool once) {
 
 // Stopping lets every voice fade out over its release time.
 void Sequencer::stop() {
+  for (auto& lane : lanes_) restoreAmp(*lane);
   releaseAll();
   nodeseq_.stop();
   playing_ = false;
+}
+
+// A Volume curve leaves the machine at its own level (the channel stage back at 1), not wherever the curve stopped.
+void Sequencer::restoreAmp(LaneState& lane) {
+  for (std::size_t k = 0; k < lane.curves.size(); k++) {
+    if (lane.curves[k].amp && !std::isnan(lane.autoCur[k])) params_[lane.curves[k].slot] = 1;
+  }
+}
+
+// The lane curves move their parameters once per span: toward where the curve is (following it with a short slew), or
+// back to its rest value when a section has ended.
+void Sequencer::applyCurves(int span) {
+  const double p = songPos_ * kAutoRes, floorP = std::floor(p);
+  const long i = static_cast<long>(floorP);
+  const double follow = 1 - js::exp(-span / (sampleRate_ * 0.02)), release = 1 - js::exp(-span / (sampleRate_ * 0.12));
+  for (auto& lane : lanes_) {
+    for (std::size_t k = 0; k < lane->curves.size(); k++) {
+      const AutoCurve& a = lane->curves[k];
+      const std::vector<float>& tab = a.table;
+      double x = std::numeric_limits<double>::quiet_NaN();
+      if (i >= 0 && i < static_cast<long>(tab.size()) - 1) {
+        const double v0 = tab[static_cast<std::size_t>(i)], v1 = tab[static_cast<std::size_t>(i) + 1];
+        x = std::isnan(v1) ? v0 : v0 + (v1 - v0) * (p - static_cast<double>(i));
+      }
+      double cur = lane->autoCur[k], want, rate;
+      if (!std::isnan(x)) { want = x; rate = follow; }
+      else if (a.hasRest && !std::isnan(cur) && cur != a.rest) { want = a.rest; rate = release; }
+      else continue;
+      cur = std::isnan(cur) ? want : cur + (want - cur) * rate;
+      if (std::abs(cur - want) < 1e-4) cur = want;
+      if (cur == static_cast<double>(lane->autoCur[k])) continue;
+      lane->autoCur[k] = static_cast<float>(cur);
+      const double e = a.taper == 1 ? cur : js::pow(cur, a.taper);
+      params_[a.slot] = static_cast<float>(a.log ? a.min * js::pow(a.max / a.min, e) : a.min + e * (a.max - a.min));
+    }
+  }
 }
 
 // Lets go of everything a lane is sounding, on every machine it plays.
@@ -374,8 +416,10 @@ void Sequencer::process(float* left, float* right, int n) {
     clock.playing = playing_;
     clock.songPos = songPos_;
     clock.tickSamples = samplesPerTick;
-    // (the lane curves are applied here, once they are ported)
-    if (playing_ && !nodeseq_.empty()) nodeseq_.control(span);
+    if (playing_) {
+      applyCurves(span);
+      if (!nodeseq_.empty()) nodeseq_.control(span);
+    }
     runtime_.process(scratchLeft_.data(), scratchRight_.data(), span);
 
     const MasterSlots& m = song_.master;

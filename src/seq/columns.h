@@ -55,6 +55,7 @@ struct Column {
   int root = 60;
 
   int slot = -1;                // Param: the parameter it writes
+  std::string node, param;      // Param: which node and parameter (what a lane curve calls it)
   double min = 0;
   double max = 1;
   bool isInt = false;
