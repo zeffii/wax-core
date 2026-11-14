@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <exception>
 #include <map>
+#include <sstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -21,6 +22,9 @@
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
 #include "imgui.h"
+#include "edit/cell_editor.h"
+#include "edit/document.h"
+#include "edit/sync.h"
 #include "live/audio_out.h"
 #include "live/player.h"
 #include "project/project.h"
@@ -30,7 +34,7 @@ namespace {
 using namespace wax;
 
 struct Options {
-  std::string path, screenshot;
+  std::string path, screenshot, press;   // press: keys to press one after another (for checking the window without a keyboard)
   double rate = 48000;
   int threads = 1, midiPort = 0, frames = 3, playFrom = -1, buffer = 0;
   bool useNull = false;
@@ -48,12 +52,19 @@ struct Session {
   std::map<std::string, std::vector<std::vector<std::string>>> rows;      // lane id -> flattened rows
   std::string audioName;
   bool pickedTab = false;   // the first lane that is not the master is shown at first
+  std::unique_ptr<Document> doc;         // the song as edited: every change goes through it, so it can be undone
+  std::unique_ptr<CellEditor> editor;
+  bool edit = false;                     // Enter: the keyboard types into cells
+  int rowsRevision = -1;                 // the revision of `doc` that `rows` shows
+  bool scrollToCursor = false;
+  std::string editStatus;
 
   Session(const std::string& path, const Options& options) : project(loadProject(path)) {
     for (const Instrument& inst : project.instruments) if (inst.id != kMaster && !inst.isMeta) playable.push_back(inst.id);
     keyjazzInstrument = playable.empty() ? std::string() : playable.front();
     player = std::make_unique<Player>(project, options.rate, options.threads, keyjazzInstrument, true);
-    for (const Lane& lane : project.lanes) rows[lane.id] = app::flattenLane(lane, project.song.length);
+    doc = std::make_unique<Document>(project);
+    editor = std::make_unique<CellEditor>(*doc);
     try {
       openAudio(options, options.buffer);
     } catch (const std::exception& e) {
@@ -117,7 +128,13 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     return;
   }
   Player& player = *session->player;
-  const Song& song = session->project.song;
+  Document& doc = *session->doc;
+  CellEditor& editor = *session->editor;
+  const Song& song = doc.project().song;
+  if (session->rowsRevision != doc.revision()) {   // the table shows the song as it is edited
+    for (const Lane& lane : doc.project().lanes) session->rows[lane.id] = app::flattenLane(lane, song.length);
+    session->rowsRevision = doc.revision();
+  }
 
   // The transport.
   const bool playing = player.playing();
@@ -183,10 +200,17 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   }
   ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "keys Z-M Q-I, octave %d ([ ])   midi: %s   audio: %s",
                      octave, session->midiName.c_str(), session->audioName.c_str());
+  if (session->edit) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kWarm), "EDIT  (Enter to leave)");
+  else ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Enter to edit cells");
+  ImGui::SameLine();
+  ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "   undo: %s   redo: %s%s%s", doc.canUndo() ? doc.undoLabel().c_str() : "-",
+                     doc.canRedo() ? doc.redoLabel().c_str() : "-", session->editStatus.empty() ? "" : "   ", session->editStatus.c_str());
   ImGui::Separator();
 
-  // The computer keyboard plays notes unless a text box has it.
+  // The computer keyboard plays notes unless a text box has it. With Enter pressed it also types into the cell under the cursor.
   ImGuiIO& io = ImGui::GetIO();
+  bool edited = false;
+  const bool ctrl = io.KeyCtrl;
   if (!io.WantTextInput) {
     if (ImGui::IsKeyPressed(ImGuiKey_LeftBracket, false)) octave = std::max(0, octave - 1);
     if (ImGui::IsKeyPressed(ImGuiKey_RightBracket, false)) octave = std::min(8, octave + 1);
@@ -194,14 +218,48 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       if (playing) player.ring().push({LiveCommand::Stop, 0, 1});
       else player.ring().push({LiveCommand::Play, 0, 1});
     }
-    for (int i = 0; i < static_cast<int>(sizeof kPianoKeys / sizeof kPianoKeys[0]); i++) {
-      const ImGuiKey key = kPianoKeys[i];
-      if (ImGui::IsKeyPressed(key, false) && !io.KeyCtrl && !io.KeyAlt) {
-        const int note = std::clamp(12 * (octave + 1) + i, 0, 127);
-        held[key] = note;
-        player.ring().push({LiveCommand::NoteOn, note, 0.8});
+    if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) session->edit = !session->edit;
+    if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Z)) { if (io.KeyShift) doc.redo(); else doc.undo(); edited = true; }
+    if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Y)) { doc.redo(); edited = true; }
+    const bool typing = session->edit && !ctrl && !io.KeyAlt;
+    if (typing) {
+      const int before = editor.tick() * 4096 + editor.cell();
+      if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) editor.move(-1, 0);
+      if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) editor.move(1, 0);
+      if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) editor.move(0, -1);
+      if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) editor.move(0, 1);
+      const int bar = std::max(1, song.ticksPerBeat) * std::max(1, song.beatsPerBar);
+      if (ImGui::IsKeyPressed(ImGuiKey_PageUp)) editor.move(-bar, 0);
+      if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) editor.move(bar, 0);
+      if (ImGui::IsKeyPressed(ImGuiKey_Delete)) edited |= io.KeyShift ? editor.deleteRow() : editor.clearCell(true);
+      if (ImGui::IsKeyPressed(ImGuiKey_Backspace)) edited |= editor.clearCell(false);
+      if (ImGui::IsKeyPressed(ImGuiKey_Insert)) edited |= editor.insertRow();
+      if (ImGui::IsKeyPressed(ImGuiKey_Equal, false)) edited |= editor.typeNoteOff();
+      if (ImGui::IsKeyPressed(ImGuiKey_GraveAccent, false)) edited |= editor.typeNoteCut();
+      if (editor.onHexCell()) {
+        for (int d = 0; d < 16; d++) {
+          const ImGuiKey key = d < 10 ? static_cast<ImGuiKey>(ImGuiKey_0 + d) : static_cast<ImGuiKey>(ImGuiKey_A + (d - 10));
+          if (ImGui::IsKeyPressed(key, false)) edited |= editor.typeHexDigit(d);
+        }
+      }
+      if (before != editor.tick() * 4096 + editor.cell() || edited) session->scrollToCursor = true;
+    }
+    const bool hexKeys = typing && editor.onHexCell();   // on a hex cell the letters are digits, not piano keys
+    if (!hexKeys) {
+      for (int i = 0; i < static_cast<int>(sizeof kPianoKeys / sizeof kPianoKeys[0]); i++) {
+        const ImGuiKey key = kPianoKeys[i];
+        if (ImGui::IsKeyPressed(key, false) && !io.KeyCtrl && !io.KeyAlt) {
+          const int note = std::clamp(12 * (octave + 1) + i, 0, 127);
+          held[key] = note;
+          player.ring().push({LiveCommand::NoteOn, note, 0.8});
+          if (typing && editor.onNoteCell()) edited |= editor.typeNote(note);
+        }
       }
     }
+  }
+  if (edited) {
+    const std::vector<std::string> problems = syncLanes(doc, player.engine());
+    session->editStatus = problems.empty() ? std::string() : problems.front();
   }
   for (auto it = held.begin(); it != held.end();) {   // a held key lets go when it is up (or the text box took the keyboard)
     if (!ImGui::IsKeyDown(it->first) || io.WantTextInput) {
@@ -214,22 +272,63 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
 
   // The lanes.
   if (ImGui::BeginTabBar("lanes")) {
-    for (const Lane& lane : session->project.lanes) {
+    for (const Lane& lane : doc.project().lanes) {
       const std::string label = lane.id + (lane.instrument == lane.id ? "" : "  " + lane.instrument);
       ImGuiTabItemFlags tabFlags = ImGuiTabItemFlags_None;
       if (!session->pickedTab && lane.id != kMaster) { tabFlags |= ImGuiTabItemFlags_SetSelected; session->pickedTab = true; }
       if (ImGui::BeginTabItem(label.c_str(), nullptr, tabFlags)) {
         selectedLane = lane.id;
+        editor.setLane(lane.id, session->player->engine().laneColumns(lane.id));
+        app::CursorView cursor;
+        cursor.show = session->edit;
+        cursor.tick = editor.tick();
+        cursor.cell = editor.cell();
+        cursor.scrollTo = session->scrollToCursor;
+        session->scrollToCursor = false;
         const app::PatternViewResult result = app::drawPatternView(
             session->rows[lane.id], session->player->engine().columnLabels(lane.id), song.ticksPerBeat, song.beatsPerBar,
-            playing ? tick : -1, follow && playing);
+            playing ? tick : -1, follow && playing && !session->edit, cursor);
         if (result.clickedTick >= 0) playFromRequest = result.clickedTick;
+        if (result.cell >= 0) editor.moveTo(result.cellTick, result.cell);
         ImGui::EndTabItem();
       }
     }
     ImGui::EndTabBar();
   }
   ImGui::End();
+}
+
+// "enter,down,ctrl+z,4,7" -> key events, one key every two frames (down, then up).
+ImGuiKey keyNamed(const std::string& name) {
+  static const std::map<std::string, ImGuiKey> named = {
+      {"enter", ImGuiKey_Enter}, {"up", ImGuiKey_UpArrow}, {"down", ImGuiKey_DownArrow}, {"left", ImGuiKey_LeftArrow},
+      {"right", ImGuiKey_RightArrow}, {"delete", ImGuiKey_Delete}, {"backspace", ImGuiKey_Backspace}, {"insert", ImGuiKey_Insert},
+      {"equal", ImGuiKey_Equal}, {"pagedown", ImGuiKey_PageDown}, {"pageup", ImGuiKey_PageUp}, {"space", ImGuiKey_Space}};
+  const auto found = named.find(name);
+  if (found != named.end()) return found->second;
+  if (name.size() == 1 && name[0] >= '0' && name[0] <= '9') return static_cast<ImGuiKey>(ImGuiKey_0 + (name[0] - '0'));
+  if (name.size() == 1 && name[0] >= 'a' && name[0] <= 'z') return static_cast<ImGuiKey>(ImGuiKey_A + (name[0] - 'a'));
+  return ImGuiKey_None;
+}
+
+void feedKeys(const std::string& script, int frame) {
+  std::vector<std::string> keys;
+  std::stringstream stream(script);
+  for (std::string item; std::getline(stream, item, ',');) keys.push_back(item);
+  ImGuiIO& io = ImGui::GetIO();
+  const int index = frame / 2;
+  if (index < 0 || index >= static_cast<int>(keys.size())) return;
+  std::string name = keys[static_cast<std::size_t>(index)];
+  bool ctrl = false, shift = false;
+  for (;;) {
+    if (name.rfind("ctrl+", 0) == 0) { ctrl = true; name = name.substr(5); }
+    else if (name.rfind("shift+", 0) == 0) { shift = true; name = name.substr(6); }
+    else break;
+  }
+  const bool down = frame % 2 == 0;
+  io.AddKeyEvent(ImGuiMod_Ctrl, ctrl && down);
+  io.AddKeyEvent(ImGuiMod_Shift, shift && down);
+  io.AddKeyEvent(keyNamed(name), down);
 }
 
 bool parse(int argc, char** argv, Options& o) {
@@ -241,6 +340,7 @@ bool parse(int argc, char** argv, Options& o) {
     else if (a == "--buffer" && more) o.buffer = std::max(0, std::atoi(argv[++i]));
     else if (a == "--midi" && more) o.midiPort = std::atoi(argv[++i]);
     else if (a == "--screenshot" && more) o.screenshot = argv[++i];
+    else if (a == "--press" && more) o.press = argv[++i];
     else if (a == "--frames" && more) o.frames = std::max(1, std::atoi(argv[++i]));
     else if (a == "--play-from" && more) o.playFrom = std::atoi(argv[++i]);
     else if (a == "--null") o.useNull = true;
@@ -313,6 +413,7 @@ int main(int argc, char** argv) {
     }
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
+    if (!options.press.empty() && frame >= 4) feedKeys(options.press, frame - 4);   // (the first frames let the window settle)
     ImGui::NewFrame();
     drawFrame(session.get(), options, status, meterL, meterR, held, octave, selectedLane, follow, playFromRequest);
     if (session && playFromRequest >= 0) {

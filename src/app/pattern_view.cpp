@@ -5,33 +5,24 @@
 #include <sstream>
 
 #include "app/theme.h"
+#include "seq/lane.h"
 #include "imgui.h"
 
 namespace wax::app {
 
 std::vector<std::vector<std::string>> flattenLane(const Lane& lane, int songLength) {
   std::vector<std::vector<std::string>> rows(static_cast<std::size_t>(std::max(0, songLength)));
-  for (const Placement& placement : lane.placements) {
-    const Pattern* pattern = nullptr;
-    for (const Pattern& p : lane.patterns) if (p.id == placement.pattern) { pattern = &p; break; }
-    if (!pattern) continue;
-    int tick = placement.start;
-    for (const std::string& line : pattern->rows) {
-      if (tick >= songLength) break;
-      if (tick >= 0) {
-        std::istringstream words(line);
-        std::vector<std::string>& cells = rows[static_cast<std::size_t>(tick)];
-        cells.clear();
-        for (std::string cell; words >> cell;) cells.push_back(cell);
-      }
-      tick++;
-    }
+  const std::vector<RowOwner> owners = rowOwners(lane, songLength);
+  for (std::size_t tick = 0; tick < owners.size(); tick++) {
+    if (owners[tick].pattern < 0) continue;
+    std::istringstream words(lane.patterns[static_cast<std::size_t>(owners[tick].pattern)].rows[static_cast<std::size_t>(owners[tick].row)]);
+    for (std::string cell; words >> cell;) rows[tick].push_back(cell);
   }
   return rows;
 }
 
 PatternViewResult drawPatternView(const std::vector<std::vector<std::string>>& rows, const std::vector<std::string>& labels,
-                                  int ticksPerBeat, int beatsPerBar, int playTick, bool follow) {
+                                  int ticksPerBeat, int beatsPerBar, int playTick, bool follow, const CursorView& cursor) {
   PatternViewResult result;
   const int columns = static_cast<int>(labels.size());
   const ImGuiTableFlags flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX | ImGuiTableFlags_BordersInnerV |
@@ -51,6 +42,7 @@ PatternViewResult drawPatternView(const std::vector<std::vector<std::string>>& r
   const int beat = std::max(1, ticksPerBeat), bar = beat * std::max(1, beatsPerBar);
   ImGuiListClipper clipper;
   clipper.Begin(static_cast<int>(rows.size()));
+  if (cursor.show && cursor.scrollTo && cursor.tick >= 0) clipper.IncludeItemByIndex(cursor.tick);
   while (clipper.Step()) {
     for (int tick = clipper.DisplayStart; tick < clipper.DisplayEnd; tick++) {
       ImGui::TableNextRow();
@@ -65,7 +57,15 @@ PatternViewResult drawPatternView(const std::vector<std::vector<std::string>>& r
       const std::vector<std::string>& cells = rows[static_cast<std::size_t>(tick)];
       for (int c = 0; c < columns; c++) {
         ImGui::TableSetColumnIndex(c + 1);
-        if (c < static_cast<int>(cells.size())) ImGui::TextUnformatted(cells[static_cast<std::size_t>(c)].c_str());
+        const bool here = cursor.show && tick == cursor.tick && c == cursor.cell;
+        if (here) {
+          ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, kCursorCell);
+          if (cursor.scrollTo) ImGui::SetScrollHereY(0.5f);
+        }
+        const bool filled = c < static_cast<int>(cells.size());
+        ImGui::PushID(tick * 4096 + c);
+        if (ImGui::Selectable(filled ? cells[static_cast<std::size_t>(c)].c_str() : "   ", false, ImGuiSelectableFlags_None)) { result.cellTick = tick; result.cell = c; }
+        ImGui::PopID();
       }
     }
   }
