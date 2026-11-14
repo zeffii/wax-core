@@ -153,6 +153,7 @@ add_library(waxcore
   src/nodes/genexpr.cpp
   src/nodes/tap.cpp
   src/engine/takes.cpp
+  src/edit/document.cpp
   src/nodes/sweep.cpp
   src/nodes/exciter.cpp
   src/nodes/cardinal.cpp

@@ -11,6 +11,7 @@
 #include "core/params.h"
 #include "core/random.h"
 #include "engine/offline.h"
+#include "edit/document.h"
 #include "engine/takes.h"
 #include "io/wav.h"
 #include "project/project.h"
@@ -205,7 +206,68 @@ void testTap() {
   std::printf("ok: tap node\n");
 }
 
+
+void testDocument() {
+  wax::Project project;
+  wax::Lane lane;
+  lane.id = "L1";
+  wax::Pattern pattern;
+  pattern.id = "p01";
+  pattern.rows = {"C-4 40 ---", "--- -- ---", "E-4 40 ---", "--- -- ---"};
+  lane.patterns.push_back(pattern);
+  project.lanes.push_back(lane);
+  wax::Document doc(project);
+  const auto rows = [&] { return doc.project().lanes[0].patterns[0].rows; };
+  const std::vector<std::string> original = rows();
+
+  check(wax::withCell("C-4  40 ---", 1, "7F") == "C-4  7F ---", "withCell keeps the spacing and the other cells");
+  bool threw = false;
+  try { wax::withCell("C-4 40", 5, "x"); } catch (const std::out_of_range&) { threw = true; }
+  check(threw, "withCell refuses a cell the row does not have");
+
+  doc.apply(std::make_unique<wax::SetRow>("L1", "p01", 1, "G-4 40 ---"));
+  check(rows()[1] == "G-4 40 ---" && doc.canUndo() && doc.modified(), "an edit changes the row and can be undone");
+  doc.undo();
+  check(rows() == original && !doc.canUndo() && doc.canRedo(), "undo puts the pattern back exactly");
+  doc.redo();
+  check(rows()[1] == "G-4 40 ---", "redo applies it again");
+  doc.undo();
+
+  // typing one cell in three steps is a single undo
+  doc.apply(std::make_unique<wax::SetRow>("L1", "p01", 0, "G-- 40 ---"));
+  doc.apply(std::make_unique<wax::SetRow>("L1", "p01", 0, "G-5 40 ---"), true);
+  doc.apply(std::make_unique<wax::SetRow>("L1", "p01", 0, "G-5 7F ---"), true);
+  check(rows()[0] == "G-5 7F ---", "the steps of an entry land");
+  doc.undo();
+  check(rows() == original && !doc.canUndo(), "one undo takes back a whole entry");
+  doc.redo();
+  check(rows()[0] == "G-5 7F ---", "and one redo brings it all back");
+  doc.undo();
+
+  doc.apply(std::make_unique<wax::InsertRow>("L1", "p01", 1, "--- -- ---"));
+  check(rows().size() == 4 && rows()[2] == "--- -- ---" && rows()[3] == "E-4 40 ---", "insert pushes rows down and keeps the length");
+  doc.undo();
+  check(rows() == original, "undoing an insert brings back the row that fell off");
+  doc.apply(std::make_unique<wax::DeleteRow>("L1", "p01", 0, "--- -- ---"));
+  check(rows()[0] == "--- -- ---" && rows()[1] == "E-4 40 ---" && rows()[3] == "--- -- ---", "delete pulls rows up and keeps the length");
+  doc.undo();
+  check(rows() == original, "undoing a delete puts the row back");
+
+  doc.apply(std::make_unique<wax::SetRow>("L1", "p01", 2, "A-4 40 ---"));
+  doc.undo();
+  doc.apply(std::make_unique<wax::SetRow>("L1", "p01", 3, "B-4 40 ---"));
+  check(!doc.canRedo(), "a new edit ends the redo history");
+  const auto lanes = doc.takeChangedLanes();
+  check(lanes.size() == 1 && lanes.count("L1") && doc.takeChangedLanes().empty(), "the changed lanes are reported once");
+  doc.markSaved();
+  check(!doc.modified(), "saving clears the modified flag");
+  doc.undo();
+  check(doc.modified(), "and an undo after saving sets it again");
+  std::printf("ok: document and undo\n");
+}
+
 int main() {
+  testDocument();
   testTap();
   testParams();
   testRandom();
