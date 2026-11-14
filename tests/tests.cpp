@@ -192,6 +192,8 @@ int main() {
   testRenderSong("rangeknob");
   testRenderSong("envfx");
   testRenderSong("notetrig");
+  testRenderSong("ctrl");
+  testRenderSong("ctrllog");
   testRenderSong("cardinal");
   testRenderSong("drumsynth");
   testRenderSong("waveshaper");

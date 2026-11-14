@@ -1,0 +1,20 @@
+{
+  "song": "ctrl.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.348208,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "7cf350682eebb9d951137a46a0ea8ae10dacbc06bc23ac99b38bd5d3a7fed263",
+  "nodeTypes": [
+    "bus-in",
+    "ctrl",
+    "ensemble",
+    "lone",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}

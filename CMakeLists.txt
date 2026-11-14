@@ -126,6 +126,7 @@ add_library(waxcore
   src/nodes/follower.cpp
   src/nodes/range.cpp
   src/nodes/envfx.cpp
+  src/nodes/ctrl.cpp
   src/nodes/sweep.cpp
   src/nodes/exciter.cpp
   src/nodes/cardinal.cpp
