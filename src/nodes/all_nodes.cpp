@@ -48,6 +48,7 @@ const NodeRegistry& builtinNodes() {
     registerNotePan(r);
     registerHpss(r);
     registerBodyBlur(r);
+    registerMbComp(r);
     registerSweep(r);
     registerExciter(r);
     registerCardinal(r);

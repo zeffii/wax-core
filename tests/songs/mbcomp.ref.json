@@ -1,0 +1,19 @@
+{
+  "song": "mbcomp.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.252074,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "991621bdafcd7e21e101a32114cde5daf7976812344e9ff7e846bbfa974f4f4c",
+  "nodeTypes": [
+    "bus-in",
+    "lone",
+    "mbcomp",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}

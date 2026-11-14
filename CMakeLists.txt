@@ -130,6 +130,7 @@ add_library(waxcore
   src/nodes/notepan.cpp
   src/nodes/hpss.cpp
   src/nodes/bodyblur.cpp
+  src/nodes/mbcomp.cpp
   src/nodes/sweep.cpp
   src/nodes/exciter.cpp
   src/nodes/cardinal.cpp
