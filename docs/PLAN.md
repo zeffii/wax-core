@@ -34,7 +34,7 @@ built engine first, with the window last. Tick a step when it is done.
       byte the same output on 1, 2, 4 and 8 threads (tests/tests.cpp, testThreads). A sidechain on an instrument that
       runs later hears nothing, as on one thread. The one thing the order of threads could still touch is a loop of
       sidechains between meta machines (the sound of a meta machine is made once a block, by whoever asks first).
-- [ ] **7. Live sound and MIDI**: miniaudio and RtMidi, a player without a window, keyjazz from a controller.
+- [x] **7. Live sound and MIDI**: miniaudio and RtMidi (vendored in third_party), `wax-play`: a player without a window, keyjazz from a MIDI controller. The set-up shared with the offline renderer is now `engine::Engine`. Tested here on miniaudio's null device and with `--dry` (the audio callback run by hand in odd block sizes: bit-identical to `wax-render`); real sound and real MIDI are for a Windows ear. `-DWAX_LIVE=OFF` skips it.
 - [ ] **8. The window**: Dear ImGui on SDL3. The pattern editor first, then the sequence view, the mixer, parameter
       panels, and the drawn views (Bezier envelopes, the DX loader) last.
 - [ ] **9. The long tail**: the nodes no demo uses, the genexpr node (its compiler has to be ported) and the glsl node.

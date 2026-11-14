@@ -38,6 +38,7 @@ add_library(waxcore
   src/engine/sleep.cpp
   src/engine/limiter.cpp
   src/engine/sequencer.cpp
+  src/engine/engine.cpp
   src/engine/offline.cpp
   src/io/wav.cpp
   src/nodeseq/nodeseq.cpp
@@ -134,3 +135,33 @@ add_executable(wax-tests tests/tests.cpp)
 target_link_libraries(wax-tests PRIVATE waxcore)
 target_compile_definitions(wax-tests PRIVATE WAX_TEST_SONGS="${CMAKE_SOURCE_DIR}/tests/songs")
 add_test(NAME wax-tests COMMAND wax-tests)
+
+# The live player: sound through miniaudio, MIDI through RtMidi (both vendored in third_party). Off with -DWAX_LIVE=OFF.
+option(WAX_LIVE "Build wax-play, the live player" ON)
+if(WAX_LIVE)
+  find_package(Threads REQUIRED)
+  add_library(waxlive STATIC tools/miniaudio_impl.cpp third_party/rtmidi/RtMidi.cpp)
+  target_include_directories(waxlive PUBLIC third_party third_party/rtmidi)
+  target_link_libraries(waxlive PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
+  if(WIN32)
+    target_compile_definitions(waxlive PUBLIC __WINDOWS_MM__)
+    target_link_libraries(waxlive PUBLIC winmm)
+  elseif(APPLE)
+    target_compile_definitions(waxlive PUBLIC __MACOSX_CORE__)
+    target_link_libraries(waxlive PUBLIC "-framework CoreMIDI" "-framework CoreAudio" "-framework CoreFoundation")
+  else()
+    find_package(ALSA)
+    if(ALSA_FOUND)
+      target_compile_definitions(waxlive PUBLIC __LINUX_ALSA__)
+      target_link_libraries(waxlive PUBLIC ALSA::ALSA)
+    else()
+      target_compile_definitions(waxlive PUBLIC __RTMIDI_DUMMY__)
+    endif()
+    target_link_libraries(waxlive PUBLIC m)
+  endif()
+  # Other people's code: no warnings from it.
+  set_source_files_properties(tools/miniaudio_impl.cpp third_party/rtmidi/RtMidi.cpp PROPERTIES COMPILE_OPTIONS
+    "$<IF:$<CXX_COMPILER_ID:MSVC>,/W0,-w>")
+  add_executable(wax-play tools/wax_play.cpp)
+  target_link_libraries(wax-play PRIVATE waxcore waxlive)
+endif()
