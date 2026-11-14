@@ -75,6 +75,8 @@ add_library(waxcore
   src/nodes/compressor.cpp
   src/nodes/flanger.cpp
   src/nodes/filterpro.cpp
+  src/nodes/oberheim.cpp
+  src/nodes/fourpole.cpp
   src/nodes/mix.cpp
   src/nodes/dcblock.cpp
   src/nodes/distortion.cpp

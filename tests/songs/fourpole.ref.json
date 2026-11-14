@@ -1,0 +1,24 @@
+{
+  "song": "fp1.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 1699712,
+  "seconds": 38.542,
+  "peak": 0.926341,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "fc367a078ae727c54073eba5381a40a895ca7845545aa359438fc3dcd8ffa87d",
+  "nodeTypes": [
+    "bus-in",
+    "duette",
+    "env",
+    "fourpole",
+    "gain",
+    "hat808",
+    "osc",
+    "out",
+    "squelch",
+    "tempo",
+    "voices"
+  ]
+}

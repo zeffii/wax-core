@@ -153,6 +153,8 @@ int main() {
   testRenderSong("curves");
   testRenderSong("effects");
   testRenderSong("effects2");
+  testRenderSong("oberheim");
+  testRenderSong("fourpole");
   if (failures) std::printf("%d check%s failed\n", failures, failures == 1 ? "" : "s");
   else std::printf("all tests passed\n");
   return failures;

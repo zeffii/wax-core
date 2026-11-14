@@ -46,6 +46,8 @@ const NodeRegistry& builtinNodes() {
     registerCompressor(r);
     registerFlanger(r);
     registerFilterPro(r);
+    registerOberheim(r);
+    registerFourpole(r);
     registerMix(r);
     registerDcBlock(r);
     registerDistortion(r);

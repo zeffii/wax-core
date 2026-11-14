@@ -1,0 +1,24 @@
+{
+  "song": "ob.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 1699712,
+  "seconds": 38.542,
+  "peak": 1.048992,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "be7228fd39441b78d34f4dfc131070ee1d17e2dc272ccfb3eb654b135aba9a50",
+  "nodeTypes": [
+    "bus-in",
+    "duette",
+    "env",
+    "gain",
+    "hat808",
+    "oberheim",
+    "osc",
+    "out",
+    "squelch",
+    "tempo",
+    "voices"
+  ]
+}

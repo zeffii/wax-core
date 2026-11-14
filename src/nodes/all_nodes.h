@@ -60,6 +60,8 @@ void registerWoodblock(NodeRegistry& registry);   // woodblock
 void registerCompressor(NodeRegistry& registry);   // compressor
 void registerFlanger(NodeRegistry& registry);   // flanger
 void registerFilterPro(NodeRegistry& registry);   // filterpro
+void registerOberheim(NodeRegistry& registry);   // oberheim
+void registerFourpole(NodeRegistry& registry);   // fourpole
 void registerMix(NodeRegistry& registry);   // mix
 void registerDcBlock(NodeRegistry& registry);   // dcblock
 void registerDistortion(NodeRegistry& registry);   // distortion
