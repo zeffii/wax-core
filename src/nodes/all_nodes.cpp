@@ -20,6 +20,12 @@ const NodeRegistry& builtinNodes() {
     registerDelay(r);
     registerDuette(r);
     registerEnv(r);
+    registerEnv2(r);
+    registerHaas(r);
+    registerHat2(r);
+    registerDrumSynth2(r);
+    registerClang(r);
+    registerUrugraVerb(r);
     registerGain(r);
     registerHall(r);
     registerHat808(r);

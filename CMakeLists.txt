@@ -99,6 +99,13 @@ add_library(waxcore
   src/nodes/arp.cpp
   src/nodes/specpan.cpp
   src/nodes/blur.cpp
+  src/nodes/bezier.cpp
+  src/nodes/env2.cpp
+  src/nodes/haas.cpp
+  src/nodes/hat2.cpp
+  src/nodes/drumsynth2.cpp
+  src/nodes/clang.cpp
+  src/nodes/urugraverb.cpp
   src/nodes/shiva.cpp
   src/nodes/woodblock.cpp
   src/nodes/mosh.cpp

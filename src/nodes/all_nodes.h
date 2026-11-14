@@ -23,6 +23,12 @@ void registerControlNodes(NodeRegistry& registry);   // random, times
 void registerDelay(NodeRegistry& registry);
 void registerDuette(NodeRegistry& registry);
 void registerEnv(NodeRegistry& registry);
+void registerEnv2(NodeRegistry& registry);
+void registerHaas(NodeRegistry& registry);
+void registerHat2(NodeRegistry& registry);
+void registerDrumSynth2(NodeRegistry& registry);
+void registerClang(NodeRegistry& registry);
+void registerUrugraVerb(NodeRegistry& registry);
 void registerGain(NodeRegistry& registry);
 void registerHall(NodeRegistry& registry);
 std::unique_ptr<Node> makeHall(const NodeContext& context);   // a hall reverb on its own, for the shimmer to run inside
