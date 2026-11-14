@@ -11,6 +11,7 @@
 //   --loop             play the song over and over (default: once)
 //   --no-play          wait for the p command instead of starting at once
 //   --seconds s        quit after s seconds
+//   --buffer frames    the sound card's buffer: smaller is quicker to answer a key, larger survives a busy moment (default: the card's own)
 //   --null             use miniaudio's null device (no sound card; time still runs): for tests and servers
 //   --dry out.wav      no device at all: run the audio callback by hand for --seconds and write the result
 #include <algorithm>
@@ -30,7 +31,7 @@
 #include "engine/engine.h"
 #include "live/player.h"
 #include "io/wav.h"
-#include "miniaudio/miniaudio.h"
+#include "live/audio_out.h"
 #include "project/project.h"
 #include "rtmidi/RtMidi.h"
 
@@ -38,13 +39,9 @@ namespace {
 
 using namespace wax;
 
-void dataCallback(ma_device* device, void* output, const void*, ma_uint32 frames) {
-  static_cast<Player*>(device->pUserData)->fill(static_cast<float*>(output), static_cast<int>(frames));
-}
-
 void usage() {
   std::printf("usage: wax-play song.wax [--rate hz] [--threads n] [--instrument id] [--midi n | --no-midi | --list-midi]\n"
-              "                [--loop] [--no-play] [--seconds s] [--null] [--dry out.wav]\n");
+              "                [--buffer frames] [--loop] [--no-play] [--seconds s] [--null] [--dry out.wav]\n");
 }
 
 }  // namespace
@@ -52,7 +49,7 @@ void usage() {
 int main(int argc, char** argv) {
   std::string path, instrument, dryPath;
   double rate = 48000, seconds = 0;
-  int threads = 1, midiPort = 0;
+  int threads = 1, midiPort = 0, bufferFrames = 0;
   bool loop = false, noPlay = false, useNull = false, noMidi = false, listMidi = false;
   for (int i = 1; i < argc; i++) {
     const std::string a = argv[i];
@@ -60,6 +57,7 @@ int main(int argc, char** argv) {
     if (a == "--rate" && more) rate = std::atof(argv[++i]);
     else if (a == "--threads" && more) threads = std::max(1, std::atoi(argv[++i]));
     else if (a == "--instrument" && more) instrument = argv[++i];
+    else if (a == "--buffer" && more) bufferFrames = std::max(0, std::atoi(argv[++i]));
     else if (a == "--midi" && more) midiPort = std::atoi(argv[++i]);
     else if (a == "--seconds" && more) seconds = std::atof(argv[++i]);
     else if (a == "--dry" && more) dryPath = argv[++i];
@@ -113,26 +111,16 @@ int main(int argc, char** argv) {
       return 0;
     }
 
-    ma_device_config config = ma_device_config_init(ma_device_type_playback);
-    config.playback.format = ma_format_f32;
-    config.playback.channels = 2;
-    config.sampleRate = static_cast<ma_uint32>(rate);
-    config.dataCallback = dataCallback;
-    config.pUserData = &player;
-    ma_context context;
-    ma_backend nullBackend[] = {ma_backend_null};
-    if (ma_context_init(useNull ? nullBackend : nullptr, useNull ? 1 : 0, nullptr, &context) != MA_SUCCESS) {
-      std::printf("no audio backend could be started\n");
+    std::unique_ptr<AudioOut> audio;
+    try {
+      audio = std::make_unique<AudioOut>(player, rate, useNull, bufferFrames);
+    } catch (const std::exception& e) {
+      std::printf("%s\n", e.what());
       return 2;
     }
-    ma_device device;
-    if (ma_device_init(&context, &config, &device) != MA_SUCCESS) {
-      std::printf("no audio device could be opened\n");
-      ma_context_uninit(&context);
-      return 2;
-    }
-    std::printf("playing %s on %s (%s), %u Hz; keyjazz plays '%s'\n", project.song.name.c_str(), device.playback.name,
-                ma_get_backend_name(context.backend), device.sampleRate, instrument.c_str());
+    std::printf("playing %s on %s (%s), %.0f Hz, buffer %d frames (%.1f ms); keyjazz plays '%s'\n", project.song.name.c_str(),
+                audio->deviceName().c_str(), audio->backendName().c_str(), audio->sampleRate(), audio->bufferFrames(),
+                1000.0 * audio->bufferFrames() / audio->sampleRate(), instrument.c_str());
 
     std::unique_ptr<RtMidiIn> midi;
     if (!noMidi) {
@@ -149,7 +137,7 @@ int main(int argc, char** argv) {
     }
 
     if (!noPlay) player.ring().push({LiveCommand::Play, 0, 1});
-    ma_device_start(&device);
+    audio->start();
 
     std::atomic<bool> quit{false};
     std::thread terminal([&] {
@@ -181,9 +169,8 @@ int main(int argc, char** argv) {
         if (std::chrono::duration<double>(std::chrono::steady_clock::now() - ended).count() > 6) break;
       }
     }
-    ma_device_uninit(&device);
-    ma_context_uninit(&context);
-    std::printf("peak %.6f\n", player.peak());
+    std::printf("peak %.6f, busiest callback %.0f%% of its buffer, %ld late\n", player.peak(), 100 * audio->load(), audio->lateBuffers());
+    audio.reset();
   } catch (const std::exception& e) {
     std::printf("error: %s\n", e.what());
     return 1;

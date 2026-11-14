@@ -32,7 +32,7 @@ using namespace wax;
 struct Options {
   std::string path, screenshot;
   double rate = 48000;
-  int threads = 1, midiPort = 0, frames = 3, playFrom = -1;
+  int threads = 1, midiPort = 0, frames = 3, playFrom = -1, buffer = 0;
   bool useNull = false;
 };
 
@@ -55,9 +55,7 @@ struct Session {
     player = std::make_unique<Player>(project, options.rate, options.threads, keyjazzInstrument, true);
     for (const Lane& lane : project.lanes) rows[lane.id] = app::flattenLane(lane, project.song.length);
     try {
-      audio = std::make_unique<AudioOut>(*player, options.rate, options.useNull);
-      audioName = audio->deviceName() + " (" + audio->backendName() + ")";
-      audio->start();
+      openAudio(options, options.buffer);
     } catch (const std::exception& e) {
       audioName = std::string("no sound: ") + e.what();
     }
@@ -71,6 +69,14 @@ struct Session {
     } catch (const RtMidiError&) {
       midi.reset();
     }
+  }
+  // (Re)opens the sound card with a buffer of this many frames (0: the card's own choice). Notes in the air are let go.
+  void openAudio(const Options& options, int bufferFrames) {
+    audio.reset();
+    player->ring().push({LiveCommand::AllOff, 0, 0});
+    audio = std::make_unique<AudioOut>(*player, options.rate, options.useNull, bufferFrames);
+    audioName = audio->deviceName() + " (" + audio->backendName() + ")";
+    audio->start();
   }
   ~Session() {
     if (midi) midi->closePort();   // the callback must not outlive the player
@@ -97,7 +103,7 @@ void drawMeter(const char* id, float level, ImVec2 size) {
                       db > -0.5f ? IM_COL32(220, 90, 70, 255) : app::kAccent, 2);
 }
 
-void drawFrame(Session* session, const std::string& status, float& meterL, float& meterR, std::map<ImGuiKey, int>& held,
+void drawFrame(Session* session, const Options& options, const std::string& status, float& meterL, float& meterR, std::map<ImGuiKey, int>& held,
                int& octave, std::string& selectedLane, bool& follow, int& playFromRequest) {
   ImGuiViewport* viewport = ImGui::GetMainViewport();
   ImGui::SetNextWindowPos(viewport->WorkPos);
@@ -134,7 +140,7 @@ void drawFrame(Session* session, const std::string& status, float& meterL, float
   drawMeter("##r", meterR, ImVec2(200 * ImGui::GetStyle().FontScaleDpi, 8));
   ImGui::EndGroup();
 
-  // Keyjazz.
+  // Keyjazz, and the sound card's buffer.
   if (!session->playable.empty()) {
     ImGui::SetNextItemWidth(160);
     if (ImGui::BeginCombo("##keys", session->keyjazzInstrument.c_str())) {
@@ -147,9 +153,36 @@ void drawFrame(Session* session, const std::string& status, float& meterL, float
       ImGui::EndCombo();
     }
     ImGui::SameLine();
-    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "keys: Z-M, Q-I   octave %d ([ ])   midi: %s   audio: %s",
-                       octave, session->midiName.c_str(), session->audioName.c_str());
   }
+  if (session->audio) {
+    static const int sizes[] = {0, 64, 128, 256, 512, 1024, 2048, 4096};
+    const int now = session->audio->bufferFrames();
+    char label[64];
+    std::snprintf(label, sizeof label, "buffer %d (%.1f ms)", now, 1000.0 * now / session->audio->sampleRate());
+    ImGui::SetNextItemWidth(190);
+    if (ImGui::BeginCombo("##buffer", label)) {
+      for (const int size : sizes) {
+        char item[32];
+        if (size == 0) std::snprintf(item, sizeof item, "card's own");
+        else std::snprintf(item, sizeof item, "%d (%.1f ms)", size, 1000.0 * size / session->audio->sampleRate());
+        if (ImGui::Selectable(item, size == now)) {
+          try { session->openAudio(options, size); }
+          catch (const std::exception& e) { session->audioName = std::string("no sound: ") + e.what(); }
+        }
+      }
+      ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+  }
+  if (session->audio) {
+    const double load = session->audio->load();
+    const bool tight = load > 0.7;
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(tight ? app::kWarm : app::kDimText), "cpu %.0f%%  late %ld",
+                       100 * load, session->audio->lateBuffers());
+    ImGui::SameLine();
+  }
+  ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "keys Z-M Q-I, octave %d ([ ])   midi: %s   audio: %s",
+                     octave, session->midiName.c_str(), session->audioName.c_str());
   ImGui::Separator();
 
   // The computer keyboard plays notes unless a text box has it.
@@ -205,6 +238,7 @@ bool parse(int argc, char** argv, Options& o) {
     const bool more = i + 1 < argc;
     if (a == "--rate" && more) o.rate = std::atof(argv[++i]);
     else if (a == "--threads" && more) o.threads = std::max(1, std::atoi(argv[++i]));
+    else if (a == "--buffer" && more) o.buffer = std::max(0, std::atoi(argv[++i]));
     else if (a == "--midi" && more) o.midiPort = std::atoi(argv[++i]);
     else if (a == "--screenshot" && more) o.screenshot = argv[++i];
     else if (a == "--frames" && more) o.frames = std::max(1, std::atoi(argv[++i]));
@@ -280,7 +314,7 @@ int main(int argc, char** argv) {
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
-    drawFrame(session.get(), status, meterL, meterR, held, octave, selectedLane, follow, playFromRequest);
+    drawFrame(session.get(), options, status, meterL, meterR, held, octave, selectedLane, follow, playFromRequest);
     if (session && playFromRequest >= 0) {
       session->player->ring().push({LiveCommand::Play, playFromRequest, 1});
       playFromRequest = -1;
