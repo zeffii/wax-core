@@ -61,9 +61,9 @@ public:
     const double decay = g(kDecay) * 0.001, sweep = g(kSweep), drive = g(kDrive);
     double ratio[4];
     for (int k = 0; k < 4; k++) ratio[k] = kHarm[k] + (kMetal[k] - kHarm[k]) * spread;
-    const double base = 440 * std::pow(2.0, (note_ + g(kTune) - 69) / 12);
+    const double base = 440 * js::pow(2.0, (note_ + g(kTune) - 69) / 12);
     const double cLp = 1 - g(kDamp) * 0.88;   // loop lowpass coefficient
-    const double sDecay = std::exp(-6.9 / (sampleRate_ * g(kSdec) * 0.001));
+    const double sDecay = js::exp(-6.9 / (sampleRate_ * g(kSdec) * 0.001));
     if (pending_) {
       pending_ = false;
       strikeLen_ = std::max(1, jsRoundInt(g(kClick) * 0.001 * sampleRate_));
@@ -84,7 +84,7 @@ public:
         x = strikeLp_ * strikeGain_ * (static_cast<double>(strikeLeft_) / strikeLen_);
         strikeLeft_--;
       }
-      const double pitch = base * std::pow(2.0, sweep * sweepEnv_);
+      const double pitch = base * js::pow(2.0, sweep * sweepEnv_);
       sweepEnv_ *= sDecay;
       double sum = 0;
       for (int k = 0; k < 4; k++) {
@@ -96,7 +96,7 @@ public:
         const double d = a0 + (a1 - a0) * df;
         lp_[k] += cLp * (d - lp_[k]);
         // loop gain from the decay time: one pass of this delay line
-        double fb = std::pow(10.0, -3 * (D / sampleRate_) / decay);
+        double fb = js::pow(10.0, -3 * (D / sampleRate_) / decay);
         if (fb > 0.99995) fb = 0.99995;
         const double y = x * 0.5 * kWeight[k] + lp_[k] * (hollow ? -fb : fb);
         b[static_cast<std::size_t>(w_ & kMask)] = y;
@@ -104,7 +104,7 @@ public:
       }
       w_ = (w_ + 1) & kMask;
       double s = sum * 0.5;
-      s = drive > 0 ? std::tanh(s * driveGain) / driveNorm : s;
+      s = drive > 0 ? js::tanh(s * driveGain) / driveNorm : s;
       // remove DC left by the feedback paths
       const double o = s - dcx_ + 0.995 * dc_;
       dcx_ = s;

@@ -36,7 +36,7 @@ public:
     for (int i = 0; i < n; i++) {
       if (until_ <= 0) {
         double v;
-        if (shape == 0) v = std::sin(kTwoPi * phase_);
+        if (shape == 0) v = js::sin(kTwoPi * phase_);
         else if (shape == 1) v = phase_ < 0.25 ? 4 * phase_ : phase_ < 0.75 ? 2 - 4 * phase_ : 4 * phase_ - 4;
         else if (shape == 2) v = 2 * phase_ - 1;
         else v = phase_ < 0.5 ? 1 : -1;

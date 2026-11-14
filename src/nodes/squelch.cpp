@@ -29,10 +29,10 @@ class Squelch final : public Node {
 public:
   explicit Squelch(const NodeContext& context) : sr_(context.sampleRate), clock_(context.clock) {
     attackStep_ = 1 / (0.003 * sr_);
-    heldCoef_ = std::exp(-1 / (0.02 * sr_));
-    envSmooth_ = 1 - std::exp(-1 / (0.002 * sr_));
-    accDecay_ = std::exp(-1 / (0.25 * sr_));
-    capDecay_ = std::exp(-1 / (0.6 * sr_));
+    heldCoef_ = js::exp(-1 / (0.02 * sr_));
+    envSmooth_ = 1 - js::exp(-1 / (0.002 * sr_));
+    accDecay_ = js::exp(-1 / (0.25 * sr_));
+    capDecay_ = js::exp(-1 / (0.6 * sr_));
   }
 
   void note(const NoteEvent& event) override {
@@ -80,9 +80,9 @@ public:
     }
     const double cutoff = g(kCutoff), res = g(kRes), envmod = g(kEnvmod) * 5, accent = g(kAccent), drive = g(kDrive), level = g(kLevel) * 0.9;
     const double decayMs = accNote_ ? std::min(g(kDecay), 200.0) : g(kDecay);
-    const double envCoef = std::exp(-6.9078 / (sr_ * decayMs * 0.001));
-    const double slideCoef = 1 - std::exp(-3 / (sr_ * g(kSlide) * 0.001));
-    const double relCoef = std::exp(-6.9078 / (sr_ * g(kRel) * 0.001));
+    const double envCoef = js::exp(-6.9078 / (sr_ * decayMs * 0.001));
+    const double slideCoef = 1 - js::exp(-3 / (sr_ * g(kSlide) * 0.001));
+    const double relCoef = js::exp(-6.9078 / (sr_ * g(kRel) * 0.001));
     const double tune = g(kTune), vel = g(kVel);
     const bool square = g(kWave) >= 0.5;
     const double velGain = 1 - vel + vel * velocity_, driveGain = 1 + drive * 7, driveNorm = std::sqrt(driveGain);
@@ -90,11 +90,11 @@ public:
     double* s = s_;
     for (int i = 0; i < n; i++) {
       if ((i & 7) == 0) {   // pitch, cutoff and the filter's coefficients are worked out every 8 samples
-        inc = 440 * std::pow(2.0, (pitch_ + tune - 69) / 12) / sr_;
+        inc = 440 * js::pow(2.0, (pitch_ + tune - 69) / 12) / sr_;
         const double accSum = std::min(2.0, accEnv_ + 0.6 * accCap_);
         const double octs = envmod * envS_ * (1 + accent * accSum) + accent * 0.6 * accSum;
-        const double fc = std::min(0.45 * sr_, std::max(20.0, cutoff * std::pow(2.0, octs)));
-        const double gg = std::tan(kPi * fc / (2 * sr_));   // the filter runs twice per sample
+        const double fc = std::min(0.45 * sr_, std::max(20.0, cutoff * js::pow(2.0, octs)));
+        const double gg = js::tan(kPi * fc / (2 * sr_));   // the filter runs twice per sample
         G = gg / (1 + gg);
         G4 = G * G * G * G;
         k = 4.2 * std::min(1.0, res + accent * 0.12 * accSum);

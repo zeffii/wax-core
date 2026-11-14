@@ -50,13 +50,13 @@ public:
     float* outLeft = outputs[0];
     float* outRight = outputs[1];
     const auto g = [&](Param p) { return static_cast<double>(params[slots[p]]); };
-    const double ratio = std::pow(2.0, g(kTune) / 12);
+    const double ratio = js::pow(2.0, g(kTune) / 12);
     const double snap = g(kSnap), level = g(kLevel) * 0.45;
     const double clvl = g(kClvl), olvl = g(kOlvl);
     const bool chokeOn = g(kChoke) >= 0.5;
-    const double cDecay = std::exp(-4.6 / (sampleRate_ * g(kCdec) * 0.001));
-    const double oDecay = std::exp(-4.6 / (sampleRate_ * g(kOdec) * 0.001));
-    const double clickDecay = std::exp(-1 / (sampleRate_ * 0.0015));
+    const double cDecay = js::exp(-4.6 / (sampleRate_ * g(kCdec) * 0.001));
+    const double oDecay = js::exp(-4.6 / (sampleRate_ * g(kOdec) * 0.001));
+    const double clickDecay = js::exp(-1 / (sampleRate_ * 0.0015));
     // events: the open hat starts first, so a closed hit on the same row cuts it
     if (pendOpen_ > 0) { open_ = pendOpen_; choking_ = false; click_ = std::max(click_, pendOpen_); pendOpen_ = 0; }
     if (pendClosed_ > 0) {
@@ -66,9 +66,9 @@ public:
       if (chokeOn && open_ > 0) { choking_ = true; chokeStep_ = open_ / (kChokeMs * 0.001 * sampleRate_); }
     }
     // band-pass around 9 kHz, high-pass at `tone`
-    const double f = std::tan(kPi * std::min(0.45, 9000 / sampleRate_)), kq = 1 / 0.8;
+    const double f = js::tan(kPi * std::min(0.45, 9000 / sampleRate_)), kq = 1 / 0.8;
     const double a1 = 1 / (1 + f * (f + kq)), a2 = f * a1, a3 = f * a2;
-    const double rh = std::exp(-2 * kPi * std::min(g(kTone), sampleRate_ * 0.45) / sampleRate_);
+    const double rh = js::exp(-2 * kPi * std::min(g(kTone), sampleRate_ * 0.45) / sampleRate_);
     for (int i = 0; i < n; i++) {
       double metal = 0;
       for (int k = 0; k < 6; k++) {

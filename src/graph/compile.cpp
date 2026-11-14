@@ -234,7 +234,7 @@ CompiledGraph compileGraph(const Graph& source, const std::string& instrument, c
     if (!isParamPort(name) || hints.count(l.fromId)) continue;
     const ParamSpec& spec = b.def->params[static_cast<std::size_t>(b.def->paramIndex(name.substr(1)))];
     const double v = b.node->param(spec.name, spec.def);
-    const double x = isLogSpec(spec) ? std::log(v / spec.min) / std::log(spec.max / spec.min) : (v - spec.min) / (spec.max - spec.min);
+    const double x = isLogSpec(spec) ? js::log(v / spec.min) / js::log(spec.max / spec.min) : (v - spec.min) / (spec.max - spec.min);
     hints[l.fromId] = clamp(x, 0, 1);
   }
 

@@ -23,7 +23,7 @@ enum RandomParam { kMode = 0, kRate, kSmooth, kAmount, kBipolar, kLow, kHigh, kL
 // An even pick u (0 to 1) bent so the values bunch up around c (0 to 1) without leaving the ends out.
 double lean(double u, double c, double focus) {
   const double g = 1 + focus * 4;
-  return u < 0.5 ? c * (1 - std::pow(1 - 2 * u, g)) : c + (1 - c) * std::pow(2 * u - 1, g);
+  return u < 0.5 ? c * (1 - js::pow(1 - 2 * u, g)) : c + (1 - c) * js::pow(2 * u - 1, g);
 }
 
 class Random final : public Node {
@@ -49,7 +49,7 @@ public:
     const double period = sampleRate_ / rate;
     const double time = std::max(1.0, smooth * (mode == 0 ? period : sampleRate_ * 0.25) * 0.5);   // how long the slide takes, about
     const float* trig = trigOn_ ? inputs[0] : nullptr;
-    const double coef = smooth <= 0 ? 1 : 1 - std::exp(-1 / time);
+    const double coef = smooth <= 0 ? 1 : 1 - js::exp(-1 / time);
     for (int i = 0; i < n; i++) {
       bool fired = false;
       if (mode == 2) {

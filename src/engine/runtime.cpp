@@ -362,7 +362,7 @@ void GraphRuntime::runNode(Instrument& inst, RunNode& node, int n) {
   for (const RunNode::PortFeed& feed : node.paramFeeds) {
     const ParamPort& p = feed.port;
     const double x = clamp(feed.buffer[n - 1], 0, 1);
-    const double v = p.log ? p.min * std::pow(p.max / p.min, x) : p.min + x * (p.max - p.min);
+    const double v = p.log ? p.min * js::pow(p.max / p.min, x) : p.min + x * (p.max - p.min);
     if (std::isfinite(v)) params_[p.slot] = static_cast<float>(p.isInt ? jsRound(v) : v);
   }
   node.node->process(node.inputs.data(), node.outputs.data(), n, params_, node.slots.data());

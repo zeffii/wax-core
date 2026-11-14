@@ -21,7 +21,7 @@ constexpr int kMaxBands = 32;
 
 // coefficients [a1, a2, a3, k] of a bandpass at f
 void setBand(double* c, double f, double q, double sr) {
-  const double g = std::tan(kPi * std::min(f, sr * 0.45) / sr), k = 1 / q, a1 = 1 / (1 + g * (g + k));
+  const double g = js::tan(kPi * std::min(f, sr * 0.45) / sr), k = 1 / q, a1 = 1 / (1 + g * (g + k));
   c[0] = a1;
   c[1] = g * a1;
   c[2] = g * g * a1;
@@ -52,11 +52,11 @@ public:
     if (!set_ || bands != bands_ || low != low_ || high != high_ || q != q_ || shift != shift_) {
       set_ = true;
       bands_ = bands; low_ = low; high_ = high; q_ = q; shift_ = shift;
-      const double ratio = std::pow(high / low, 1.0 / std::max(bands - 1, 1)), sh = std::pow(2.0, shift / 12);
+      const double ratio = js::pow(high / low, 1.0 / std::max(bands - 1, 1)), sh = js::pow(2.0, shift / 12);
       // wider bands when there are fewer of them, so the spectrum stays covered
       const double qq = q * std::min(1.0, 16.0 / bands) * std::max(1.0, std::sqrt(bands / 16.0));
       for (int b = 0; b < bands && b < kMaxBands; b++) {
-        const double f = low * std::pow(ratio, b);
+        const double f = low * js::pow(ratio, b);
         setBand(analysisCoef_ + b * 4, f, qq, sr_);
         setBand(synthCoef_ + b * 4, f * sh, qq, sr_);
       }
@@ -64,9 +64,9 @@ public:
       std::fill(std::begin(synthState_), std::end(synthState_), 0.0);
     }
     const int nb = std::min(bands_, kMaxBands);
-    const double att = std::exp(-1 / (sr_ * params[slots[kAttack]] / 1000)), rel = std::exp(-1 / (sr_ * params[slots[kRelease]] / 1000));
+    const double att = js::exp(-1 / (sr_ * params[slots[kAttack]] / 1000)), rel = js::exp(-1 / (sr_ * params[slots[kRelease]] / 1000));
     const double level = params[slots[kLevel]] * 10 * std::sqrt(16.0 / bands);
-    const double gHp = std::tan(kPi * 5000 / sr_), hk = 1.4142, ha1 = 1 / (1 + gHp * (gHp + hk));
+    const double gHp = js::tan(kPi * 5000 / sr_), hk = 1.4142, ha1 = 1 / (1 + gHp * (gHp + hk));
     for (int i = 0; i < n; i++) {
       const double x = voice[i];
       double c;

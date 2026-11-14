@@ -20,8 +20,8 @@ Limiter::Limiter(double sampleRate)
 
 Limiter::Result Limiter::process(float* left, float* right, int n, double ceilingDb, double boostDb, double releaseMs) {
   const int L = look_;
-  const double c = std::pow(10.0, std::min(0.0, ceilingDb) / 20), boost = std::pow(10.0, boostDb / 20);
-  const double relA = 1 - std::exp(-1 / (sampleRate_ * std::max(1.0, releaseMs) / 1000));
+  const double c = js::pow(10.0, std::min(0.0, ceilingDb) / 20), boost = js::pow(10.0, boostDb / 20);
+  const double relA = 1 - js::exp(-1 / (sampleRate_ * std::max(1.0, releaseMs) / 1000));
   int pos = pos_;
   double sum = sum_, rel = release_, low = 1, top = 0;
   for (int i = 0; i < n; i++) {
@@ -45,7 +45,7 @@ Limiter::Result Limiter::process(float* left, float* right, int n, double ceilin
   sum_ = sum;
   release_ = rel;
   if (sum_ < 0) sum_ = L;   // floating point drift can never leave it negative
-  return {low < 1 ? -20 * std::log10(low) : 0, 20 * std::log10(std::max(1e-10, top))};
+  return {low < 1 ? -20 * js::log10(low) : 0, 20 * js::log10(std::max(1e-10, top))};
 }
 
 }  // namespace wax

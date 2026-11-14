@@ -101,7 +101,7 @@ void Cx::setParam(double x) const {
   const auto found = engine_.resolve_.slots.find(rec_.id);
   if (found == engine_.resolve_.slots.end() || found->second.slot < 0) return;
   const SetTarget& r = found->second;
-  double v = r.log ? r.min * std::pow(r.max / r.min, x) : r.min + x * (r.max - r.min);
+  double v = r.log ? r.min * js::pow(r.max / r.min, x) : r.min + x * (r.max - r.min);
   if (r.isInt) v = jsRound(v);
   if (std::isfinite(v)) engine_.io_.params[r.slot] = static_cast<float>(v);   // not counted as a pattern write: it is not an event
 }

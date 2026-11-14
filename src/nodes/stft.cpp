@@ -4,6 +4,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include "core/js_math.h"
 
 namespace wax {
 
@@ -15,7 +16,7 @@ const std::vector<double>& hannWindow(int n) {
   if (!window) {
     constexpr double pi = 3.141592653589793;
     window = std::make_unique<std::vector<double>>(static_cast<std::size_t>(n));
-    for (int i = 0; i < n; i++) (*window)[static_cast<std::size_t>(i)] = 0.5 - 0.5 * std::cos((2 * pi * i) / n);
+    for (int i = 0; i < n; i++) (*window)[static_cast<std::size_t>(i)] = 0.5 - 0.5 * js::cos((2 * pi * i) / n);
   }
   return *window;
 }

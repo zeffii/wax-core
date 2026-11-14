@@ -43,7 +43,7 @@ constexpr int kBins = kStftMaxSize / 2 + 1;
 
 double wrap(double x) { return x - kTau * jsRound(x / kTau); }   // an angle brought into -pi..pi
 
-double toAmplitude(double db, double peak) { return db <= kFloor ? 0 : peak * std::pow(10.0, db / 20); }
+double toAmplitude(double db, double peak) { return db <= kFloor ? 0 : peak * js::pow(10.0, db / 20); }
 
 // One side of the stereo pair: its analysers, its output, and the picture.
 struct Side {
@@ -92,7 +92,7 @@ public:
     p.bloom = params[slots[kBloom]];
     p.every = jsRoundInt(params[slots[kKeyframe]] * sampleRate_ / 1000 / hop);
     // the pull toward the live sound each frame: a time constant of 2 s at a heal near 0, 0.1 s at 1 (nothing at 0)
-    p.heal = heal > 0 ? 1 - std::exp(-hop / (sampleRate_ * 2 * std::pow(0.05, heal))) : 0;
+    p.heal = heal > 0 ? 1 - js::exp(-hop / (sampleRate_ * 2 * js::pow(0.05, heal))) : 0;
     p.reach = jsRoundInt(params[slots[kSmooth]] * 6);
     const double mix = params[slots[kMix]];
     for (int c = 0; c < 2; c++) {
@@ -120,8 +120,8 @@ private:
   static void levels(const std::vector<double>& r, const std::vector<double>& i, std::vector<double>& out, int half, double peak, std::vector<double>* phases) {
     for (int k = 0; k <= half; k++) {
       const std::size_t at = static_cast<std::size_t>(k);
-      out[at] = std::max(kFloor, 20 * std::log10(jsHypot(r[at], i[at]) / peak + 1e-9));
-      if (phases) (*phases)[at] = std::atan2(i[at], r[at]);
+      out[at] = std::max(kFloor, 20 * js::log10(jsHypot(r[at], i[at]) / peak + 1e-9));
+      if (phases) (*phases)[at] = js::atan2(i[at], r[at]);
     }
   }
 
@@ -264,8 +264,8 @@ private:
     for (int k = 0; k <= half; k++) {
       const std::size_t at = static_cast<std::size_t>(k);
       const double a = toAmplitude(s.cur[at], peak);
-      re_[at] = a * std::cos(s.ph[at]);
-      im_[at] = a * std::sin(s.ph[at]);
+      re_[at] = a * js::cos(s.ph[at]);
+      im_[at] = a * js::sin(s.ph[at]);
     }
     mirrorSpectrum(re_.data(), im_.data(), n_);
     s.out.add(re_.data(), im_.data(), s.carrier.t());

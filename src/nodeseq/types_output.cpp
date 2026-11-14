@@ -34,7 +34,7 @@ public:
       case 2: w = phase_ * 2 - 1; break;
       case 3: w = phase_ < 0.5 ? 1 : -1; break;
       case 4: if (phase_ < before) held_ = cx_.rand() * 2 - 1; w = held_; break;   // a new random value each cycle
-      default: w = std::sin(phase_ * 2 * kPi);
+      default: w = js::sin(phase_ * 2 * kPi);
     }
     cx_.ctl("out", clamp(cx_.p("center") + w * 0.5 * cx_.p("depth"), 0, 1));
   }
@@ -62,7 +62,7 @@ public:
       x_ = top_ * (t_ / a);
     } else {
       const double d = (t_ - a) / std::max(1.0, cx_.p("decay"));
-      x_ = top_ * std::exp(-5 * d);
+      x_ = top_ * js::exp(-5 * d);
       if (d > 1.2) { t_ = kInfinity; x_ = 0; }
     }
     cx_.ctl("out", x_);
@@ -82,7 +82,7 @@ public:
   void control(double) override {
     const double v = cx_.read("in");
     if (std::isnan(v)) return;
-    cx_.ctl("out", cx_.p("lo") + std::pow(clamp(v, 0, 1), cx_.p("curve")) * (cx_.p("hi") - cx_.p("lo")));
+    cx_.ctl("out", cx_.p("lo") + js::pow(clamp(v, 0, 1), cx_.p("curve")) * (cx_.p("hi") - cx_.p("lo")));
   }
 
 private:
@@ -145,7 +145,7 @@ public:
     const double c = cx_.read("in");
     if (!std::isnan(c)) want_ = clamp(c, 0, 1);
     if (std::isnan(want_)) return;
-    const double k = cx_.p("smooth") > 0 ? 1 - std::exp(-dt * 1000 / cx_.p("smooth")) : 1;
+    const double k = cx_.p("smooth") > 0 ? 1 - js::exp(-dt * 1000 / cx_.p("smooth")) : 1;
     cur_ = std::isnan(cur_) ? want_ : cur_ + (want_ - cur_) * k;
     if (std::abs(cur_ - want_) < 1e-4) cur_ = want_;
     const double x = cx_.p("lo") + cur_ * (cx_.p("hi") - cx_.p("lo"));

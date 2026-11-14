@@ -11,15 +11,15 @@ namespace wax {
 
 FftPlan::FftPlan(int n) : n_(n), reversed_(static_cast<std::size_t>(n)), cos_(static_cast<std::size_t>(n / 2)), sin_(static_cast<std::size_t>(n / 2)) {
   constexpr double pi = 3.141592653589793;
-  const int bits = jsRoundInt(std::log2(n));
+  const int bits = jsRoundInt(js::log2(n));
   for (int i = 0; i < n; i++) {
     std::uint32_t r = 0;
     for (int b = 0; b < bits; b++) if (i & (1 << b)) r |= 1u << (bits - 1 - b);
     reversed_[static_cast<std::size_t>(i)] = r;
   }
   for (int i = 0; i < n / 2; i++) {
-    cos_[static_cast<std::size_t>(i)] = std::cos(2 * pi * i / n);
-    sin_[static_cast<std::size_t>(i)] = -std::sin(2 * pi * i / n);
+    cos_[static_cast<std::size_t>(i)] = js::cos(2 * pi * i / n);
+    sin_[static_cast<std::size_t>(i)] = -js::sin(2 * pi * i / n);
   }
 }
 

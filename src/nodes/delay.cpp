@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "nodes/all_nodes.h"
+#include "core/js_math.h"
 
 namespace wax {
 namespace {
@@ -17,7 +18,7 @@ public:
       : sampleRate_(context.sampleRate),
         size_(static_cast<int>(std::ceil(context.sampleRate)) + 2),
         line_(static_cast<std::size_t>(size_), 0.0f),
-        slew_(1 - std::exp(-1 / (context.sampleRate * 0.05))) {}   // per sample, so the glide does not depend on the block size
+        slew_(1 - js::exp(-1 / (context.sampleRate * 0.05))) {}   // per sample, so the glide does not depend on the block size
 
   void process(const float* const* inputs, float* const* outputs, int n, const float* params, const int* slots) override {
     const float* in = inputs[0];

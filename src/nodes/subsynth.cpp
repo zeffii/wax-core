@@ -36,7 +36,7 @@ double oscillator(int wave, double p, double dt, double pw) {
     return (p < pw ? 1 : -1) + polyBlep(p, dt) - polyBlep(q, dt);
   }
   if (wave == 2) return p < 0.25 ? 4 * p : p < 0.75 ? 2 - 4 * p : 4 * p - 4;
-  return std::sin(kTwoPi * p);
+  return js::sin(kTwoPi * p);
 }
 
 double flush(double v) { return std::abs(v) < 1e-18 ? 0 : v; }
@@ -107,7 +107,7 @@ public:
       pos_ = std::abs(note_ - pos_) <= step ? note_ : pos_ + sign(note_ - pos_) * step;
       if (pos_ == note_) rate_ = 0;
     } else if (glideMs > 0.5) {
-      pos_ += (note_ - pos_) * (1 - std::exp(-n / (sampleRate_ * glideMs * 0.001 / 3)));
+      pos_ += (note_ - pos_) * (1 - js::exp(-n / (sampleRate_ * glideMs * 0.001 / 3)));
     } else {
       pos_ = note_;
     }
@@ -116,16 +116,16 @@ public:
     const double lvl2 = g(kOsc2), sub = g(kSub), noise = g(kNoise);
     const int U = std::max(1, std::min(kMaxUnison, jsRoundInt(g(kUnison))));
     const double spread = g(kSpread), width = g(kWidth), detune = g(kDetune), tune2 = g(kTune2);
-    const double baseHz = 440 * std::pow(2.0, (pos_ - 69) / 12);
+    const double baseHz = 440 * js::pow(2.0, (pos_ - 69) / 12);
     const double vnorm = 1 / std::sqrt(static_cast<double>(U));
     for (int u = 0; u < U; u++) {
       const double x = U == 1 ? 0 : (2.0 * u) / (U - 1) - 1;
       const double cents = x * spread;
-      inc1_[u] = (baseHz * std::pow(2.0, cents / 1200)) / sampleRate_;
-      inc2_[u] = (baseHz * std::pow(2.0, (tune2 * 100 + detune + cents) / 1200)) / sampleRate_;
+      inc1_[u] = (baseHz * js::pow(2.0, cents / 1200)) / sampleRate_;
+      inc2_[u] = (baseHz * js::pow(2.0, (tune2 * 100 + detune + cents) / 1200)) / sampleRate_;
       const double a = ((x * width + 1) * kPi) / 4;   // equal-power pan, centre at x = 0
-      gl_[u] = std::cos(a) * kSqrt2 * vnorm;
-      gr_[u] = std::sin(a) * kSqrt2 * vnorm;
+      gl_[u] = js::cos(a) * kSqrt2 * vnorm;
+      gr_[u] = js::sin(a) * kSqrt2 * vnorm;
     }
     const double subInc = baseHz / 2 / sampleRate_;
     const double cutoff = g(kCutoff), res = g(kRes), k = res * 4, drive = 1 + g(kDrive) * 4;
@@ -139,15 +139,15 @@ public:
       const double a = amp_.next(), f = fil_.next();
       if ((i & (kSubBlock - 1)) == 0) {
         const double oct = fenv * f + keyOct + (cutOn_ ? cutIn[i] : 0);
-        const double hz = std::min(nyq, std::max(10.0, cutoff * std::pow(2.0, oct)));
-        const double gg = std::tan((kPi * hz) / sampleRate_);
+        const double hz = std::min(nyq, std::max(10.0, cutoff * js::pow(2.0, oct)));
+        const double gg = js::tan((kPi * hz) / sampleRate_);
         G = gg / (1 + gg);
         G2 = G * G;
         G3 = G2 * G;
         G4 = G2 * G2;
         norm = 1 / (1 + k * G4);
       }
-      const double fm = pitchOn_ ? std::pow(2.0, pitchIn[i]) : 1;
+      const double fm = pitchOn_ ? js::pow(2.0, pitchIn[i]) : 1;
       double l = 0, r = 0;
       for (int u = 0; u < U; u++) {
         const double d1 = inc1_[u] * fm, d2 = inc2_[u] * fm;
@@ -158,7 +158,7 @@ public:
         double q2 = ph2_[u] + d2; if (q2 >= 1) q2 -= 1; ph2_[u] = q2;
       }
       double c = 0;
-      if (sub > 0) c += sub * std::sin(kTwoPi * subPhase_);
+      if (sub > 0) c += sub * js::sin(kTwoPi * subPhase_);
       subPhase_ += subInc * fm;
       if (subPhase_ >= 1) subPhase_ -= 1;
       if (noise > 0) {

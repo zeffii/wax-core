@@ -212,7 +212,7 @@ void Sequencer::release(LaneState& lane, int k, bool implied) {
 
 // x is 0..1; the slot gets the value on the parameter's own scale.
 void Sequencer::writeParam(int slot, double min, double max, bool log, double x) {
-  const double value = log ? min * std::pow(max / min, x) : min + x * (max - min);
+  const double value = log ? min * js::pow(max / min, x) : min + x * (max - min);
   if (std::isfinite(value)) params_[slot] = static_cast<float>(value);
   touch(slot);
 }

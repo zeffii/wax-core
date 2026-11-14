@@ -7,6 +7,7 @@
 #include <cmath>
 
 #include "nodes/shared_dsp.h"
+#include "core/js_math.h"
 
 namespace wax {
 
@@ -16,7 +17,7 @@ inline constexpr double kFoldGain = 10;   // how many times louder the wave is p
 // overshoots. `amount` 0..1 sets how hard the wave is pushed (1 to 11 times), `offset` moves it off centre first, so
 // the folds come out uneven (that adds the even harmonics).
 inline double foldWave(double v, double amount, double offset) {
-  return std::sin((1 + amount * kFoldGain) * (v + offset) * (kPi / 2));
+  return js::sin((1 + amount * kFoldGain) * (v + offset) * (kPi / 2));
 }
 
 // Takes out the slow drift a folded, off-centre wave carries. About 4 Hz at 48 kHz.
@@ -45,10 +46,10 @@ public:
   void set(int mode, double bright, double res, double openMs, double closeMs, double semis) {
     mode_ = mode;
     k_ = 2 - 2 * std::min(0.95, std::max(0.0, res));
-    fmax_ = std::min(sr_ * 0.45, 200 * std::pow(2.0, bright * 7) * std::pow(2.0, semis / 12));
-    openCoef_ = 1 - std::exp(-1 / (sr_ * std::max(0.05, openMs) * 0.001));
-    closeCoef_ = 1 - std::exp(-1 / (sr_ * std::max(1.0, closeMs) * 0.001));
-    slowCoef_ = 1 - std::exp(-1 / (sr_ * std::max(1.0, closeMs) * 0.004));   // the photocell's slow part lets go four times slower
+    fmax_ = std::min(sr_ * 0.45, 200 * js::pow(2.0, bright * 7) * js::pow(2.0, semis / 12));
+    openCoef_ = 1 - js::exp(-1 / (sr_ * std::max(0.05, openMs) * 0.001));
+    closeCoef_ = 1 - js::exp(-1 / (sr_ * std::max(1.0, closeMs) * 0.001));
+    slowCoef_ = 1 - js::exp(-1 / (sr_ * std::max(1.0, closeMs) * 0.004));   // the photocell's slow part lets go four times slower
   }
 
   bool idle() const { return level_ < 1e-5; }
@@ -61,10 +62,10 @@ public:
     fast_ += (strike - fast_) * (strike > fast_ ? openCoef_ : closeCoef_);
     slow_ += (strike - slow_) * (strike > slow_ ? openCoef_ : slowCoef_);
     const double lvl = level_ = fast_ * 0.75 + slow_ * 0.25;
-    if (mode_ == 1) return x * std::pow(lvl, 1.4);
+    if (mode_ == 1) return x * js::pow(lvl, 1.4);
     if ((count_++ & 7) == 0) {   // the filter's coefficients are worked out every 8 samples
-      const double fc = fmin * std::pow(fmax_ / fmin, std::min(1.0, std::pow(lvl, 0.7)));
-      const double g = std::tan(kPi * std::min(sr_ * 0.45, fc) / sr_);
+      const double fc = fmin * js::pow(fmax_ / fmin, std::min(1.0, js::pow(lvl, 0.7)));
+      const double g = js::tan(kPi * std::min(sr_ * 0.45, fc) / sr_);
       a1_ = 1 / (1 + g * (g + k_));
       a2_ = g * a1_;
       a3_ = g * a2_;
@@ -74,7 +75,7 @@ public:
     s2_ = 2 * v2 - s2_;
     if (std::abs(s1_) < 1e-18) s1_ = 0;
     if (std::abs(s2_) < 1e-18) s2_ = 0;
-    return mode_ == 2 ? v2 : v2 * std::pow(lvl, 1.4);
+    return mode_ == 2 ? v2 : v2 * js::pow(lvl, 1.4);
   }
 
 private:

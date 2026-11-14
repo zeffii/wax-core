@@ -46,8 +46,8 @@ public:
     const float* pm = inputs[kPm];
     const double tune = params[slots[kTune]], restart = params[slots[kPhase]];
     const double base = (params[slots[kTrack]] >= 0.5f
-      ? 440 * std::pow(2.0, (note_ + tune - 69) / 12)
-      : params[slots[kFreq]] * std::pow(2.0, tune / 12)) / sampleRate_;
+      ? 440 * js::pow(2.0, (note_ + tune - 69) / 12)
+      : params[slots[kFreq]] * js::pow(2.0, tune / 12)) / sampleRate_;
     const int wave = jsRoundInt(params[slots[kWave]]);
     const double level = params[slots[kLevel]], width = params[slots[kWidth]];
     if (pendingReset_ && params[slots[kReset]] >= 0.5f) phase_ = restart;
@@ -60,13 +60,13 @@ public:
       }
       double v, ph = phase_;
       if (pmOn_) { ph += pm[i] / kTwoPi; ph -= std::floor(ph); }
-      if (wave == 0) v = std::sin(kTwoPi * ph);
+      if (wave == 0) v = js::sin(kTwoPi * ph);
       else if (wave == 1) v = 2 * ph - 1;
       else if (wave == 2) v = ph < 0.5 ? 1 : -1;
       else if (wave == 3) v = ph < 0.25 ? 4 * ph : ph < 0.75 ? 2 - 4 * ph : 4 * ph - 4;
       else if (wave == 4) v = ph < width ? 1 : -1;
-      else if (wave == 5) v = (ph < 0.5 ? std::sin(kTwoPi * ph) : 0) * 2 - 2 * kHalfSineMean;
-      else if (wave == 6) v = std::abs(std::sin(kTwoPi * ph)) * 2 - 1;
+      else if (wave == 5) v = (ph < 0.5 ? js::sin(kTwoPi * ph) : 0) * 2 - 2 * kHalfSineMean;
+      else if (wave == 6) v = std::abs(js::sin(kTwoPi * ph)) * 2 - 1;
       else if (wave == 7) v = std::floor(ph * 8) / 3.5 - 1;
       else {
         const double x = ph * kWavePoints;
@@ -76,7 +76,7 @@ public:
         v = a + (b - a) * f;
       }
       out[i] = static_cast<float>(v * level);
-      phase_ += fmOn_ ? base * std::exp(fm[i] * kLn2) : base;
+      phase_ += fmOn_ ? base * js::exp(fm[i] * kLn2) : base;
       if (phase_ >= 1) phase_ -= std::floor(phase_);
     }
   }

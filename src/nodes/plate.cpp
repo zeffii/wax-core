@@ -94,16 +94,16 @@ public:
     const double rt60 = params[slots[kDecay]];
     // one branch's trip round the tank, in seconds
     const double half = static_cast<double>(length(kTankLeft[0]) + length(kTankLeft[1]) + length(kTankLeft[2]) + length(kTankLeft[3])) / sampleRate_;
-    const double decay = std::min(0.9995, std::pow(10.0, -3 * half / rt60));
+    const double decay = std::min(0.9995, js::pow(10.0, -3 * half / rt60));
     const double excursion = params[slots[kMod]] * maxExcursion_, width = params[slots[kWidth]], mix = params[slots[kMix]];
     if (preCur_ < 0) preCur_ = preTarget;
     // the modulation is slow: its sine is worked out at the start and end of the block and the read position slides between
     const double inv = 1.0 / n;
     for (int j = 0; j < 2; j++) {
-      const double a0 = excursion * (0.5 + 0.5 * std::sin(kTwoPi * phase_[j]));
+      const double a0 = excursion * (0.5 + 0.5 * js::sin(kTwoPi * phase_[j]));
       phase_[j] += rate_[j] * n;
       if (phase_[j] >= 1) phase_[j] -= 1;
-      const double a1 = excursion * (0.5 + 0.5 * std::sin(kTwoPi * phase_[j]));
+      const double a1 = excursion * (0.5 + 0.5 * js::sin(kTwoPi * phase_[j]));
       at_[j] = a0;
       step_[j] = (a1 - a0) * inv;
     }

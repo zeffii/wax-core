@@ -18,7 +18,7 @@ built engine first, with the window last. Tick a step when it is done.
       subsynth, duette, chord, chorus, hall, plate, pluckgate, wavefolder, westcoast, random, times).
       nodes and voicing, which brought the Node Sequencer (`src/nodeseq/`), are identical to the reference.
       weights and vocoder followed (prismacanyon, lfo, delay, sidechain, vocoder), within -140 dB and identical.
-      mosh.wax plays, but is not the same sample for sample: see "Where the maths libraries matter" below.
+      mosh.wax is now sample for sample the same as well (see "Where the maths libraries matter").
       To do: original, phase, suite, bugsong, interstellar-nodes.
 - [ ] **6. Threads.** A pool of workers renders the instruments of a block side by side. Sidechain, listen and meta
       machines make one instrument wait for another, so those are put in order and the rest run together. The check:
@@ -40,19 +40,24 @@ Each is named in a comment where it will go, and `wax-render` says so when a son
 
 ## What counts as ported
 
-A node is ported when the songs that use it render within -90 dB of the reference (`wax-compare`). The renders cannot
-be identical bit for bit: the JS and C++ maths libraries differ in the last digits of sin, exp and tan. Reverbs and the
-nodes that roll dice are compared more loosely. The dice themselves are the same on both sides (`core/random.h`).
+A node is ported when the songs that use it render within -90 dB of the reference (`wax-compare`). Most of the demos
+render byte for byte the same as the web app. Reverbs and the nodes that roll dice are the ones to watch if one drifts.
+The dice themselves are the same on both sides (`core/random.h`).
 
 ## Where the maths libraries matter
 
-sin, cos, atan2, log10 and pow give a last digit that differs between the JS engine and the C library in 1 to 18 of
-every 100 calls (measured). In most nodes that stays 140 dB or more below the sound. The mosh node is different: it
-makes yes-or-no decisions from those numbers (which way the spectrum moved, whether a bin is loud enough to count), so
-sooner or later one decision falls the other way and the two renders part company. mosh.wax is the same to -100 dB
-for its first 9 seconds and then differs audibly in detail, though not in character. The other spectral nodes are
-likely to behave the same way. The cure, if exact agreement is wanted there, is to use the JS engine's own maths
-functions (they are open source) instead of the C library's; that would also make Windows and Linux agree exactly.
+The system maths library gives a last digit that differs from the JS engine's in 1 to 40 of every 100 calls (measured:
+sin 3%, exp 10%, atan2 18%, cbrt 40%). Most nodes stay 140 dB below the sound anyway, but mosh and the other spectral
+nodes make yes-or-no decisions from those numbers, so one decision falls the other way and the renders part company.
+
+So every node calls `js::sin`, `js::pow` and the rest (`core/js_math.h`), which run a copy of the JS engine's own maths
+(V8's fdlibm port, `third_party/v8-ieee754`, with its licence). It is the version in Node 22, the engine that makes the
+reference renders. It checks out bit for bit against Node on 400,000 random inputs for each of 18 functions, and it makes
+Windows and Linux agree exactly. Never call `std::sin`, `std::pow` and friends in a node. The build turns off fused
+multiply-add (`-ffp-contract=off`) so a compiler can't change a last digit either.
+
+A browser's own V8 may differ from Node 22's in some functions (newer V8 moved some maths to a different library), so
+the browser and a render can part by a last digit in rare cases; `.wax` files are unaffected.
 
 ## Rules for a ported node
 

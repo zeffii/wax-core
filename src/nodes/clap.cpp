@@ -45,13 +45,13 @@ public:
     }
     const int bursts = jsRoundInt(g(kBursts));
     const double gap = g(kSpacing) * ms_;
-    const double bDec = std::exp(-4.6 / (g(kBurstDecay) * ms_)), tDec = std::exp(-4.6 / (g(kTailDecay) * ms_)), tailLevel = g(kTailLevel);
+    const double bDec = js::exp(-4.6 / (g(kBurstDecay) * ms_)), tDec = js::exp(-4.6 / (g(kTailDecay) * ms_)), tailLevel = g(kTailLevel);
     const double spread = g(kSpread), drive = 1 + g(kDrive) * 4, v = 1 - g(kVel) + g(kVel) * velocity_, level = g(kLevel) * v * 1.6;
     // a trapezoidal state-variable band-pass, unity gain at the centre
-    const double f = std::tan(kPi * std::min(0.45, g(kTone) / sampleRate_)), k = 1 / g(kQ);
+    const double f = js::tan(kPi * std::min(0.45, g(kTone) / sampleRate_)), k = 1 / g(kQ);
     const double a1 = 1 / (1 + f * (f + k)), a2 = f * a1, a3 = f * a2;
-    const double rh = std::exp(-2 * kPi * 250 / sampleRate_);   // a gentle high-pass to keep rumble out
-    const double driveNorm = std::tanh(drive);
+    const double rh = js::exp(-2 * kPi * 250 / sampleRate_);   // a gentle high-pass to keep rumble out
+    const double driveNorm = js::tanh(drive);
     for (int i = 0; i < n; i++) {
       if (since_ >= 0) {
         if (next_ < bursts && since_ >= jsRound(next_ * gap)) {
@@ -72,7 +72,7 @@ public:
         const double y = bp - hpx_[c] + rh * hp_[c];
         hpx_[c] = bp;
         hp_[c] = y;
-        const double s = std::tanh(y * env * drive) / driveNorm * level;
+        const double s = js::tanh(y * env * drive) / driveNorm * level;
         (c ? outRight : outLeft)[i] = static_cast<float>(s);
       }
       burst_ *= bDec;

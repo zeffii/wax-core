@@ -7,6 +7,7 @@
 #include <cmath>
 
 #include "nodes/all_nodes.h"
+#include "core/js_math.h"
 
 namespace wax {
 namespace {
@@ -14,7 +15,7 @@ namespace {
 enum Param { kAttack = 0, kDecay, kSustain, kRelease, kAmount, kVel };
 enum class Stage { Idle, Attacking, Decaying, Releasing };
 
-const double kLn60Db = std::log(0.001);
+const double kLn60Db = js::log(0.001);
 
 class Env final : public Node {
 public:
@@ -29,8 +30,8 @@ public:
   void process(const float* const*, float* const* outputs, int n, const float* params, const int* slots) override {
     float* out = outputs[0];
     const double attackStep = 1 / (std::max(0.1, static_cast<double>(params[slots[kAttack]])) * 0.001 * sampleRate_);
-    const double decayCoef = std::exp(kLn60Db / (std::max(1.0, static_cast<double>(params[slots[kDecay]])) * 0.001 * sampleRate_));
-    const double releaseCoef = std::exp(kLn60Db / (std::max(1.0, static_cast<double>(params[slots[kRelease]])) * 0.001 * sampleRate_));
+    const double decayCoef = js::exp(kLn60Db / (std::max(1.0, static_cast<double>(params[slots[kDecay]])) * 0.001 * sampleRate_));
+    const double releaseCoef = js::exp(kLn60Db / (std::max(1.0, static_cast<double>(params[slots[kRelease]])) * 0.001 * sampleRate_));
     const double sustain = params[slots[kSustain]];
     const double vel = params[slots[kVel]];
     const double scale = params[slots[kAmount]] * (1 - vel + vel * velocity_);

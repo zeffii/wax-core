@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include "core/js_math.h"
 
 namespace wax {
 
@@ -15,11 +16,11 @@ public:
 
   // times in ms; call once per block
   void set(double attack, double decay, double sustain, double release) {
-    static const double ln60Db = std::log(0.001);
+    static const double ln60Db = js::log(0.001);
     const double ms = sampleRate_ * 0.001;
     attackStep_ = 1 / (std::max(0.1, attack) * ms);
-    decayCoef_ = std::exp(ln60Db / (std::max(1.0, decay) * ms));
-    releaseCoef_ = std::exp(ln60Db / (std::max(1.0, release) * ms));
+    decayCoef_ = js::exp(ln60Db / (std::max(1.0, decay) * ms));
+    releaseCoef_ = js::exp(ln60Db / (std::max(1.0, release) * ms));
     sustain_ = sustain;
   }
 

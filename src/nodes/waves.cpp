@@ -14,7 +14,7 @@ constexpr double kTau = 2 * 3.141592653589793;
 WaveTable sine() {
   WaveTable table{};
   for (int i = 0; i < kWavePoints; i++) {
-    table[static_cast<std::size_t>(i)] = static_cast<float>(jsRound(std::sin(kTau * (static_cast<double>(i) / kWavePoints)) * 10000) / 10000);
+    table[static_cast<std::size_t>(i)] = static_cast<float>(jsRound(js::sin(kTau * (static_cast<double>(i) / kWavePoints)) * 10000) / 10000);
   }
   return table;
 }

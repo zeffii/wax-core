@@ -21,6 +21,7 @@ FetchContent_MakeAvailable(json)
 
 # The engine: everything that makes sound, with no window and no sound card.
 add_library(waxcore
+  third_party/v8-ieee754/ieee754.cc
   src/core/params.cpp
   src/core/node_registry.cpp
   src/core/random.cpp
@@ -77,7 +78,11 @@ add_library(waxcore
   src/nodes/vocoder.cpp
   src/nodes/wavefolder.cpp
   src/nodes/westcoast.cpp)
-target_include_directories(waxcore PUBLIC src)
+target_include_directories(waxcore PUBLIC src third_party)
+# Results must be the same on every machine: no fused multiply-add, no fast-math.
+if(NOT MSVC)
+  target_compile_options(waxcore PUBLIC -ffp-contract=off)
+endif()
 target_link_libraries(waxcore PUBLIC nlohmann_json::nlohmann_json)
 
 # Command-line tools.

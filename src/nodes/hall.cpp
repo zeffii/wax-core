@@ -39,7 +39,7 @@ public:
       diffusers_[q].length = std::max(2, jsRoundInt(kDiffusers44k[q] * sampleRate_ / 44100));
       diffusers_[q].buf.assign(static_cast<std::size_t>(diffusers_[q].length), 0.0f);
     }
-    slew_ = 1 - std::exp(-1 / (sampleRate_ * 0.05));
+    slew_ = 1 - js::exp(-1 / (sampleRate_ * 0.05));
   }
 
   void process(const float* const* inputs, float* const* outputs, int n, const float* params, const int* slots) override {
@@ -50,23 +50,23 @@ public:
     const double sz = params[slots[kSize]], rt60 = std::min(20.0, static_cast<double>(params[slots[kDecay]]));
     const double openness = 1 - static_cast<double>(params[slots[kDamp]]);
     const double fc = std::max(800.0, 20000 * (openness * openness));
-    const double lpCoef = 1 - std::exp(-2 * kPi * fc / sampleRate_);
+    const double lpCoef = 1 - js::exp(-2 * kPi * fc / sampleRate_);
     const double preTarget = std::min(params[slots[kPredelay]] * ms_, static_cast<double>(preSize_ - 3));
     const double g = 0.15 + 0.5 * params[slots[kDiffusion]];
     const double depth = params[slots[kMod]] * maxDepth_, width = params[slots[kWidth]], mix = params[slots[kMix]];
     for (int k = 0; k < kLines; k++) {
       len_[k] = kBaseMs[k] * sz * ms_;
-      gain_[k] = std::pow(10.0, (-3 * len_[k]) / (sampleRate_ * rt60));   // 60 dB down after rt60 seconds
+      gain_[k] = js::pow(10.0, (-3 * len_[k]) / (sampleRate_ * rt60));   // 60 dB down after rt60 seconds
     }
     if (preCur_ < 0) preCur_ = preTarget;
     // The modulation moves a few times a second, so its sine is worked out at the start and end of the block and the
     // read position slides between them, instead of eight sines for every sample.
     const double inv = 1.0 / n;
     for (int k = 0; k < kLines; k++) {
-      const double a0 = len_[k] + depth * (0.5 + 0.5 * std::sin(kTwoPi * phase_[k]));
+      const double a0 = len_[k] + depth * (0.5 + 0.5 * js::sin(kTwoPi * phase_[k]));
       phase_[k] += rate_[k] * n;
       if (phase_[k] >= 1) phase_[k] -= 1;
-      const double a1 = len_[k] + depth * (0.5 + 0.5 * std::sin(kTwoPi * phase_[k]));
+      const double a1 = len_[k] + depth * (0.5 + 0.5 * js::sin(kTwoPi * phase_[k]));
       at_[k] = a0;
       step_[k] = (a1 - a0) * inv;
     }

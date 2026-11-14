@@ -1,0 +1,15 @@
+ieee754.cc is adapted from V8 (src/base/ieee754.cc, version 12.4.254.21), which is itself adapted from fdlibm.
+
+====================================================
+Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+
+Developed at SunSoft, a Sun Microsystems, Inc. business.
+Permission to use, copy, modify, and distribute this
+software is freely granted, provided that this notice
+is preserved.
+====================================================
+
+The original source code covered by the above license was modified significantly by Google Inc.
+Copyright 2016 the V8 project authors. All rights reserved.
+Redistribution and use in source and binary forms, with or without modification, are permitted under the V8 licence
+(BSD-3-Clause): https://github.com/v8/v8/blob/main/LICENSE.v8

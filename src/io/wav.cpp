@@ -6,6 +6,7 @@
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
+#include "core/js_math.h"
 
 namespace wax {
 namespace {
@@ -34,7 +35,7 @@ float readSample(const unsigned char* at, int format, int bits) {
   throw std::runtime_error("this reads 16-bit, 24-bit and 32-bit float WAV files only");
 }
 
-double toDb(double x) { return 20.0 * std::log10(std::max(x, 1e-15)); }
+double toDb(double x) { return 20.0 * js::log10(std::max(x, 1e-15)); }
 
 }  // namespace
 

@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "nodes/all_nodes.h"
+#include "core/js_math.h"
 
 namespace wax {
 namespace {
@@ -23,7 +24,7 @@ public:
     float* right = outputs[1];
     const double g = params[slots[kGain]] * kSqrt2;
     const double a = (params[slots[kPan]] + 1.0) * kPi / 4;
-    const double gl = g * std::cos(a), gr = g * std::sin(a);
+    const double gl = g * js::cos(a), gr = g * js::sin(a);
     if (gl0_ < 0) { gl0_ = gl; gr0_ = gr; }
     const double dl = (gl - gl0_) / n, dr = (gr - gr0_) / n;   // ramp across the block
     for (int i = 0; i < n; i++) {

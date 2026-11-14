@@ -75,19 +75,19 @@ public:
     amp_.set(g(kAtk), g(kDec), g(kSus), g(kRel));
     tim_.set(g(kTatk), g(kTdec), g(kTsus), g(kTrel));
     const double glideMs = g(kGlide);
-    if (glideMs > 0.5) pos_ += (note_ - pos_) * (1 - std::exp(-n / (sampleRate_ * glideMs * 0.001 / 3)));
+    if (glideMs > 0.5) pos_ += (note_ - pos_) * (1 - js::exp(-n / (sampleRate_ * glideMs * 0.001 / 3)));
     else pos_ = note_;
     const int wave = jsRoundInt(g(kWave)), modwave = jsRoundInt(g(kModWave)), quality = jsRoundInt(g(kQuality));
     const bool sync = g(kSync) >= 0.5;
     const double drift = g(kDrift);
     until_ -= n;   // a new place to wander to about every 0.4 s, reached smoothly
     if (until_ <= 0) { tFold_ = rand(); tFm_ = rand(); tPitch_ = rand(); until_ = sampleRate_ * 0.4; }
-    const double slide = 1 - std::exp(-n / (sampleRate_ * 0.25));
+    const double slide = 1 - js::exp(-n / (sampleRate_ * 0.25));
     dFold_ += (tFold_ - dFold_) * slide;
     dFm_ += (tFm_ - dFm_) * slide;
     dPitch_ += (tPitch_ - dPitch_) * slide;
-    const double inc = 440 * std::pow(2.0, (pos_ - 69 + g(kTune) + drift * dPitch_ * 0.06) / 12) / sampleRate_;
-    const double incMod = inc * g(kRatio) * std::pow(2.0, g(kModTune) / 1200);
+    const double inc = 440 * js::pow(2.0, (pos_ - 69 + g(kTune) + drift * dPitch_ * 0.06) / 12) / sampleRate_;
+    const double incMod = inc * g(kRatio) * js::pow(2.0, g(kModTune) / 1200);
     const double fm0 = g(kFm), fmenv = g(kFmEnv), fold0 = g(kFold), foldenv = g(kFoldEnv), sym = g(kSymmetry) * 0.6;
     gate_.set(jsRoundInt(g(kMode)), g(kBright), g(kRes), g(kLpgAtk), g(kLpgDec), (pos_ - 60) * g(kTrack));
     const double strike = 1 - g(kVel) + g(kVel) * velocity_, level = g(kLevel);
@@ -97,13 +97,13 @@ public:
     const double foldDrift = drift * (0.22 * dFold_ + 0.12 * perNote_), fmDrift = drift * 0.2 * dFm_;
     for (int i = 0; i < n; i++) {
       const double a = amp_.next(), t = tim_.next();
-      const double pitchMul = pitchOn_ ? std::pow(2.0, pitchIn[i]) : 1;
+      const double pitchMul = pitchOn_ ? js::pow(2.0, pitchIn[i]) : 1;
       const double idx = clamp(fm0 + fmDrift + fmenv * t, 0, 1);
       const double index = idx * idx * kFmRadians;
       const double amount = clamp(fold0 + foldDrift + foldenv * t + (foldOn_ ? foldIn[i] : 0), 0, 1);
       double first = 0, last = 0, sum = 0;
       for (int s = 0; s < steps; s++) {
-        const double m = modwave == 0 ? std::sin(kTwoPi * pm_) : triangle(pm_);
+        const double m = modwave == 0 ? js::sin(kTwoPi * pm_) : triangle(pm_);
         double x = p_ + (index * m) / kTwoPi;
         x -= std::floor(x);
         const double y = foldWave(principal(wave, x, inc * pitchMul * step), amount, sym);
@@ -142,7 +142,7 @@ private:
 
   // the principal oscillator: 0 sine, 1 triangle, 2 saw, 3 square, 4 drawn
   double principal(int wave, double x, double dt) const {
-    if (wave == 0) return std::sin(kTwoPi * x);
+    if (wave == 0) return js::sin(kTwoPi * x);
     if (wave == 1) return triangle(x);
     if (wave == 2) return 2 * x - 1 - polyBlep(x, dt);
     if (wave == 3) return (x < 0.5 ? 1 : -1) + polyBlep(x, dt) - polyBlep(x < 0.5 ? x + 0.5 : x - 0.5, dt);

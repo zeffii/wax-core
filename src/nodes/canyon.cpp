@@ -32,7 +32,7 @@ constexpr double kLevels[kLines] = {1, 0.7, 0.5, 0.35}, kPans[kLines] = {-0.7, 0
 class Shelf {
 public:
   void set(bool high, double f, double db, double sr) {
-    const double A = std::pow(10.0, db / 40), w = 2 * kPi * std::min(f, sr * 0.45) / sr, cs = std::cos(w), sn = std::sin(w);
+    const double A = js::pow(10.0, db / 40), w = 2 * kPi * std::min(f, sr * 0.45) / sr, cs = js::cos(w), sn = js::sin(w);
     const double al = sn / 2 * kSqrt2, t = 2 * std::sqrt(A) * al;
     double b0, b1, b2, a0, a1, a2;
     if (high) {
@@ -106,9 +106,9 @@ public:
     size_ = static_cast<int>(std::ceil(sr_ * (kLines * kMaxTimeMs + 30) / 1000)) + 8;
     tape_[0].assign(static_cast<std::size_t>(size_), 0.0f);
     tape_[1].assign(static_cast<std::size_t>(size_), 0.0f);
-    slew_ = 1 - std::exp(-1 / (sr_ * 0.08));
-    noiseA_ = 1 - std::exp(-2 * kPi * 1.2 / sr_);
-    flutterA_ = 1 - std::exp(-2 * kPi * 25 / sr_);
+    slew_ = 1 - js::exp(-1 / (sr_ * 0.08));
+    noiseA_ = 1 - js::exp(-2 * kPi * 1.2 / sr_);
+    flutterA_ = 1 - js::exp(-2 * kPi * 25 / sr_);
   }
 
   void process(const float* const* inputs, float* const* outputs, int n, const float* params, const int* slots) override {
@@ -130,8 +130,8 @@ public:
       // the pan only shapes what is heard; the loop gets the line as it is
       gl[k] = a[k] * std::min(1.0, 1 - p) * echo;
       gr[k] = a[k] * std::min(1.0, 1 + p) * echo;
-      const double lineCutoff = cutoff * std::pow(2.0, -4 * g(kLine + k * kPerLine + 2));
-      pole[k] = 1 - std::exp(-2 * kPi * std::min(lineCutoff, sr_ * 0.45) / sr_);
+      const double lineCutoff = cutoff * js::pow(2.0, -4 * g(kLine + k * kPerLine + 2));
+      pole[k] = 1 - js::exp(-2 * kPi * std::min(lineCutoff, sr_ * 0.45) / sr_);
     }
     for (int k = 0; k < kLines; k++) weight[k] = sum > 1e-6 ? a[k] / sum : 0;
     for (Tone& s : shelves_) { s.bass.set(false, 150, g(kBass), sr_); s.treble.set(true, 3500, g(kTreble), sr_); }
@@ -142,8 +142,8 @@ public:
       flPh2_ += 11.9 / sr_; if (flPh2_ > 1) flPh2_ -= 1;
       wowNz_ += (rand() - wowNz_) * noiseA_;
       flNz_ += (rand() - flNz_) * flutterA_;
-      const double mod = (std::sin(kTwoPi * wowPh_) * 0.7 + wowNz_ * 2.5 * 0.3) * wowMs * 0.001 * sr_
-                       + (std::sin(kTwoPi * flPh_) * 0.6 + std::sin(kTwoPi * flPh2_) * 0.35 + flNz_ * 0.9 * 0.3) * flMs * 0.001 * sr_;
+      const double mod = (js::sin(kTwoPi * wowPh_) * 0.7 + wowNz_ * 2.5 * 0.3) * wowMs * 0.001 * sr_
+                       + (js::sin(kTwoPi * flPh_) * 0.6 + js::sin(kTwoPi * flPh2_) * 0.35 + flNz_ * 0.9 * 0.3) * flMs * 0.001 * sr_;
       const double x[2] = {inLeft[i], inRight[i]};
       double heard[2], recorded[2];
       for (int ch = 0; ch < 2; ch++) {
@@ -171,7 +171,7 @@ public:
         dc_[ch] = hp;
         loop = hp;
         const double v = x[ch] + loop;
-        recorded[ch] = std::tanh(sat * v) / sat;
+        recorded[ch] = js::tanh(sat * v) / sat;
         heard[ch] = bus;
       }
       const double m = (x[0] + x[1]) * 0.5 * 0.3;

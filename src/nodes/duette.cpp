@@ -92,10 +92,10 @@ public:
     const int lwave = whole(kLfoWave), lmode = whole(kLfoMode), ltarget = whole(kLfoTarget);
     const double lint = g(kLfoInt);
     const double r0 = lmode == 0 ? 0.5 : 0.05, r1 = lmode == 0 ? 2800 : 28;   // fast, or slow
-    const double lfoHz = r0 * std::pow(r1 / r0, g(kLfoRate));
+    const double lfoHz = r0 * js::pow(r1 / r0, g(kLfoRate));
     const double atk = std::max(1e-4, g(kAttack) * 0.001 * sr_);
-    const double decCoef = std::exp(-6.9078 / (sr_ * (cutting_ ? 4 : g(kDecay)) * 0.001));
-    const double glideCoef = glideMs_ > 0 ? 1 - std::exp(-3 / (sr_ * glideMs_ * 0.001)) : 1;
+    const double decCoef = js::exp(-6.9078 / (sr_ * (cutting_ ? 4 : g(kDecay)) * 0.001));
+    const double glideCoef = glideMs_ > 0 ? 1 - js::exp(-3 / (sr_ * glideMs_ * 0.001)) : 1;
     const double tune = g(kTune), key = g(kKeytrack), cutvel = g(kCutVel), ampvel = g(kAmpVel);
     const double velGain = 1 - ampvel + ampvel * velocity_, driveGain = 1 + drive * 9, driveNorm = std::sqrt(driveGain);
     const double kq = 2 - 1.96 * res;   // the filter's damping: 2 is none, near 0 rings by itself
@@ -124,14 +124,14 @@ public:
       if (egtype == 2) { gateEnv_ += ((gate_ ? 1 : 0) - gateEnv_) * 0.01; vca_ = gateEnv_; } else vca_ = eg_;
       // the pitch, then the coefficients, every 8 samples
       if ((i & 7) == 0) {
-        pitch_ += (target_ - pitch_) * (glideCoef == 1 ? 1 : 1 - std::pow(1 - glideCoef, 8));
+        pitch_ += (target_ - pitch_) * (glideCoef == 1 ? 1 : 1 - js::pow(1 - glideCoef, 8));
         if (std::abs(target_ - pitch_) < 1e-3) pitch_ = target_;
         const double lfoSemis = ltarget == 0 ? lfoV * lint * lint * 24 : 0, egSemis = egtarget == 0 ? egOct * eg_ * 12 : 0, egSemis2 = egtarget == 1 ? egOct * eg_ * 12 : 0;
-        inc1 = 440 * std::pow(2.0, (pitch_ + tune + lfoSemis + egSemis - 69) / 12) / sr_;
-        inc2 = 440 * std::pow(2.0, (pitch_ + tune + vco2Offset + vco2Cents / 100 + lfoSemis + egSemis + egSemis2 - 69) / 12) / sr_;
+        inc1 = 440 * js::pow(2.0, (pitch_ + tune + lfoSemis + egSemis - 69) / 12) / sr_;
+        inc2 = 440 * js::pow(2.0, (pitch_ + tune + vco2Offset + vco2Cents / 100 + lfoSemis + egSemis + egSemis2 - 69) / 12) / sr_;
         const double octs = (egtarget == 2 ? egOct * eg_ : 0) + (ltarget == 2 ? lfoV * lint * lint * 4 : 0) + key * (pitch_ - 60) / 12 + cutvel * (velocity_ - 0.5) * 3;
-        const double fc = std::min(0.45 * sr_, std::max(20.0, cutoff * std::pow(2.0, octs)));
-        gg = std::tan(kPi * fc / sr_);
+        const double fc = std::min(0.45 * sr_, std::max(20.0, cutoff * js::pow(2.0, octs)));
+        gg = js::tan(kPi * fc / sr_);
         a1 = 1 / (1 + gg * (gg + kq));
       }
       const double shapeMod = ltarget == 1 ? lfoV * lint * 0.5 : 0;

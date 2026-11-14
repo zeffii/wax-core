@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "nodes/shared_dsp.h"
+#include "core/js_math.h"
 
 namespace wax {
 
@@ -24,8 +25,8 @@ struct Taps {
     for (int j = 0; j <= 2 * kHalf; j++) {
       const int n = j - kHalf;
       if (n != 0 && n % 2 == 0) continue;
-      const double sinc = n == 0 ? 1 : std::sin((kPi * n) / 2) / ((kPi * n) / 2);
-      const double window = 0.42 + 0.5 * std::cos((kPi * n) / kHalf) + 0.08 * std::cos((2 * kPi * n) / kHalf);
+      const double sinc = n == 0 ? 1 : js::sin((kPi * n) / 2) / ((kPi * n) / 2);
+      const double window = 0.42 + 0.5 * js::cos((kPi * n) / kHalf) + 0.08 * js::cos((2 * kPi * n) / kHalf);
       offset.push_back(j);
       weight.push_back(0.5 * sinc * window);
     }

@@ -25,7 +25,7 @@ public:
         size_(static_cast<int>(std::ceil(context.sampleRate * kMaxMs / 1000)) + 4),
         bufLeft_(static_cast<std::size_t>(size_), 0.0f),
         bufRight_(static_cast<std::size_t>(size_), 0.0f),
-        slew_(1 - std::exp(-1 / (context.sampleRate * 0.05))),   // per sample, so parameter moves do not click
+        slew_(1 - js::exp(-1 / (context.sampleRate * 0.05))),   // per sample, so parameter moves do not click
         ms_(context.sampleRate / 1000) {}
 
   void process(const float* const* inputs, float* const* outputs, int n, const float* params, const int* slots) override {
@@ -35,7 +35,7 @@ public:
         const double target = jsMod(params[slots[kPhase]], 1), d = phase_ + err_ - target, glide = params[slots[kGlide]];
         err_ = glide > 0 ? d - jsRound(d) : 0;
         phase_ = target;
-        decay_ = std::exp(-3 / (sampleRate_ * glide / 1000 + 1));
+        decay_ = js::exp(-3 / (sampleRate_ * glide / 1000 + 1));
       }
       seen_ = stamp;
     }
@@ -54,8 +54,8 @@ public:
       double wl = 0, wr = 0;
       for (int v = 0; v < voices; v++) {
         const double p = phase_ + err_ + static_cast<double>(v) / voices;
-        wl += read(bufLeft_, (delay_ + depth_ * std::sin(kTwoPi * p)) * ms_);
-        wr += read(bufRight_, (delay_ + depth_ * std::sin(kTwoPi * (p + offset))) * ms_);
+        wl += read(bufLeft_, (delay_ + depth_ * js::sin(kTwoPi * p)) * ms_);
+        wr += read(bufRight_, (delay_ + depth_ * js::sin(kTwoPi * (p + offset))) * ms_);
       }
       const float l = inLeft[i], r = inRight[i];
       outLeft[i] = static_cast<float>(l + (wl / voices) * mix);
