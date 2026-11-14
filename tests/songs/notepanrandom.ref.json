@@ -1,0 +1,19 @@
+{
+  "song": "notepanrandom.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.45987,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "455c94bde9a5b45aee7454012de57d0d2046b00073ab2cd8851ae39c2ec36ea6",
+  "nodeTypes": [
+    "bus-in",
+    "lone",
+    "notepan",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}

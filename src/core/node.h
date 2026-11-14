@@ -97,6 +97,8 @@ struct NodeContext {
   std::vector<bool> connected;           // one flag per input port
   bool stereo = false;                   // the node's own `stereo` flag in the graph
   const Json* data = nullptr;            // the node's `data` in the graph, when it has any
+  std::shared_ptr<void>* shared = nullptr;   // one slot for each node of an instrument, shared by all its voice copies: a node that runs
+                                             // once per voice can know what the others are doing (it makes its state there, once)
   std::optional<RangeTarget> target;     // a range node: the port it feeds
   std::optional<double> init;            // where a node feeding a parameter port should start (0..1)
   const Clock* clock = nullptr;

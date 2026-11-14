@@ -171,6 +171,7 @@ std::unique_ptr<GraphRuntime::RunNode> GraphRuntime::makeNode(const CompiledNode
   context.data = compiled.data.is_null() ? nullptr : &compiled.data;
   context.init = compiled.init;
   context.target = compiled.target;
+  context.shared = &sharedStates_[instrument + "/" + compiled.id];
   context.clock = &clock_;
   context.bus = instrument == "master" ? &bus_ : nullptr;
   context.deliver = [this, instrument](const NoteEvent& event) { deliver(instrument, event); };
@@ -238,6 +239,7 @@ void GraphRuntime::load(const CompiledGraph& source) {
   maxDelay_.reset();
   if (std::find(loadOrder_.begin(), loadOrder_.end(), id) == loadOrder_.end()) loadOrder_.push_back(id);
 
+  for (auto it = sharedStates_.begin(); it != sharedStates_.end();) it = it->first.rfind(id + "/", 0) == 0 ? sharedStates_.erase(it) : std::next(it);   // a rebuilt instrument starts fresh
   const int V = std::max(1, std::min(kMaxVoices, compiled.voices));
   const auto fresh = [&] { return std::vector<std::vector<float>>(static_cast<std::size_t>(compiled.bufferCount), std::vector<float>(static_cast<std::size_t>(maxBlock_), 0.0f)); };
 

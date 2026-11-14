@@ -45,6 +45,7 @@ const NodeRegistry& builtinNodes() {
     registerRange(r);
     registerEnvFx(r);
     registerCtrl(r);
+    registerNotePan(r);
     registerSweep(r);
     registerExciter(r);
     registerCardinal(r);

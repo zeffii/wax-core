@@ -136,6 +136,7 @@ private:
   std::vector<char> mixesIn_;                                     // per instrument of the order: whether its sound goes into the mix this block
   std::optional<std::map<std::string, std::vector<Listener>>> followMap_;
   std::map<std::string, std::shared_ptr<const SampleMessage>> samples_;   // the last sample sent to each node and slot, replayed on a rebuild
+  std::map<std::string, std::shared_ptr<void>> sharedStates_;   // by instrument and node id (see NodeContext::shared)
   std::map<std::string, int> instancesMade_;   // per kind of dice-rolling node (see NodeContext::nextInstance)
   struct Mix;
   std::map<std::string, std::unique_ptr<Mix>> mixes_;   // the added-together sound of a meta machine's machines, one for each way a sidechain asks for it

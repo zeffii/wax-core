@@ -1,0 +1,19 @@
+{
+  "song": "notepancluster.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.581231,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "ceb1062104f12ee961cb2447d21ab5f252ac00506fecbbb09d43cb0aa8027276",
+  "nodeTypes": [
+    "bus-in",
+    "lone",
+    "notepan",
+    "out",
+    "tempo",
+    "voices"
+  ]
+}

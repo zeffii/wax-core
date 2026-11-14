@@ -194,6 +194,9 @@ int main() {
   testRenderSong("notetrig");
   testRenderSong("ctrl");
   testRenderSong("ctrllog");
+  testRenderSong("notepan");
+  testRenderSong("notepancluster");
+  testRenderSong("notepanrandom");
   testRenderSong("cardinal");
   testRenderSong("drumsynth");
   testRenderSong("waveshaper");
