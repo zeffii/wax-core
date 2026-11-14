@@ -143,6 +143,8 @@ private:
 
 }  // namespace
 
+std::unique_ptr<Node> makeHall(const NodeContext& context) { return std::make_unique<Hall>(context); }
+
 void registerHall(NodeRegistry& registry) {
   NodeType type;
   type.type = "hall";

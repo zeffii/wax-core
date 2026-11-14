@@ -67,6 +67,20 @@ add_library(waxcore
   src/nodes/hall.cpp
   src/nodes/hat808.cpp
   src/nodes/lfo.cpp
+  src/nodes/filter.cpp
+  src/nodes/noise.cpp
+  src/nodes/crusher.cpp
+  src/nodes/gater.cpp
+  src/nodes/multitap.cpp
+  src/nodes/freqshift.cpp
+  src/nodes/phaser.cpp
+  src/nodes/shimmer.cpp
+  src/nodes/addsynth.cpp
+  src/nodes/arp.cpp
+  src/nodes/specpan.cpp
+  src/nodes/blur.cpp
+  src/nodes/shiva.cpp
+  src/nodes/woodblock.cpp
   src/nodes/mosh.cpp
   src/nodes/osc.cpp
   src/nodes/plate.cpp
