@@ -1,0 +1,17 @@
+{
+  "song": "modchannearest.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 942080,
+  "seconds": 21.362,
+  "peak": 0.582708,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "461a1455792543ee13f1a18ed0145394c26b517bbb93d75c43bf4274b78756b8",
+  "nodeTypes": [
+    "bus-in",
+    "modchan",
+    "out",
+    "tempo"
+  ]
+}

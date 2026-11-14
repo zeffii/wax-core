@@ -1,0 +1,17 @@
+{
+  "song": "modchan2.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 942080,
+  "seconds": 21.362,
+  "peak": 0.451694,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "1b07b30528f43b56ea1e10f85b3e1e6d8fe16b5a44a7804e485b48d75e838842",
+  "nodeTypes": [
+    "bus-in",
+    "modchan",
+    "out",
+    "tempo"
+  ]
+}

@@ -141,6 +141,7 @@ add_library(waxcore
   src/nodes/snarl.cpp
   src/nodes/dvii.cpp
   src/nodes/specsynth.cpp
+  src/nodes/modchan.cpp
   src/nodes/sweep.cpp
   src/nodes/exciter.cpp
   src/nodes/cardinal.cpp
