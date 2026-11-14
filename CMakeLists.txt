@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(MSVC)
   add_compile_options(/W4 /utf-8 /permissive-)
+  add_compile_definitions(_CRT_SECURE_NO_WARNINGS)   # the standard sscanf is fine here
 else()
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
