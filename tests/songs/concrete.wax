@@ -1,0 +1,1052 @@
+{
+ "format": "webtracker",
+ "version": 1,
+ "song": {
+  "name": "concrete (meta)",
+  "bpm": 134,
+  "ticksPerBeat": 4,
+  "length": 64,
+  "loop": {
+   "start": 0,
+   "end": 64
+  },
+  "info": "Four bars of techno from five percussion machines (a kick, a hi-hat, a clap, a comb-resonator metal percussion and a tuned tom), all played by one meta machine. The grid lane has no notes of its own: each of its columns is a proxy of one thing of another machine, so the kick, hat, clap, metal and tom have no lanes at all. n1 v1 are the kick note and velocity, then its pitch envelope, pitch decay, decay and tune; t1 t2 the hat hits (closed, open) and its decays, tone and tune; t3 the clap and its tone, tail, bursts and spacing; n2 is the metal as a 2hex note relative to E-5 (80 is E-5, 83 is G-5, 87 is B-5, 00 would be a note off); n3 is the tom relative to C-3. The sound moves through the parameter columns. Each pattern is four rows and is placed again where the music repeats."
+ },
+ "instruments": {
+  "kick": {
+   "graph": {
+    "nodes": [
+     {
+      "id": "pitchEnv",
+      "type": "env",
+      "params": {
+       "attack": 0.2,
+       "decay": 70,
+       "sustain": 0,
+       "release": 50,
+       "amount": 2.5
+      }
+     },
+     {
+      "id": "osc",
+      "type": "osc",
+      "params": {
+       "wave": 0,
+       "reset": 1,
+       "phase": 0.25
+      }
+     },
+     {
+      "id": "ampEnv",
+      "type": "env",
+      "params": {
+       "attack": 0.5,
+       "decay": 300,
+       "sustain": 0,
+       "release": 40
+      }
+     },
+     {
+      "id": "vca",
+      "type": "gain"
+     },
+     {
+      "id": "out",
+      "type": "out",
+      "params": {
+       "gain": 0.42
+      }
+     }
+    ],
+    "connections": [
+     [
+      "pitchEnv.out",
+      "osc.fm"
+     ],
+     [
+      "osc.out",
+      "vca.in"
+     ],
+     [
+      "ampEnv.out",
+      "vca.cv"
+     ],
+     [
+      "vca.out",
+      "out.in"
+     ]
+    ]
+   },
+   "exposed": [
+    {
+     "node": "pitchEnv",
+     "param": "amount",
+     "label": "Pit"
+    },
+    {
+     "node": "pitchEnv",
+     "param": "decay",
+     "label": "PDc",
+     "scale": "log"
+    },
+    {
+     "node": "ampEnv",
+     "param": "decay",
+     "label": "Dec",
+     "scale": "log"
+    },
+    {
+     "node": "osc",
+     "param": "tune",
+     "label": "Tun"
+    }
+   ],
+   "commands": [
+    {
+     "id": 1,
+     "node": "pitchEnv",
+     "param": "amount"
+    },
+    {
+     "id": 2,
+     "node": "pitchEnv",
+     "param": "decay",
+     "scale": "log"
+    },
+    {
+     "id": 3,
+     "node": "ampEnv",
+     "param": "decay",
+     "scale": "log"
+    },
+    {
+     "id": 4,
+     "node": "osc",
+     "param": "tune"
+    },
+    {
+     "id": 5,
+     "node": "out",
+     "param": "gain"
+    }
+   ]
+  },
+  "hat": {
+   "graph": {
+    "nodes": [
+     {
+      "id": "hat",
+      "type": "hat808"
+     },
+     {
+      "id": "out",
+      "type": "out",
+      "params": {
+       "gain": 0.4
+      }
+     }
+    ],
+    "connections": [
+     [
+      "hat.out",
+      "out.in"
+     ]
+    ]
+   },
+   "noteColumns": 0,
+   "triggers": [
+    {
+     "label": "Cl",
+     "note": 0
+    },
+    {
+     "label": "Op",
+     "note": 1
+    }
+   ],
+   "exposed": [
+    {
+     "node": "hat",
+     "param": "cdec",
+     "label": "CDc",
+     "scale": "log"
+    },
+    {
+     "node": "hat",
+     "param": "odec",
+     "label": "ODc",
+     "scale": "log"
+    },
+    {
+     "node": "hat",
+     "param": "tone",
+     "label": "Ton"
+    },
+    {
+     "node": "hat",
+     "param": "tune",
+     "label": "Tun"
+    }
+   ],
+   "commands": [
+    {
+     "id": 1,
+     "node": "hat",
+     "param": "tune"
+    },
+    {
+     "id": 2,
+     "node": "hat",
+     "param": "tone"
+    },
+    {
+     "id": 3,
+     "node": "hat",
+     "param": "snap"
+    },
+    {
+     "id": 4,
+     "node": "hat",
+     "param": "level"
+    },
+    {
+     "id": 5,
+     "node": "hat",
+     "param": "cdec",
+     "scale": "log"
+    },
+    {
+     "id": 6,
+     "node": "hat",
+     "param": "odec",
+     "scale": "log"
+    },
+    {
+     "id": 7,
+     "node": "hat",
+     "param": "clvl"
+    },
+    {
+     "id": 8,
+     "node": "hat",
+     "param": "olvl"
+    },
+    {
+     "id": 9,
+     "node": "hat",
+     "param": "choke"
+    }
+   ]
+  },
+  "clap": {
+   "graph": {
+    "nodes": [
+     {
+      "id": "clap",
+      "type": "clap"
+     },
+     {
+      "id": "out",
+      "type": "out",
+      "params": {
+       "gain": 0.5
+      }
+     }
+    ],
+    "connections": [
+     [
+      "clap.out",
+      "out.in"
+     ]
+    ]
+   },
+   "noteColumns": 0,
+   "triggers": [
+    {
+     "label": "Cl",
+     "note": 0
+    }
+   ],
+   "exposed": [
+    {
+     "node": "clap",
+     "param": "tone",
+     "label": "Ton",
+     "scale": "log"
+    },
+    {
+     "node": "clap",
+     "param": "tailDecay",
+     "label": "Tai",
+     "scale": "log"
+    },
+    {
+     "node": "clap",
+     "param": "bursts",
+     "label": "Bur"
+    },
+    {
+     "node": "clap",
+     "param": "spacing",
+     "label": "Spc"
+    }
+   ],
+   "commands": [
+    {
+     "id": 1,
+     "node": "clap",
+     "param": "tone",
+     "scale": "log"
+    },
+    {
+     "id": 2,
+     "node": "clap",
+     "param": "q"
+    },
+    {
+     "id": 3,
+     "node": "clap",
+     "param": "bursts"
+    },
+    {
+     "id": 4,
+     "node": "clap",
+     "param": "spacing"
+    },
+    {
+     "id": 5,
+     "node": "clap",
+     "param": "burstDecay"
+    },
+    {
+     "id": 6,
+     "node": "clap",
+     "param": "tailDecay",
+     "scale": "log"
+    },
+    {
+     "id": 7,
+     "node": "clap",
+     "param": "tailLevel"
+    },
+    {
+     "id": 8,
+     "node": "clap",
+     "param": "spread"
+    },
+    {
+     "id": 9,
+     "node": "clap",
+     "param": "drive"
+    },
+    {
+     "id": 10,
+     "node": "clap",
+     "param": "level"
+    }
+   ]
+  },
+  "metal": {
+   "graph": {
+    "nodes": [
+     {
+      "id": "perc",
+      "type": "combperc",
+      "params": {
+       "spread": 0.7,
+       "decay": 220,
+       "sweep": 0.4,
+       "sdec": 30,
+       "click": 1.5,
+       "drive": 0.25
+      }
+     },
+     {
+      "id": "out",
+      "type": "out",
+      "params": {
+       "gain": 0.5
+      }
+     }
+    ],
+    "connections": [
+     [
+      "perc.out",
+      "out.in"
+     ]
+    ]
+   },
+   "noteColumns": 1,
+   "exposed": [
+    {
+     "node": "perc",
+     "param": "decay",
+     "label": "Dec",
+     "scale": "log"
+    },
+    {
+     "node": "perc",
+     "param": "sweep",
+     "label": "Swp"
+    },
+    {
+     "node": "perc",
+     "param": "spread",
+     "label": "Spr"
+    },
+    {
+     "node": "perc",
+     "param": "damp",
+     "label": "Dmp"
+    }
+   ],
+   "commands": [
+    {
+     "id": 1,
+     "node": "perc",
+     "param": "decay",
+     "scale": "log"
+    },
+    {
+     "id": 2,
+     "node": "perc",
+     "param": "damp"
+    },
+    {
+     "id": 3,
+     "node": "perc",
+     "param": "spread"
+    },
+    {
+     "id": 4,
+     "node": "perc",
+     "param": "tune"
+    },
+    {
+     "id": 5,
+     "node": "perc",
+     "param": "sweep"
+    },
+    {
+     "id": 6,
+     "node": "perc",
+     "param": "sdec",
+     "scale": "log"
+    },
+    {
+     "id": 7,
+     "node": "perc",
+     "param": "drive"
+    },
+    {
+     "id": 8,
+     "node": "perc",
+     "param": "click",
+     "scale": "log"
+    },
+    {
+     "id": 9,
+     "node": "perc",
+     "param": "bright"
+    },
+    {
+     "id": 10,
+     "node": "perc",
+     "param": "hollow"
+    },
+    {
+     "id": 11,
+     "node": "out",
+     "param": "gain"
+    }
+   ]
+  },
+  "tom": {
+   "graph": {
+    "nodes": [
+     {
+      "id": "perc",
+      "type": "combperc",
+      "params": {
+       "spread": 0.1,
+       "decay": 380,
+       "sweep": 2,
+       "sdec": 45,
+       "damp": 0.5,
+       "click": 3,
+       "bright": 0.45,
+       "drive": 0.15
+      }
+     },
+     {
+      "id": "out",
+      "type": "out",
+      "params": {
+       "gain": 0.5
+      }
+     }
+    ],
+    "connections": [
+     [
+      "perc.out",
+      "out.in"
+     ]
+    ]
+   },
+   "noteColumns": 1,
+   "exposed": [
+    {
+     "node": "perc",
+     "param": "decay",
+     "label": "Dec",
+     "scale": "log"
+    },
+    {
+     "node": "perc",
+     "param": "sweep",
+     "label": "Swp"
+    },
+    {
+     "node": "perc",
+     "param": "spread",
+     "label": "Spr"
+    },
+    {
+     "node": "perc",
+     "param": "damp",
+     "label": "Dmp"
+    }
+   ],
+   "commands": [
+    {
+     "id": 1,
+     "node": "perc",
+     "param": "decay",
+     "scale": "log"
+    },
+    {
+     "id": 2,
+     "node": "perc",
+     "param": "damp"
+    },
+    {
+     "id": 3,
+     "node": "perc",
+     "param": "spread"
+    },
+    {
+     "id": 4,
+     "node": "perc",
+     "param": "tune"
+    },
+    {
+     "id": 5,
+     "node": "perc",
+     "param": "sweep"
+    },
+    {
+     "id": 6,
+     "node": "perc",
+     "param": "sdec",
+     "scale": "log"
+    },
+    {
+     "id": 7,
+     "node": "perc",
+     "param": "drive"
+    },
+    {
+     "id": 8,
+     "node": "perc",
+     "param": "click",
+     "scale": "log"
+    },
+    {
+     "id": 9,
+     "node": "perc",
+     "param": "bright"
+    },
+    {
+     "id": 10,
+     "node": "perc",
+     "param": "hollow"
+    },
+    {
+     "id": 11,
+     "node": "out",
+     "param": "gain"
+    }
+   ]
+  },
+  "grid": {
+   "graph": {
+    "nodes": [
+     {
+      "id": "out",
+      "type": "out",
+      "x": 200,
+      "y": 80,
+      "params": {
+       "gain": 0.5
+      }
+     }
+    ],
+    "connections": []
+   },
+   "noteColumns": 0,
+   "exposed": [],
+   "commands": [],
+   "meta": {
+    "columns": [
+     {
+      "id": "c1",
+      "instrument": "kick",
+      "role": "note",
+      "nc": 0
+     },
+     {
+      "id": "c2",
+      "instrument": "kick",
+      "role": "vel",
+      "nc": 0
+     },
+     {
+      "id": "c3",
+      "instrument": "kick",
+      "role": "param",
+      "node": "pitchEnv",
+      "param": "amount"
+     },
+     {
+      "id": "c4",
+      "instrument": "kick",
+      "role": "param",
+      "node": "pitchEnv",
+      "param": "decay"
+     },
+     {
+      "id": "c5",
+      "instrument": "kick",
+      "role": "param",
+      "node": "ampEnv",
+      "param": "decay"
+     },
+     {
+      "id": "c6",
+      "instrument": "kick",
+      "role": "param",
+      "node": "osc",
+      "param": "tune"
+     },
+     {
+      "id": "c7",
+      "instrument": "hat",
+      "role": "trig",
+      "tc": 0
+     },
+     {
+      "id": "c8",
+      "instrument": "hat",
+      "role": "trig",
+      "tc": 1
+     },
+     {
+      "id": "c9",
+      "instrument": "hat",
+      "role": "param",
+      "node": "hat",
+      "param": "cdec"
+     },
+     {
+      "id": "c10",
+      "instrument": "hat",
+      "role": "param",
+      "node": "hat",
+      "param": "odec"
+     },
+     {
+      "id": "c11",
+      "instrument": "hat",
+      "role": "param",
+      "node": "hat",
+      "param": "tone"
+     },
+     {
+      "id": "c12",
+      "instrument": "hat",
+      "role": "param",
+      "node": "hat",
+      "param": "tune"
+     },
+     {
+      "id": "c13",
+      "instrument": "clap",
+      "role": "trig",
+      "tc": 0
+     },
+     {
+      "id": "c14",
+      "instrument": "clap",
+      "role": "param",
+      "node": "clap",
+      "param": "tone"
+     },
+     {
+      "id": "c15",
+      "instrument": "clap",
+      "role": "param",
+      "node": "clap",
+      "param": "tailDecay"
+     },
+     {
+      "id": "c16",
+      "instrument": "clap",
+      "role": "param",
+      "node": "clap",
+      "param": "bursts"
+     },
+     {
+      "id": "c17",
+      "instrument": "clap",
+      "role": "param",
+      "node": "clap",
+      "param": "spacing"
+     },
+     {
+      "id": "c18",
+      "instrument": "metal",
+      "role": "rnote",
+      "nc": 0,
+      "root": 76
+     },
+     {
+      "id": "c19",
+      "instrument": "metal",
+      "role": "vel",
+      "nc": 0
+     },
+     {
+      "id": "c20",
+      "instrument": "metal",
+      "role": "param",
+      "node": "perc",
+      "param": "decay"
+     },
+     {
+      "id": "c21",
+      "instrument": "metal",
+      "role": "param",
+      "node": "perc",
+      "param": "sweep"
+     },
+     {
+      "id": "c22",
+      "instrument": "metal",
+      "role": "param",
+      "node": "perc",
+      "param": "spread"
+     },
+     {
+      "id": "c23",
+      "instrument": "metal",
+      "role": "param",
+      "node": "perc",
+      "param": "damp"
+     },
+     {
+      "id": "c24",
+      "instrument": "tom",
+      "role": "rnote",
+      "nc": 0,
+      "root": 48
+     },
+     {
+      "id": "c25",
+      "instrument": "tom",
+      "role": "vel",
+      "nc": 0
+     },
+     {
+      "id": "c26",
+      "instrument": "tom",
+      "role": "param",
+      "node": "perc",
+      "param": "decay"
+     },
+     {
+      "id": "c27",
+      "instrument": "tom",
+      "role": "param",
+      "node": "perc",
+      "param": "sweep"
+     },
+     {
+      "id": "c28",
+      "instrument": "tom",
+      "role": "param",
+      "node": "perc",
+      "param": "spread"
+     },
+     {
+      "id": "c29",
+      "instrument": "tom",
+      "role": "param",
+      "node": "perc",
+      "param": "damp"
+     }
+    ]
+   }
+  }
+ },
+ "samples": {},
+ "lanes": [
+  {
+   "id": "grid",
+   "instrument": "grid",
+   "patterns": {
+    "p01": {
+     "name": "p01",
+     "index": 0,
+     "rows": [
+      "C-2 F0 .. .. .. .. A . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. 4 . .. .. .. .. . .. .. .. .. .. .. 50 20 C0 30 .. .. .. .. .. ..",
+      "... .. .. .. .. .. . 9 .. .. .. .. . .. 50 80 60 .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. . . 20 60 60 80 . .. .. .. .. 80 A0 .. .. .. .. .. .. .. .. .. .."
+     ]
+    },
+    "p02": {
+     "name": "p02",
+     "index": 1,
+     "rows": [
+      "C-2 F0 .. .. .. .. A . .. .. .. .. D .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. 4 . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. 60 40 20 40",
+      "... .. .. .. .. .. . 9 .. .. .. .. . .. .. .. .. 80 A0 .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. . . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. 89 C0 .. .. .. .."
+     ]
+    },
+    "p03": {
+     "name": "p03",
+     "index": 2,
+     "rows": [
+      "C-2 F0 .. .. .. .. A . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. 4 . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. . 9 .. .. .. .. . .. .. .. .. 80 A0 .. .. .. .. 82 A0 .. .. .. ..",
+      "... .. .. .. .. .. . . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. .."
+     ]
+    },
+    "p04": {
+     "name": "p04",
+     "index": 3,
+     "rows": [
+      "C-2 F0 .. .. .. .. A . .. .. .. .. D .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. 4 . .. .. .. .. . .. .. .. .. 80 A0 .. .. .. .. .. .. .. .. .. ..",
+      "C-2 48 80 30 38 .. . 9 .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. . . .. .. .. .. . .. .. .. .. 87 D0 .. .. .. .. 85 90 .. .. .. .."
+     ]
+    },
+    "p05": {
+     "name": "p05",
+     "index": 4,
+     "rows": [
+      "C-2 F0 .. .. .. .. A . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. 4 . .. .. .. .. . .. .. .. .. .. .. 80 60 40 60 .. .. .. .. .. ..",
+      "... .. .. .. .. .. . 9 .. .. .. .. . A0 90 .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. . . 30 70 80 88 . .. .. .. .. 80 A0 .. .. .. .. .. .. .. .. .. .."
+     ]
+    },
+    "p06": {
+     "name": "p06",
+     "index": 5,
+     "rows": [
+      "C-2 F0 .. .. .. .. A . .. .. .. .. D .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. 4 . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. A0 80 30 20",
+      "... .. .. .. .. .. . 9 .. .. .. .. . .. .. .. .. 80 A0 .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. . . .. .. .. .. 5 .. .. .. .. .. .. .. .. .. .. 89 C0 .. .. .. .."
+     ]
+    },
+    "p07": {
+     "name": "p07",
+     "index": 6,
+     "rows": [
+      "C-2 F0 .. .. .. .. A . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. 4 . .. .. .. .. . .. .. .. .. .. .. B0 A0 90 20 .. .. .. .. .. ..",
+      "... .. .. .. .. .. . 9 .. .. .. .. . .. .. .. .. 80 A0 .. .. .. .. 82 A0 .. .. .. ..",
+      "... .. .. .. .. .. . . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. .."
+     ]
+    },
+    "p08": {
+     "name": "p08",
+     "index": 7,
+     "rows": [
+      "C-2 F0 .. .. .. .. A . .. .. .. .. D .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. 4 . .. .. .. .. . .. .. .. .. 80 A0 .. .. .. .. .. .. .. .. .. ..",
+      "C-2 48 80 30 38 .. D . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. F . .. .. .. .. . .. .. .. .. 87 D0 .. .. .. .. 85 90 .. .. .. .."
+     ]
+    },
+    "p09": {
+     "name": "p09",
+     "index": 8,
+     "rows": [
+      "C-2 FF B0 50 90 84 A . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. 4 . .. .. .. .. . .. .. .. .. .. .. 40 F0 E0 70 .. .. .. .. .. ..",
+      "... .. .. .. .. .. . 9 .. .. .. .. . .. .. E0 20 .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. . . 38 A0 A0 90 . .. .. .. .. 83 80 .. .. .. .. .. .. .. .. .. .."
+     ]
+    },
+    "p10": {
+     "name": "p10",
+     "index": 9,
+     "rows": [
+      "C-2 FF B0 50 90 84 A . .. .. .. .. D .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. 4 . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. .. C0 80 30",
+      "... .. .. .. .. .. . 9 .. .. .. .. . .. .. .. .. 83 80 .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. . . .. .. .. .. 5 .. .. .. .. .. .. .. .. .. .. 89 C0 .. .. .. .."
+     ]
+    },
+    "p11": {
+     "name": "p11",
+     "index": 10,
+     "rows": [
+      "C-2 FF B0 50 90 84 A . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. 4 . .. .. .. .. . .. .. .. .. .. .. D0 30 10 A0 .. .. .. .. .. ..",
+      "... .. .. .. .. .. . 9 .. .. .. .. . .. .. .. .. 83 80 .. .. .. .. 82 A0 .. .. .. ..",
+      "... .. .. .. .. .. . . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. .."
+     ]
+    },
+    "p12": {
+     "name": "p12",
+     "index": 11,
+     "rows": [
+      "C-2 FF B0 50 90 84 A . .. .. .. .. F .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. 4 . .. .. .. .. 8 .. .. .. .. 83 80 .. .. .. .. .. .. .. .. .. ..",
+      "C-2 48 80 30 38 .. . 9 .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. . . .. .. .. .. . .. .. .. .. 87 D0 .. .. .. .. 85 90 .. .. .. .."
+     ]
+    },
+    "p13": {
+     "name": "p13",
+     "index": 12,
+     "rows": [
+      "C-2 FF B0 50 90 84 A . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. 4 . .. .. .. .. . .. .. .. .. .. .. 30 90 B0 50 .. .. .. .. .. ..",
+      "... .. .. .. .. .. . 9 .. .. .. .. . 60 D0 FF 40 .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. 4 . 60 D0 D0 A0 . .. .. .. .. 83 80 .. .. .. .. .. .. .. .. .. .."
+     ]
+    },
+    "p14": {
+     "name": "p14",
+     "index": 13,
+     "rows": [
+      "C-2 FF B0 50 90 84 A . .. .. .. .. D .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. 4 . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. E0 FF 60 10",
+      "... .. .. .. .. .. . 9 .. .. .. .. . .. .. .. .. 83 80 .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. . . .. .. .. .. 5 .. .. .. .. .. .. .. .. .. .. 89 C0 .. .. .. .."
+     ]
+    },
+    "p15": {
+     "name": "p15",
+     "index": 14,
+     "rows": [
+      "C-2 FF B0 50 90 84 A . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. 87 FF .. C0 .. ..",
+      "... .. .. .. .. .. 4 . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "... .. .. .. .. .. . 9 .. .. .. .. 5 .. .. .. .. 83 80 .. .. .. .. 84 F0 .. D0 .. ..",
+      "C-2 48 80 30 38 .. 4 . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. .."
+     ]
+    },
+    "p16": {
+     "name": "p16",
+     "index": 15,
+     "rows": [
+      "C-2 FF 40 A0 E8 70 A . .. .. .. .. D .. .. .. .. .. .. .. .. .. .. 80 F8 .. E8 .. ..",
+      "... .. .. .. .. .. C . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. ..",
+      "C-2 48 80 30 38 .. E . .. .. .. .. . .. .. .. .. 87 D0 .. .. .. .. 7D FF .. FF .. ..",
+      "... .. .. .. .. .. F . .. .. .. .. . .. .. .. .. .. .. .. .. .. .. .. .. .. .. .. .."
+     ]
+    }
+   },
+   "placements": [
+    {
+     "puid": "p01",
+     "start": 0,
+     "length": 4
+    },
+    {
+     "puid": "p02",
+     "start": 4,
+     "length": 4
+    },
+    {
+     "puid": "p03",
+     "start": 8,
+     "length": 4
+    },
+    {
+     "puid": "p04",
+     "start": 12,
+     "length": 4
+    },
+    {
+     "puid": "p05",
+     "start": 16,
+     "length": 4
+    },
+    {
+     "puid": "p06",
+     "start": 20,
+     "length": 4
+    },
+    {
+     "puid": "p07",
+     "start": 24,
+     "length": 4
+    },
+    {
+     "puid": "p08",
+     "start": 28,
+     "length": 4
+    },
+    {
+     "puid": "p09",
+     "start": 32,
+     "length": 4
+    },
+    {
+     "puid": "p10",
+     "start": 36,
+     "length": 4
+    },
+    {
+     "puid": "p11",
+     "start": 40,
+     "length": 4
+    },
+    {
+     "puid": "p12",
+     "start": 44,
+     "length": 4
+    },
+    {
+     "puid": "p13",
+     "start": 48,
+     "length": 4
+    },
+    {
+     "puid": "p14",
+     "start": 52,
+     "length": 4
+    },
+    {
+     "puid": "p15",
+     "start": 56,
+     "length": 4
+    },
+    {
+     "puid": "p16",
+     "start": 60,
+     "length": 4
+    }
+   ]
+  }
+ ]
+}

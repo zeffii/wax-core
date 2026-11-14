@@ -1,0 +1,22 @@
+{
+  "song": "concrete.wax",
+  "version": "0.772.0",
+  "sampleRate": 44100,
+  "frames": 580608,
+  "seconds": 13.166,
+  "peak": 0.577977,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "f07f68c72da359449bef68a7b25fe1341a12fa6d950e3b882204b853c958b1ca",
+  "nodeTypes": [
+    "bus-in",
+    "clap",
+    "combperc",
+    "env",
+    "gain",
+    "hat808",
+    "osc",
+    "out",
+    "tempo"
+  ]
+}
