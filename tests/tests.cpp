@@ -202,6 +202,8 @@ int main() {
   testRenderSong("bodyblur");
   testRenderSong("bodyblurbig");
   testRenderSong("mbcomp");
+  testRenderSong("specdyn");
+  testRenderSong("specdynbig");
   testRenderSong("cardinal");
   testRenderSong("drumsynth");
   testRenderSong("waveshaper");

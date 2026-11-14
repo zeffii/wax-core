@@ -1,0 +1,19 @@
+{
+  "song": "specdynbig.wax",
+  "version": "0.774.0",
+  "sampleRate": 44100,
+  "frames": 4039040,
+  "seconds": 91.588,
+  "peak": 0.872139,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "1435d477a12c7fa0e202210429aa921b0e28009c8e159056a87bb4b1a41cda3f",
+  "nodeTypes": [
+    "bus-in",
+    "lone",
+    "out",
+    "specdyn",
+    "tempo",
+    "voices"
+  ]
+}

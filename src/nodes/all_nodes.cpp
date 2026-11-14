@@ -49,6 +49,7 @@ const NodeRegistry& builtinNodes() {
     registerHpss(r);
     registerBodyBlur(r);
     registerMbComp(r);
+    registerSpecDyn(r);
     registerSweep(r);
     registerExciter(r);
     registerCardinal(r);
