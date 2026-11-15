@@ -116,6 +116,49 @@ private:
   bool neverSleeps_, oldNeverSleeps_ = false;
 };
 
+// An instrument renamed: the lanes that play it follow. Refused when another machine listens to it (a sidechain) or plays it (a meta
+// machine), as those references live in the file under the old name.
+class RenameInstrument final : public Edit {
+public:
+  RenameInstrument(std::string from, std::string to) : from_(std::move(from)), to_(std::move(to)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Rename machine " + from_; }
+  std::string graphInstrument() const override { return to_; }
+  bool allLanes() const override { return true; }
+
+private:
+  void rename(Project& project, const std::string& from, const std::string& to);
+  std::string from_, to_;
+};
+
+// A copy of an instrument (graph, parameters, samples) listed right after it, under a new name.
+class DuplicateInstrument final : public Edit {
+public:
+  DuplicateInstrument(std::string source, std::string copy) : source_(std::move(source)), copy_(std::move(copy)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Duplicate machine " + source_; }
+  std::string graphInstrument() const override { return copy_; }
+
+private:
+  std::string source_, copy_;
+};
+
+// An instrument taken away. Refused while a lane plays it, another machine listens to it or a meta machine plays it.
+class RemoveInstrument final : public Edit {
+public:
+  explicit RemoveInstrument(std::string instrument) : instrument_(std::move(instrument)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Remove machine " + instrument_; }
+
+private:
+  std::string instrument_;
+  int at_ = -1;
+  Instrument removed_;
+};
+
 // An instrument one place earlier (direction -1) or later (+1) in the list. The master stays first.
 class MoveInstrument final : public Edit {
 public:

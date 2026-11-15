@@ -126,6 +126,8 @@ struct Session {
   float browserOptions = 0;              // height of the options under the lists in web pixels (0: half the panel)
   Screen browserScreen = Screen::Song;   // the screen the browser last matched its tab to
   int browserTab = 0;                    // 0 Patterns, 1 Machines, 2 Samples
+  char machineName[64] = {};              // the Instrument screen's rename box
+  bool renamingMachine = false;
   bool showMixer = true;                 // the mixer under the Song and Pattern screens (the status bar's toggle)
   Screen screen = Screen::Pattern;       // the screen shown (the rail at the left)
   std::string instrument;                // the instrument shown on the Instrument screen
@@ -687,6 +689,31 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
           if (app::textButton("Move earlier")) doc.apply(std::make_unique<MoveInstrument>(name, -1));
           ImGui::SameLine(0, 8 * scale);
           if (app::textButton("Move later")) doc.apply(std::make_unique<MoveInstrument>(name, 1));
+          if (name != kMaster) {   // rename, duplicate, remove (each refused with a message when something still uses the machine)
+            std::vector<std::string> ids;
+            for (const Instrument& i : doc.project().instruments) ids.push_back(i.id);
+            const auto attempt = [&](std::unique_ptr<Edit> edit, const std::string& then) {
+              try {
+                doc.apply(std::move(edit));
+                if (!then.empty()) session->instrument = then;
+                const std::vector<std::string> problems = syncGraphs(doc, player.engine());
+                const std::vector<std::string> laneProblems = syncLanes(doc, player.engine());
+                session->editStatus = !problems.empty() ? problems.front() : !laneProblems.empty() ? laneProblems.front() : std::string();
+              } catch (const std::exception& e) { session->editStatus = e.what(); }
+            };
+            if (!session->renamingMachine) std::snprintf(session->machineName, sizeof session->machineName, "%s", name.c_str());
+            ImGui::SetNextItemWidth(-1);
+            ImGui::InputText("##machinename", session->machineName, sizeof session->machineName);
+            session->renamingMachine = ImGui::IsItemActive();
+            if (ImGui::IsItemDeactivatedAfterEdit() && name != session->machineName) attempt(std::make_unique<RenameInstrument>(name, session->machineName), session->machineName);
+            if (app::textButton("Duplicate")) { const std::string copy = app::uniqueName(name, ids); attempt(std::make_unique<DuplicateInstrument>(name, copy), copy); }
+            ImGui::SameLine(0, 8 * scale);
+            if (app::textButton("Remove")) {
+              std::string next = kMaster;
+              for (const Instrument& i : doc.project().instruments) if (i.id != name && i.id != kMaster) { next = i.id; break; }
+              attempt(std::make_unique<RemoveInstrument>(name), next);
+            }
+          }
         }
       }
       ImGui::EndChild();

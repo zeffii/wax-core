@@ -934,6 +934,35 @@ void testInstrumentSetup() {
   std::printf("ok: instrument setup\n");
 }
 
+void testInstrumentManage() {
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/cloves.wax"));
+  const std::string id = doc.project().instruments[1].id;
+  const std::size_t count = doc.project().instruments.size();
+  doc.apply(std::make_unique<wax::DuplicateInstrument>(id, id + "_copy"));
+  check(doc.project().instruments.size() == count + 1 && doc.project().instruments[2].id == id + "_copy", "a copy follows its machine");
+  const wax::Project reread = wax::parseProject(wax::serializeProject(doc.project()));
+  check(reread.instruments.size() == count + 1, "the copy is saved");
+  doc.apply(std::make_unique<wax::RenameInstrument>(id + "_copy", "fresh"));
+  check(doc.project().instruments[2].id == "fresh", "renamed");
+  bool refused = false;
+  try { doc.apply(std::make_unique<wax::RenameInstrument>("fresh", id)); } catch (const std::exception&) { refused = true; }
+  check(refused, "a taken name is refused");
+  doc.apply(std::make_unique<wax::RemoveInstrument>("fresh"));
+  check(doc.project().instruments.size() == count, "removed");
+  doc.undo();
+  check(doc.project().instruments.size() == count + 1, "remove undone");
+  doc.undo(); doc.undo();
+  check(doc.project().instruments.size() == count, "all undone");
+  std::string played;
+  for (const wax::Lane& lane : doc.project().lanes) if (lane.instrument == id) played = lane.id;
+  if (!played.empty()) {
+    refused = false;
+    try { doc.apply(std::make_unique<wax::RemoveInstrument>(id)); } catch (const std::exception&) { refused = true; }
+    check(refused, "a played machine stays");
+  }
+  std::printf("ok: instrument manage\n");
+}
+
 void testMoveNode() {
   const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
   wax::Document doc(original);
@@ -1008,6 +1037,7 @@ int main() {
   testSongLength();
   testWireEdits();
   testInstrumentSetup();
+  testInstrumentManage();
   testAddNode();
   testUnits();
   testRewire();

@@ -415,6 +415,69 @@ void SetInstrumentSetup::revert(Project& project) {
   g.voices = oldVoices_; g.neverSleeps = oldNeverSleeps_;
 }
 
+namespace {
+int instrumentIndex(const Project& project, const std::string& id) {
+  for (std::size_t i = 0; i < project.instruments.size(); i++) if (project.instruments[i].id == id) return static_cast<int>(i);
+  return -1;
+}
+
+// Why an instrument cannot be renamed or removed: something else still refers to it by name ("" when nothing does).
+std::string referencedBy(const Project& project, const std::string& id) {
+  for (const Instrument& other : project.instruments) {
+    if (other.id == id) continue;
+    for (const GraphNode& node : other.graph.nodes) if (node.source == id) return other.id + " listens to it";
+    for (const MetaColumn& column : other.metaColumns) if (column.instrument == id) return other.id + " plays it";
+  }
+  return std::string();
+}
+}  // namespace
+
+void RenameInstrument::rename(Project& project, const std::string& from, const std::string& to) {
+  const int at = instrumentIndex(project, from);
+  if (at < 0) throw std::out_of_range("no machine " + from);
+  if (from == "master") throw std::runtime_error("The master machine keeps its name.");
+  if (to.empty() || instrumentIndex(project, to) >= 0) throw std::runtime_error("A machine called \"" + to + "\" exists already.");
+  const std::string why = referencedBy(project, from);
+  if (!why.empty()) throw std::runtime_error("Cannot rename: " + why + ".");
+  project.instruments[static_cast<std::size_t>(at)].id = to;
+  for (Lane& lane : project.lanes) if (lane.instrument == from) lane.instrument = to;
+}
+
+void RenameInstrument::apply(Project& project) { rename(project, from_, to_); }
+void RenameInstrument::revert(Project& project) { rename(project, to_, from_); }
+
+void DuplicateInstrument::apply(Project& project) {
+  const int at = instrumentIndex(project, source_);
+  if (at < 0) throw std::out_of_range("no machine " + source_);
+  if (source_ == "master") throw std::runtime_error("There is one master machine.");
+  if (instrumentIndex(project, copy_) >= 0) throw std::runtime_error("A machine called \"" + copy_ + "\" exists already.");
+  Instrument copy = project.instruments[static_cast<std::size_t>(at)];
+  copy.id = copy_;
+  project.instruments.insert(project.instruments.begin() + at + 1, std::move(copy));
+}
+
+void DuplicateInstrument::revert(Project& project) {
+  const int at = instrumentIndex(project, copy_);
+  if (at >= 0) project.instruments.erase(project.instruments.begin() + at);
+}
+
+void RemoveInstrument::apply(Project& project) {
+  at_ = instrumentIndex(project, instrument_);
+  if (at_ < 0) throw std::out_of_range("no machine " + instrument_);
+  if (instrument_ == "master") throw std::runtime_error("The master machine stays.");
+  std::string users;
+  for (const Lane& lane : project.lanes) if (lane.instrument == instrument_) users += (users.empty() ? "" : ", ") + lane.id;
+  if (!users.empty()) throw std::runtime_error("\"" + instrument_ + "\" is played by " + users + "; remove that lane first.");
+  const std::string why = referencedBy(project, instrument_);
+  if (!why.empty()) throw std::runtime_error("Cannot remove: " + why + ".");
+  removed_ = project.instruments[static_cast<std::size_t>(at_)];
+  project.instruments.erase(project.instruments.begin() + at_);
+}
+
+void RemoveInstrument::revert(Project& project) {
+  project.instruments.insert(project.instruments.begin() + at_, removed_);
+}
+
 void MoveInstrument::apply(Project& project) {
   from_ = to_ = -1;
   for (std::size_t i = 0; i < project.instruments.size(); i++) if (project.instruments[i].id == instrument_) from_ = static_cast<int>(i);
