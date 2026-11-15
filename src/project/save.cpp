@@ -75,6 +75,10 @@ std::string serializeProject(const Project& project) {
   for (const Instrument& instrument : project.instruments) {
     if (!out.contains("instruments") || !out["instruments"].contains(instrument.id)) continue;
     Json& graph = out["instruments"][instrument.id]["graph"];
+    if (graph.is_object()) {   // voices and sleep as edited
+      if (instrument.graph.voices != 1 || graph.contains("voices")) graph["voices"] = instrument.graph.voices;
+      if (instrument.graph.neverSleeps) graph["sleep"] = "never"; else graph.erase("sleep");
+    }
     if (!graph.is_object() || !graph.contains("nodes")) continue;
     for (Json& node : graph["nodes"]) {
       for (const GraphNode& edited : instrument.graph.nodes) {
@@ -84,6 +88,13 @@ std::string serializeProject(const Project& project) {
         if (edited.data.is_object() && !(node.contains("data") && node["data"] == edited.data)) node["data"] = edited.data;
       }
     }
+  }
+  // the instruments in the order of the list (moving one changes it)
+  if (out.contains("instruments") && out["instruments"].is_object()) {
+    Json ordered = Json::object();
+    for (const Instrument& instrument : project.instruments) if (out["instruments"].contains(instrument.id)) ordered[instrument.id] = out["instruments"][instrument.id];
+    for (const auto& [id, def] : out["instruments"].items()) if (!ordered.contains(id)) ordered[id] = def;
+    out["instruments"] = ordered;
   }
   // the song's tempo settings are the master tempo node's parameters as edited (the header's bpm, swing and ticks per beat);
   // a setting is written only when it differs from what the file holds, so a song that was not touched is saved as it was

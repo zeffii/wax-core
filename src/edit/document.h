@@ -101,6 +101,34 @@ private:
   bool added_ = false;
 };
 
+// How many copies of an instrument's graph play notes at once (1 to 16), and whether it sleeps when quiet.
+class SetInstrumentSetup final : public Edit {
+public:
+  SetInstrumentSetup(std::string instrument, int voices, bool neverSleeps) : instrument_(std::move(instrument)), voices_(voices), neverSleeps_(neverSleeps) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Voices and sleep of " + instrument_; }
+  std::string graphInstrument() const override { return instrument_; }
+
+private:
+  std::string instrument_;
+  int voices_, oldVoices_ = 1;
+  bool neverSleeps_, oldNeverSleeps_ = false;
+};
+
+// An instrument one place earlier (direction -1) or later (+1) in the list. The master stays first.
+class MoveInstrument final : public Edit {
+public:
+  MoveInstrument(std::string instrument, int direction) : instrument_(std::move(instrument)), direction_(direction) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Move instrument " + instrument_; }
+
+private:
+  std::string instrument_;
+  int direction_, from_ = -1, to_ = -1;
+};
+
 // A wire's end moved to another port (a dragged wire dropped on a port): `from -> to` becomes `newFrom -> newTo`, in the same place in the list.
 // A loop is refused (as Connect does) and nothing changes.
 class MoveWire final : public Edit {

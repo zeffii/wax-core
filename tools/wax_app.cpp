@@ -124,6 +124,7 @@ struct Session {
   bool showBrowser = true;               // the browser down the left of every screen (Alt+B)
   float browserWidth = 260;              // in web pixels
   float browserOptions = 0;              // height of the options under the lists in web pixels (0: half the panel)
+  Screen browserScreen = Screen::Song;   // the screen the browser last matched its tab to
   int browserTab = 0;                    // 0 Patterns, 1 Machines, 2 Samples
   bool showMixer = true;                 // the mixer under the Song and Pattern screens (the status bar's toggle)
   Screen screen = Screen::Pattern;       // the screen shown (the rail at the left)
@@ -591,7 +592,12 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         if (app::textButton(tabs[i], session->browserTab == i)) session->browserTab = i;
       }
     }
-    const bool hasOptions = session->screen == Screen::Song;
+    if (session->screen != session->browserScreen) {   // each screen shows the list that goes with it
+      session->browserScreen = session->screen;
+      if (session->screen == Screen::Instrument) session->browserTab = 1;
+      else if (session->screen == Screen::Song || session->screen == Screen::Pattern) session->browserTab = 0;
+    }
+    const bool hasOptions = session->screen == Screen::Song || session->screen == Screen::Instrument;
     const float panelH = ImGui::GetContentRegionAvail().y;
     float optionsH = hasOptions ? (session->browserOptions > 0 ? session->browserOptions * scale : panelH * 0.5f) : 0.0f;
     optionsH = std::clamp(optionsH, 0.0f, std::max(0.0f, panelH - 120 * scale));
@@ -618,6 +624,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       ImGui::BeginChild("browseroptions", ImVec2(0, 0), false, ImGuiWindowFlags_NoNav);
       // a button goes on the same line when it fits, else it wraps to the next (the browser is narrow)
       const auto fits = [&](const char* label) { return ImGui::GetContentRegionAvail().x > ImGui::CalcTextSize(label).x + 24 * scale; };
+      if (session->screen == Screen::Song) {
     {   // the lane under the cursor: rename, move, duplicate, remove (the web's lane tools)
       const Lane* current = nullptr;
       for (const Lane& l : doc.project().lanes) if (l.id == selectedLane) current = &l;
@@ -684,6 +691,36 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         if (app::textButton(label)) { session->silenceTicks = preset; insert(preset); }
       }
     }
+      }
+      if (session->screen == Screen::Instrument) {   // the instrument under the cursor: voices, sleep, order
+        const Instrument* current = nullptr;
+        for (const Instrument& i : doc.project().instruments) if (i.id == session->instrument) current = &i;
+        if (current) {
+          const std::string name = current->id;
+          int voices = current->graph.voices;
+          bool never = current->graph.neverSleeps;
+          ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kText), "%s", name.c_str());
+          ImGui::AlignTextToFramePadding();
+          ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "voices");
+          ImGui::SameLine();
+          char text[16]; std::snprintf(text, sizeof text, "%d", voices);
+          const int step = name == kMaster ? 0 : app::spinBox("##voices", text, 56 * scale);
+          bool setup = false;
+          if (step && voices + step >= 1 && voices + step <= 16) { voices += step; setup = true; }
+          ImGui::AlignTextToFramePadding();
+          ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "tracks %d", current->noteColumns);
+          bool sleeps = !never;
+          if (ImGui::Checkbox("sleep when quiet", &sleeps)) { never = !sleeps; setup = true; }
+          if (setup) {
+            doc.apply(std::make_unique<SetInstrumentSetup>(name, voices, never));
+            const std::vector<std::string> problems = syncGraphs(doc, player.engine());
+            session->editStatus = problems.empty() ? std::string() : problems.front();
+          }
+          if (app::textButton("Move earlier")) doc.apply(std::make_unique<MoveInstrument>(name, -1));
+          ImGui::SameLine(0, 8 * scale);
+          if (app::textButton("Move later")) doc.apply(std::make_unique<MoveInstrument>(name, 1));
+        }
+      }
       ImGui::EndChild();
     }
     {   // the grip on the right edge: drag to change the width, all the way left closes it

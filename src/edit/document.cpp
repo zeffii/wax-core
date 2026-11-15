@@ -403,6 +403,30 @@ void Connect::revert(Project& project) {
   }
 }
 
+void SetInstrumentSetup::apply(Project& project) {
+  if (voices_ < 1 || voices_ > 16) throw std::out_of_range("voices must be 1 to 16");
+  Graph& g = graphOf(project, instrument_);
+  oldVoices_ = g.voices; oldNeverSleeps_ = g.neverSleeps;
+  g.voices = voices_; g.neverSleeps = neverSleeps_;
+}
+
+void SetInstrumentSetup::revert(Project& project) {
+  Graph& g = graphOf(project, instrument_);
+  g.voices = oldVoices_; g.neverSleeps = oldNeverSleeps_;
+}
+
+void MoveInstrument::apply(Project& project) {
+  from_ = to_ = -1;
+  for (std::size_t i = 0; i < project.instruments.size(); i++) if (project.instruments[i].id == instrument_) from_ = static_cast<int>(i);
+  to_ = from_ + direction_;
+  if (from_ < 0 || to_ < 0 || to_ >= static_cast<int>(project.instruments.size()) || project.instruments[static_cast<std::size_t>(from_)].id == "master" || project.instruments[static_cast<std::size_t>(to_)].id == "master") { from_ = to_ = -1; return; }
+  std::swap(project.instruments[static_cast<std::size_t>(from_)], project.instruments[static_cast<std::size_t>(to_)]);
+}
+
+void MoveInstrument::revert(Project& project) {
+  if (from_ >= 0) std::swap(project.instruments[static_cast<std::size_t>(from_)], project.instruments[static_cast<std::size_t>(to_)]);
+}
+
 void MoveWire::apply(Project& project) {
   Graph& g = graphOf(project, instrument_);
   replaced_ = duplicate_ = false;

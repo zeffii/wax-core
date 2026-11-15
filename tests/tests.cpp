@@ -911,6 +911,29 @@ void testWireEdits() {
   std::printf("ok: wire edits\n");
 }
 
+void testInstrumentSetup() {
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax"));
+  std::string id;
+  for (const wax::Instrument& i : doc.project().instruments) if (i.id != "master") { id = i.id; break; }
+  const auto voices = [&](const wax::Project& p) { for (const wax::Instrument& i : p.instruments) if (i.id == id) return i.graph.voices; return 0; };
+  const int before = voices(doc.project());
+  doc.apply(std::make_unique<wax::SetInstrumentSetup>(id, 4, true));
+  const wax::Project reread = wax::parseProject(wax::serializeProject(doc.project()));
+  check(voices(reread) == 4, "the voices are saved");
+  bool never = false;
+  for (const wax::Instrument& i : reread.instruments) if (i.id == id) never = i.graph.neverSleeps;
+  check(never, "never sleeping is saved");
+  doc.undo();
+  check(voices(doc.project()) == before, "voices undone");
+  wax::Document many(wax::loadProject(std::string(WAX_TEST_SONGS) + "/cloves.wax"));
+  const std::string first = many.project().instruments[1].id;
+  many.apply(std::make_unique<wax::MoveInstrument>(first, 1));
+  check(many.project().instruments[2].id == first, "an instrument moves later");
+  many.undo();
+  check(many.project().instruments[1].id == first, "move undone");
+  std::printf("ok: instrument setup\n");
+}
+
 void testMoveNode() {
   const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
   wax::Document doc(original);
@@ -984,6 +1007,7 @@ int main() {
   testPatternColour();
   testSongLength();
   testWireEdits();
+  testInstrumentSetup();
   testAddNode();
   testUnits();
   testRewire();
