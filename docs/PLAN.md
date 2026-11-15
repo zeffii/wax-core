@@ -92,3 +92,16 @@ the browser and a render can part by a last digit in rare cases; `.wax` files ar
   plain JS number is a `double` here, and what the JS keeps in a `Float32Array` is a `float`.
 - All memory is taken when the node is made; `process()` never allocates.
 - No brand or model names, in node names, labels or comments.
+
+## UI: the parameter panel is a test panel for now
+
+The current panel (flat node names, a row of sliders) exists to try sounds. The target is the web app's parameter view
+(webtracker `src/graph/paramview.js`, styles `.pv-*` in index.html), to be ported when the UI is tweaked:
+- a docked vertical list at the right, width dragged by a grip on its left edge (default 210, 90 to 520);
+- an inverted title strip with the node name (and a pin that keeps a node's rows when another is selected);
+- one 16-px row per parameter: name (9 characters, wider panels show more), then a bar with the value written inside it,
+  a faint fill to the value, one thin accent mark; exposed parameters get a dot and their hex cell value at the bar's right;
+  a parameter driven by a wire is dimmed; time parameters show song ticks and snap to tick lines (Alt drags freely);
+- keys: Up/Down choose a row, Left/Right change it (Shift more, Ctrl less), Home/End, PageUp/PageDown, Enter opens the
+  row menu (type a value, reset, expose as pattern column with 1/2/4 hex width, add a port); the keyjazz keys keep playing;
+- values shown in real units (ms/s, Hz/kHz, %, st, dB, on/off, named choices).
