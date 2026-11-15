@@ -23,6 +23,7 @@
 #include "app/envelope_window.h"
 #include "app/dx_window.h"
 #include "app/graph_view.h"
+#include "app/shortcut_sheet.h"
 #include "app/widgets.h"
 #include "app/icons.h"
 #include "app/mixer_view.h"
@@ -95,6 +96,7 @@ struct Session {
   app::EnvelopeWindow envelopes;
   app::DxWindow dx;
   app::GraphViewState graphView;
+  bool showKeys = true;                  // the shortcut sheet beside the Pattern grid
   bool showMixer = true;                 // the mixer under the Song and Pattern screens (the status bar's toggle)
   Screen screen = Screen::Pattern;       // the screen shown (the rail at the left)
   std::string instrument;                // the instrument shown on the Instrument screen
@@ -459,6 +461,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, session->edit ? editor.tick() : -1, follow && playing && !session->edit);
     if (!hit.lane.empty()) { session->wantLane = hit.lane; session->wantTick = hit.tick; selectedLane = hit.lane; }
   } else if (session->screen == Screen::Pattern) {
+    const float sheetW = session->showKeys ? 270 * scale : 0;
+    ImGui::BeginChild("patmain", ImVec2(-sheetW, 0), false, ImGuiWindowFlags_NoNav);
     if (ImGui::BeginTabBar("lanes")) {
       for (const Lane& lane : doc.project().lanes) {
         const std::string label = lane.id + (lane.instrument == lane.id ? "" : "  " + lane.instrument);
@@ -493,6 +497,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       }
       ImGui::EndTabBar();
     }
+    ImGui::EndChild();
+    if (session->showKeys) { ImGui::SameLine(0, 8 * scale); app::drawShortcutSheet("patkeys", app::patternShortcuts(), 0, 0); }
   } else if (session->screen == Screen::Instrument) {
     // the instruments as flat text on the left, the graph in the middle, the parameter dock at the right
     if (session->instrument.empty()) session->instrument = !laneInstrument.empty() ? laneInstrument : session->playable.empty() ? std::string(kMaster) : session->playable.front();
@@ -557,6 +563,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(load > 0.7 ? app::kWarm : app::kDimText), "cpu %.0f%%  late %ld", 100 * load, session->audio->lateBuffers());
       ImGui::SameLine(0, 14 * scale);
     }
+    if (app::iconButton("keys-toggle", "Shortcuts: the keys of the Pattern screen, beside the grid", session->showKeys, 16)) session->showKeys = !session->showKeys;
+    ImGui::SameLine(0, 10 * scale);
     if (app::iconButton("mixer-toggle", "Mixer: a fader for each lane, along the bottom of the Song and Pattern screens", session->showMixer, 16)) session->showMixer = !session->showMixer;
     ImGui::SameLine(0, 10 * scale);
     const double limitOn = player.engine().registry().slotOf("master.m.limit") >= 0 ? player.engine().registry().get("master.m.limit") : 0;
