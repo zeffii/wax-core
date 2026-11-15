@@ -101,6 +101,8 @@ struct Session {
   app::DxWindow dx;
   app::GraphViewState graphView;
   app::PatternListState patternList;     // the Song screen's pattern list
+  char laneName[40] = {0};               // the rename box on the Song screen
+  std::string laneNameFor;               // the lane that text belongs to
   bool wantTree = false;                 // open the machine tree (Shift+I, or the Instrument screen's add button)
   bool showKeys = true;                  // the shortcut sheet beside the Pattern grid
   bool showMixer = true;                 // the mixer under the Song and Pattern screens (the status bar's toggle)
@@ -468,6 +470,53 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   if (session->screen == Screen::Song) {
     const float listW = session->patternList.width * scale;
     ImGui::BeginChild("seqmain", ImVec2(-listW, 0), false, ImGuiWindowFlags_NoNav);
+    {   // the lane under the cursor: rename, move, duplicate, remove (the web's lane tools)
+      const Lane* current = nullptr;
+      for (const Lane& l : doc.project().lanes) if (l.id == selectedLane) current = &l;
+      if (current && current->id != kMaster) {
+        const std::string curId = current->id, curMachine = current->instrument;   // (the edits below move the lanes about: a pointer into them would go stale)
+        if (session->laneNameFor != curId) { std::snprintf(session->laneName, sizeof session->laneName, "%s", curId.c_str()); session->laneNameFor = curId; }
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "lane");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(110 * scale);
+        ImGui::InputText("##lanename", session->laneName, sizeof session->laneName);
+        ImGui::SameLine(0, 8 * scale);
+        std::vector<std::string> laneIds;
+        for (const Lane& l : doc.project().lanes) laneIds.push_back(l.id);
+        bool laneEdited = false;
+        const std::string wanted = session->laneName;
+        ImGui::AlignTextToFramePadding();
+        if (app::textButton("Rename") && !wanted.empty() && wanted != curId && std::find(laneIds.begin(), laneIds.end(), wanted) == laneIds.end()) {
+          doc.apply(std::make_unique<RenameLane>(curId, wanted)); selectedLane = wanted; session->wantLane = wanted; session->laneNameFor = wanted; laneEdited = true;
+        }
+        ImGui::SameLine(0, 8 * scale);
+        if (app::textButton("<")) { doc.apply(std::make_unique<MoveLane>(curId, -1)); }
+        ImGui::SameLine(0, 4 * scale);
+        if (app::textButton(">")) { doc.apply(std::make_unique<MoveLane>(curId, 1)); }
+        ImGui::SameLine(0, 8 * scale);
+        if (app::textButton("Duplicate") && !laneEdited) {
+          const std::string copy = app::uniqueName(curId, laneIds);
+          doc.apply(std::make_unique<DuplicateLane>(curId, copy)); selectedLane = copy; session->wantLane = copy; laneEdited = true;
+        }
+        ImGui::SameLine(0, 8 * scale);
+        int shares = 0;
+        for (const Lane& l : doc.project().lanes) shares += l.instrument == curMachine;
+        if (app::textButton("Remove") && !laneEdited) { const std::string gone = curId; doc.apply(std::make_unique<RemoveLane>(gone, false)); session->wantLane.clear(); selectedLane.clear(); laneEdited = true; }
+        if (shares == 1 && !laneEdited) {
+          ImGui::SameLine(0, 8 * scale);
+          if (app::textButton("Remove with machine")) {
+            const std::string gone = curId, machine = curMachine;
+            doc.apply(std::make_unique<RemoveLane>(gone, true));
+            session->playable.erase(std::remove(session->playable.begin(), session->playable.end(), machine), session->playable.end());
+            if (session->instrument == machine) session->instrument.clear();
+            session->wantLane.clear(); selectedLane.clear(); laneEdited = true;
+          }
+        }
+        if (laneEdited) { const std::vector<std::string> problems = syncLanes(doc, player.engine()); session->editStatus = problems.empty() ? std::string() : problems.front(); }
+        if (!laneEdited) { /* a move changes order only */ }
+      }
+    }
     const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, session->edit ? editor.tick() : -1, follow && playing && !session->edit);
     if (!hit.lane.empty()) { session->wantLane = hit.lane; session->wantTick = hit.tick; selectedLane = hit.lane; }
     ImGui::EndChild();

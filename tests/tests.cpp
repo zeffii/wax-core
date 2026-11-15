@@ -787,6 +787,31 @@ void testAddInstrument() {
   std::printf("ok: add instrument\n");
 }
 
+void testLaneEdits() {
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax"));
+  const auto ids = [&] { std::string out; for (const wax::Lane& l : doc.project().lanes) out += l.id + ","; return out; };
+  const std::string before = ids();
+  std::string first;
+  for (const wax::Lane& l : doc.project().lanes) if (l.id != "master") { first = l.id; break; }
+  doc.apply(std::make_unique<wax::RenameLane>(first, "renamed"));
+  check(ids().find("renamed") != std::string::npos && ids().find(first + ",") == std::string::npos, "a lane can be renamed");
+  const wax::Project reread = wax::parseProject(wax::serializeProject(doc.project()));
+  bool found = false;
+  for (const wax::Lane& l : reread.lanes) found |= l.id == "renamed";
+  check(found, "the new name is saved");
+  doc.undo();
+  check(ids() == before, "undo gives the lane its name back");
+  doc.apply(std::make_unique<wax::DuplicateLane>(first, "copy"));
+  check(doc.project().lanes.size() > 0 && ids().find("copy") != std::string::npos, "a lane can be duplicated");
+  doc.undo();
+  const std::size_t count = doc.project().lanes.size();
+  doc.apply(std::make_unique<wax::RemoveLane>(first, false));
+  check(doc.project().lanes.size() == count - 1, "a lane can be removed");
+  doc.undo();
+  check(ids() == before, "undo puts the lane back in its place");
+  std::printf("ok: lane edits\n");
+}
+
 void testMoveNode() {
   const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
   wax::Document doc(original);
@@ -854,6 +879,7 @@ int main() {
   testLoop();
   testPlacePattern();
   testAddInstrument();
+  testLaneEdits();
   testAddNode();
   testUnits();
   testRewire();

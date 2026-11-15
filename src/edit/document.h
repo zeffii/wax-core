@@ -19,6 +19,7 @@ public:
   virtual void apply(Project& project) = 0;
   virtual void revert(Project& project) = 0;
   virtual std::string label() const = 0;               // "Set cell", shown next to Undo in the window
+  virtual std::string otherLane() const { return {}; }  // a second lane whose sound this changes (the old name of a renamed lane)
   virtual std::string lane() const { return {}; }      // the lane whose sound this changes ("" when none)
   virtual std::string paramAddress() const { return {}; }   // "instrument.node.param" of the parameter this sets ("" when none)
   virtual std::string graphInstrument() const { return {}; }   // the instrument whose wiring this changes ("" when none)
@@ -272,6 +273,64 @@ private:
   std::string instrument_;
   Json definition_;
   std::string lane_;
+};
+
+// The lane under another name (its instrument and patterns stay). The engine's lane of the old name is replaced by an empty one.
+class RenameLane final : public Edit {
+public:
+  RenameLane(std::string from, std::string to) : from_(std::move(from)), to_(std::move(to)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Rename lane " + from_; }
+  std::string lane() const override { return to_; }
+  std::string otherLane() const override { return from_; }
+
+private:
+  std::string from_, to_;
+};
+
+// A lane one place earlier (direction -1) or later (+1) among the lanes. The master lane stays first.
+class MoveLane final : public Edit {
+public:
+  MoveLane(std::string lane, int direction) : lane_(std::move(lane)), direction_(direction) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Move lane " + lane_; }
+
+private:
+  std::string lane_;
+  int direction_;
+  int from_ = -1, to_ = -1;
+};
+
+// A copy of a lane (same instrument, patterns and placements) right after it, under a new name.
+class DuplicateLane final : public Edit {
+public:
+  DuplicateLane(std::string source, std::string copy) : source_(std::move(source)), copy_(std::move(copy)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Duplicate lane " + source_; }
+  std::string lane() const override { return copy_; }
+
+private:
+  std::string source_, copy_;
+};
+
+// A lane taken away; with `withMachine` the instrument it played goes too. Undo puts them back where they were.
+class RemoveLane final : public Edit {
+public:
+  RemoveLane(std::string lane, bool withMachine) : lane_(std::move(lane)), withMachine_(withMachine) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return std::string(withMachine_ ? "Remove lane and machine " : "Remove lane ") + lane_; }
+  std::string lane() const override { return lane_; }
+
+private:
+  std::string lane_;
+  bool withMachine_;
+  Lane removed_;
+  int laneAt_ = -1, instrumentAt_ = -1;
+  Instrument instrument_;
 };
 
 // An existing pattern placed on a lane at a tick (a placement already starting there is replaced; undo puts it back).

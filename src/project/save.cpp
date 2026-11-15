@@ -51,6 +51,16 @@ std::string serializeProject(const Project& project) {
   Json lanes = Json::array();
   for (const Lane& lane : project.lanes) lanes.push_back(laneJson(lane));
   out["lanes"] = std::move(lanes);
+  // instruments taken away while editing (with their lane) leave the file too
+  if (out.contains("instruments") && out["instruments"].is_object()) {
+    std::vector<std::string> gone;
+    for (const auto& [id, def] : out["instruments"].items()) {
+      bool kept = false;
+      for (const Instrument& i : project.instruments) kept |= i.id == id;
+      if (!kept) gone.push_back(id);
+    }
+    for (const std::string& id : gone) out["instruments"].erase(id);
+  }
   // instruments added while editing: written as they were made
   for (const Instrument& instrument : project.instruments) {
     if (!out.contains("instruments") || !out["instruments"].is_object()) out["instruments"] = Json::object();

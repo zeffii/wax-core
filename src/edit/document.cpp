@@ -91,6 +91,74 @@ void AddInstrument::revert(Project& project) {
   for (std::size_t i = project.instruments.size(); i-- > 0;) if (project.instruments[i].id == instrument_) { project.instruments.erase(project.instruments.begin() + static_cast<long>(i)); break; }
 }
 
+namespace {
+int laneIndex(const Project& project, const std::string& id) {
+  for (std::size_t i = 0; i < project.lanes.size(); i++) if (project.lanes[i].id == id) return static_cast<int>(i);
+  return -1;
+}
+}  // namespace
+
+void RenameLane::apply(Project& project) {
+  const int at = laneIndex(project, from_);
+  if (at < 0) throw std::out_of_range("no lane " + from_);
+  project.lanes[static_cast<std::size_t>(at)].id = to_;
+  if (project.lanes[static_cast<std::size_t>(at)].raw.is_object()) project.lanes[static_cast<std::size_t>(at)].raw["id"] = to_;
+}
+
+void RenameLane::revert(Project& project) {
+  const int at = laneIndex(project, to_);
+  if (at < 0) return;
+  project.lanes[static_cast<std::size_t>(at)].id = from_;
+  if (project.lanes[static_cast<std::size_t>(at)].raw.is_object()) project.lanes[static_cast<std::size_t>(at)].raw["id"] = from_;
+}
+
+void MoveLane::apply(Project& project) {
+  from_ = laneIndex(project, lane_);
+  to_ = from_ + direction_;
+  if (from_ < 0 || to_ < 0 || to_ >= static_cast<int>(project.lanes.size())) { from_ = to_ = -1; return; }
+  if (project.lanes[static_cast<std::size_t>(from_)].id == "master" || project.lanes[static_cast<std::size_t>(to_)].id == "master") { from_ = to_ = -1; return; }   // the master stays first
+  std::swap(project.lanes[static_cast<std::size_t>(from_)], project.lanes[static_cast<std::size_t>(to_)]);
+}
+
+void MoveLane::revert(Project& project) {
+  if (from_ >= 0) std::swap(project.lanes[static_cast<std::size_t>(from_)], project.lanes[static_cast<std::size_t>(to_)]);
+}
+
+void DuplicateLane::apply(Project& project) {
+  const int at = laneIndex(project, source_);
+  if (at < 0) throw std::out_of_range("no lane " + source_);
+  Lane copy = project.lanes[static_cast<std::size_t>(at)];
+  copy.id = copy_;
+  if (copy.raw.is_object()) copy.raw["id"] = copy_;
+  project.lanes.insert(project.lanes.begin() + at + 1, std::move(copy));
+}
+
+void DuplicateLane::revert(Project& project) {
+  const int at = laneIndex(project, copy_);
+  if (at >= 0) project.lanes.erase(project.lanes.begin() + at);
+}
+
+void RemoveLane::apply(Project& project) {
+  laneAt_ = laneIndex(project, lane_);
+  if (laneAt_ < 0) throw std::out_of_range("no lane " + lane_);
+  removed_ = project.lanes[static_cast<std::size_t>(laneAt_)];
+  project.lanes.erase(project.lanes.begin() + laneAt_);
+  instrumentAt_ = -1;
+  if (!withMachine_) return;
+  for (std::size_t i = 0; i < project.instruments.size(); i++) {
+    if (project.instruments[i].id != removed_.instrument) continue;
+    instrument_ = project.instruments[i];
+    instrumentAt_ = static_cast<int>(i);
+    project.instruments.erase(project.instruments.begin() + static_cast<long>(i));
+    break;
+  }
+}
+
+void RemoveLane::revert(Project& project) {
+  if (instrumentAt_ >= 0) project.instruments.insert(project.instruments.begin() + instrumentAt_, instrument_);
+  project.lanes.insert(project.lanes.begin() + laneAt_, removed_);
+}
+
 void PlacePattern::apply(Project& project) {
   for (Lane& lane : project.lanes) {
     if (lane.id != lane_) continue;
@@ -369,6 +437,7 @@ void DeleteRow::revert(Project& project) {
 void Document::touched(const Edit& edit) {
   revision_++;
   if (!edit.lane().empty()) changed_.insert(edit.lane());
+  if (!edit.otherLane().empty()) changed_.insert(edit.otherLane());
   if (!edit.paramAddress().empty()) changedParams_.insert(edit.paramAddress());
   if (!edit.dataNode().empty()) changedData_.insert(edit.dataNode());
   if (edit.songLoop()) loopChanged_ = true;
