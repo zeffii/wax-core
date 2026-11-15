@@ -23,11 +23,6 @@ Anchor makeAnchor(double x, double y, const double* l, const double* r) {
   return a;
 }
 
-namespace {
-
-// {dx, dy}: the handles an anchor has when it has none of its own.
-struct Handles { double l[2], r[2]; };
-
 Handles autoHandles(const Spline& a, std::size_t i) {
   const Anchor& p = a[i];
   const Anchor* prev = i > 0 ? &a[i - 1] : nullptr;
@@ -50,8 +45,6 @@ Handles autoHandles(const Spline& a, std::size_t i) {
   return h;
 }
 
-struct Segment { double x[4], y[4]; };
-
 Segment segmentOf(const Spline& a, std::size_t i) {
   const Anchor& p = a[i];
   const Anchor& q = a[i + 1];
@@ -68,10 +61,14 @@ Segment segmentOf(const Spline& a, std::size_t i) {
   return s;
 }
 
+namespace {
+
 double bez(double p0, double p1, double p2, double p3, double t) {
   const double u = 1 - t;
   return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3;
 }
+
+}  // namespace
 
 // The spline walked as a line of (x, y) points.
 std::vector<std::array<double, 2>> walk(const Spline& a) {
@@ -86,6 +83,8 @@ std::vector<std::array<double, 2>> walk(const Spline& a) {
   }
   return out;
 }
+
+namespace {
 
 bool finiteNumber(const Json& v) { return v.is_number() && std::isfinite(v.get<double>()); }
 
@@ -133,6 +132,10 @@ Spline cleanSpline(const Json* stored, const Spline& fallback) {
     n.y = clampTo(p["y"].get<double>(), 0, 1);
     n.hasLeft = readHandle(p, "l", n.left);
     n.hasRight = readHandle(p, "r", n.right);
+    if (p.contains("t") && p["t"].is_string()) {
+      const std::string t = p["t"].get<std::string>();
+      if (t == "equal" || t == "free" || t == "sharp") n.kind = t;
+    }
     n.sustain = p.contains("s") && p["s"].is_boolean() && p["s"].get<bool>();
     a.push_back(n);
   }
@@ -180,6 +183,66 @@ Spline drawingOf(const Json* data, const char* name, const Spline& fallback) {
   if (data && data->is_object() && data->contains("env") && (*data)["env"].is_object() && (*data)["env"].contains(name))
     return cleanSpline(&(*data)["env"][name], fallback);
   return fallback;
+}
+
+}  // namespace wax::bezier
+
+namespace wax::bezier {
+
+Handles handlesOf(const Spline& spline, std::size_t i) {
+  const Handles a = autoHandles(spline, i);
+  const Anchor& p = spline[i];
+  Handles h = a;
+  if (p.hasLeft) { h.l[0] = p.left[0]; h.l[1] = p.left[1]; }
+  if (p.hasRight) { h.r[0] = p.right[0]; h.r[1] = p.right[1]; }
+  return h;
+}
+
+Split splitSegment(const Spline& spline, std::size_t i, double t) {
+  const Segment s = segmentOf(spline, i);
+  const auto mix = [t](const std::array<double, 2>& u, const std::array<double, 2>& v) { return std::array<double, 2>{u[0] + (v[0] - u[0]) * t, u[1] + (v[1] - u[1]) * t}; };
+  const std::array<double, 2> p0{s.x[0], s.y[0]}, p1{s.x[1], s.y[1]}, p2{s.x[2], s.y[2]}, p3{s.x[3], s.y[3]};
+  const auto a1 = mix(p0, p1), b1 = mix(p1, p2), c1 = mix(p2, p3), a2 = mix(a1, b1), b2 = mix(b1, c1), at = mix(a2, b2);
+  Split out;
+  out.point = makeAnchor(at[0], at[1], nullptr, nullptr);
+  out.point.hasLeft = out.point.hasRight = true;
+  out.point.left[0] = a2[0] - at[0]; out.point.left[1] = a2[1] - at[1];
+  out.point.right[0] = b2[0] - at[0]; out.point.right[1] = b2[1] - at[1];
+  out.left[0] = a1[0] - p0[0]; out.left[1] = a1[1] - p0[1];
+  out.right[0] = c1[0] - p3[0]; out.right[1] = c1[1] - p3[1];
+  return out;
+}
+
+Nearest nearestOnSpline(const Spline& spline, double x, double y, const double scale[2]) {
+  Nearest best;
+  for (std::size_t i = 0; i + 1 < spline.size(); i++) {
+    const Segment s = segmentOf(spline, i);
+    for (int k = 0; k <= kSteps * 2; k++) {
+      const double t = static_cast<double>(k) / (kSteps * 2);
+      const double px = bez(s.x[0], s.x[1], s.x[2], s.x[3], t), py = bez(s.y[0], s.y[1], s.y[2], s.y[3], t);
+      const double d = std::hypot((px - x) * scale[0], (py - y) * scale[1]);
+      if (best.segment < 0 || d < best.d) best = {static_cast<int>(i), t, px, py, d};
+    }
+  }
+  return best;
+}
+
+Json toJson(const Spline& spline) {
+  const auto round4 = [](double v) { return std::round(v * 10000) / 10000; };
+  Json out = Json::array();
+  for (const Anchor& a : spline) {
+    Json p = Json::object();
+    p["x"] = round4(a.x);
+    p["y"] = round4(a.y);
+    if (a.hasLeft) p["l"] = Json::array({round4(a.left[0]), round4(a.left[1])});
+    else p["l"] = nullptr;
+    if (a.hasRight) p["r"] = Json::array({round4(a.right[0]), round4(a.right[1])});
+    else p["r"] = nullptr;
+    if (!a.kind.empty()) p["t"] = a.kind;
+    if (a.sustain) p["s"] = true;
+    out.push_back(std::move(p));
+  }
+  return out;
 }
 
 }  // namespace wax::bezier

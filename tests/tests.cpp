@@ -13,7 +13,9 @@
 #include "engine/offline.h"
 #include "edit/cell_editor.h"
 #include "edit/document.h"
+#include "edit/spline_ops.h"
 #include "edit/sync.h"
+#include "nodes/bezier.h"
 #include "engine/engine.h"
 #include "engine/takes.h"
 #include "io/wav.h"
@@ -452,6 +454,52 @@ void testSave() {
   std::printf("ok: saving\n");
 }
 
+void testSpline() {
+  using namespace wax::bezier;
+  Spline s = shapeOf(Shape::Hump);
+  const auto before = walk(s);
+  const double scale[2] = {1, 1};
+  const Nearest n = nearestOnSpline(s, 0.2, 0.7, scale);
+  check(n.segment == 0 && n.d < 0.5, "a point is found on the curve");
+  const int at = insertOn(s, n);
+  check(at == 1 && s.size() == 4, "an anchor is put on the curve");
+  const auto after = walk(s);
+  double worst = 0;   // the shape is unchanged: every table value stays where it was
+  const Table a = envelopeTable(shapeOf(Shape::Hump)), b = envelopeTable(s);
+  for (std::size_t k = 0; k < a.size(); k++) worst = std::max(worst, static_cast<double>(std::fabs(a[k] - b[k])));
+  check(worst < 0.01, "inserting on a curve leaves its shape as it was");
+  (void)before; (void)after;
+  check(removeAnchor(s, 1) && s.size() == 3 && !removeAnchor(s, 0) && !removeAnchor(s, 2), "inner anchors go, the ends stay");
+  setKind(s, 1, "sharp");
+  check(kindOf(s[1]) == "sharp" && s[1].hasLeft && s[1].left[0] == 0 && s[1].right[1] == 0, "a sharp anchor has no handles");
+  setKind(s, 1, "smooth");
+  check(kindOf(s[1]).empty() && !s[1].hasLeft, "and smooth again works them out");
+  setHandle(s, 1, Side::Right, s[1].x + 0.1, s[1].y + 0.2, false);
+  check(std::fabs(s[1].left[0] * s[1].right[1] - s[1].left[1] * s[1].right[0]) < 1e-9, "a smooth anchor's handles stay in line");
+  setKind(s, 1, "equal");
+  setHandle(s, 1, Side::Left, s[1].x - 0.15, s[1].y, false);
+  check(std::fabs(s[1].right[0] - 0.15) < 1e-9 && std::fabs(s[1].right[1]) < 1e-9, "an equal anchor mirrors its handle");
+  setKnot(s, 1);
+  check(sustainKnot(s) && sustainKnot(s)->index == 1, "the sustain knot is set");
+  setKnot(s, 1);
+  check(!sustainKnot(s), "and taken off by asking again");
+  moveAnchor(s, 1, 5, 0.3);
+  check(s[1].x < 1 && s[1].x > 0.9, "an anchor stays before the next one");
+  Spline r = s;
+  reverse(r); reverse(r);
+  const Table t1 = envelopeTable(s), t2 = envelopeTable(r);
+  double diff = 0;
+  for (std::size_t k = 0; k < t1.size(); k++) diff = std::max(diff, static_cast<double>(std::fabs(t1[k] - t2[k])));
+  check(diff < 1e-6, "reversing twice gives the drawing back");
+  const wax::Json stored = toJson(s);
+  const Spline again = cleanSpline(&stored, Shape::Fall);
+  const Table t3 = envelopeTable(again);
+  diff = 0;
+  for (std::size_t k = 0; k < t1.size(); k++) diff = std::max(diff, static_cast<double>(std::fabs(t1[k] - t3[k])));
+  check(diff < 1e-3 && again.size() == s.size() && kindOf(again[1]) == kindOf(s[1]), "a drawing written to the file reads back the same");
+  std::printf("ok: spline editing\n");
+}
+
 void testLevels() {
   const wax::Project song = wax::loadProject(std::string(WAX_TEST_SONGS) + "/jawharp.wax");
   wax::Engine engine(song, 44100);
@@ -500,6 +548,7 @@ void testSetParam() {
 }
 
 int main() {
+  testSpline();
   testLevels();
   testSetParam();
   testSave();
