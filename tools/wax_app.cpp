@@ -508,7 +508,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (!hexKeys) {
       for (int i = 0; i < static_cast<int>(sizeof kPianoKeys / sizeof kPianoKeys[0]); i++) {
         const ImGuiKey key = kPianoKeys[i];
-        if (ImGui::IsKeyPressed(key, false) && !io.KeyCtrl && !io.KeyAlt) {
+        if (ImGui::IsKeyPressed(key, false) && !io.KeyCtrl && !io.KeyAlt && !io.KeyShift) {   // (Shift+letter is a command, e.g. Shift+I: the machine menu)
           const int note = std::clamp(12 * (octave + 1) + i, 0, 127);
           const bool entering = typing && editor.onNoteCell();   // the key puts a note in the grid
           held[key] = note;
