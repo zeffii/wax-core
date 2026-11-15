@@ -339,20 +339,6 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   drawMeter("##r", meterR, ImVec2(200 * ImGui::GetStyle().FontScaleDpi, 8));
   ImGui::EndGroup();
 
-  // Keyjazz, and the sound card's buffer.
-  if (!session->playable.empty()) {
-    ImGui::SetNextItemWidth(160);
-    if (ImGui::BeginCombo("##keys", session->keyjazzInstrument.c_str())) {
-      for (const std::string& id : session->playable)
-        if (ImGui::Selectable(id.c_str(), id == session->keyjazzInstrument)) {
-          player.ring().push({LiveCommand::AllOff, 0, 0});
-          session->keyjazzInstrument = id;
-          player.setInstrument(id);
-        }
-      ImGui::EndCombo();
-    }
-    ImGui::SameLine();
-  }
   // The File menu and the song settings (the web app's header LCD): bpm, swing, tpb and bar are spin boxes; len and time are read out.
   {
     const float hs = ImGui::GetStyle().FontScaleDpi;
@@ -894,6 +880,13 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (changed) app::saveSettings();
   }
   ImGui::EndChild();
+  // The keys play the machine being worked on: the lane's machine, or the one picked in the browser.
+  if (!laneInstrument.empty() && laneInstrument != session->keyjazzInstrument &&
+      std::find(session->playable.begin(), session->playable.end(), laneInstrument) != session->playable.end()) {
+    player.ring().push({LiveCommand::AllOff, 0, 0});
+    session->keyjazzInstrument = laneInstrument;
+    player.setInstrument(laneInstrument);
+  }
   if (!session->panel.drawNode.empty()) { app::showEnvelopes(session->envelopes, laneInstrument, session->panel.drawNode); session->panel.drawNode.clear(); }
   ImGui::Separator();
   if (app::drawEnvelopeWindow(session->envelopes, doc, player.engine())) syncData(doc, player.engine());
