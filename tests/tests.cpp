@@ -323,6 +323,47 @@ void testLiveEdit() {
 }
 
 
+void testBlockEdit() {
+  wax::Project project;
+  project.song.length = 8;
+  wax::Lane lane;
+  lane.id = "L1";
+  wax::Pattern pattern;
+  pattern.id = "p01";
+  pattern.rows = {"C-4 40 .... ......", "D-4 41 .... ......", "E-4 42 .... ......", "... .. .... ......"};
+  lane.patterns.push_back(pattern);
+  lane.placements.push_back({"p01", 2, 4});
+  project.lanes.push_back(lane);
+  std::vector<wax::Column> columns(4);
+  columns[0].kind = wax::ColumnKind::Note;  columns[0].token = wax::Token::Note;
+  columns[1].kind = wax::ColumnKind::Vel;   columns[1].token = wax::Token::Hex2;
+  columns[2].kind = wax::ColumnKind::Param; columns[2].token = wax::Token::Hex4;
+  columns[3].kind = wax::ColumnKind::Cmd;   columns[3].token = wax::Token::Cmd;
+  wax::Document doc(project);
+  wax::CellEditor ed(doc);
+  ed.setLane("L1", columns);
+  const auto row = [&](int i) { return doc.project().lanes[0].patterns[0].rows[static_cast<std::size_t>(i)]; };
+
+  ed.moveTo(2, 0);
+  ed.extend(1, 1);   // ticks 2..3, cells 0..1
+  check(ed.selection().active && ed.selection().tick1 == 3 && ed.selection().cell1 == 1, "shift-moving selects a block");
+  const std::string text = ed.copy();
+  check(text == "C-4\t40\nD-4\t41\n", "copy gives rows and cells as text");
+  ed.moveTo(4, 0);
+  check(ed.paste(), "paste works");
+  check(row(2) == "C-4 40 .... ......" && row(3) == "D-4 41 .... ......" || row(2) == "C-4 40 .... ......", "the pasted rows are there");
+  check(row(2).substr(0, 6) == "C-4 40" && row(3).substr(0, 6) == "D-4 41", "the block lands at the cursor");
+  doc.undo();
+  check(row(2) == "E-4 42 .... ......" , "undo takes back the whole paste in one step");
+  ed.moveTo(2, 0);
+  ed.extend(1, 1);
+  check(ed.cut(), "cut works");
+  check(row(0) == "... .. .... ......" && row(1) == "... .. .... ......", "cut blanks the cells");
+  doc.undo();
+  check(row(0) == "C-4 40 .... ......", "undo puts a cut back");
+  std::printf("ok: block edits\n");
+}
+
 void testCellEditor() {
   wax::Project project;
   project.song.length = 8;
@@ -735,6 +776,7 @@ void testSetParam() {
 }
 
 int main() {
+  testBlockEdit();
   testSongSettings();
   testAddNode();
   testUnits();

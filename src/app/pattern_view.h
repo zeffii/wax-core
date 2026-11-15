@@ -17,6 +17,8 @@ struct CursorView {
   bool show = false;
   int tick = -1, cell = -1;
   bool scrollTo = false;
+  bool selected = false;                 // a block of cells is selected: ticks tick0..tick1, cells cell0..cell1
+  int tick0 = 0, tick1 = 0, cell0 = 0, cell1 = 0;
 };
 
 struct PatternViewResult {

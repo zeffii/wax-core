@@ -60,6 +60,7 @@ void CellEditor::setLane(const std::string& laneId, const std::vector<Column>& c
 }
 
 void CellEditor::moveTo(int tick, int cell) {
+  selecting_ = false;
   const int length = std::max(1, document_.project().song.length);
   tick_ = std::clamp(tick, 0, length - 1);
   cell_ = std::clamp(cell, 0, std::max(0, static_cast<int>(columns_.size()) - 1));
@@ -89,13 +90,13 @@ bool CellEditor::onHexCell() const {
   return t == Token::Hex1 || t == Token::Hex2 || t == Token::Hex4 || t == Token::Cmd;
 }
 
-CellEditor::Place CellEditor::place() const {
+CellEditor::Place CellEditor::placeAt(int tick) const {
   Place found;
   for (const Lane& lane : document_.project().lanes) {
     if (lane.id != lane_) continue;
     const std::vector<RowOwner> owners = rowOwners(lane, document_.project().song.length);
-    if (tick_ < 0 || tick_ >= static_cast<int>(owners.size())) return found;
-    const RowOwner owner = owners[static_cast<std::size_t>(tick_)];
+    if (tick < 0 || tick >= static_cast<int>(owners.size())) return found;
+    const RowOwner owner = owners[static_cast<std::size_t>(tick)];
     if (owner.pattern < 0) return found;
     found.lane = &lane;
     found.pattern = &lane.patterns[static_cast<std::size_t>(owner.pattern)];
@@ -236,6 +237,115 @@ bool CellEditor::deleteRow() {
   document_.apply(std::make_unique<DeleteRow>(lane_, at.pattern->id, at.row, blank));
   typed_ = 0;
   return true;
+}
+
+}  // namespace wax
+
+namespace wax {
+
+std::vector<std::string> CellEditor::cellsOf(const std::string& row) const {
+  std::vector<std::string> cells;
+  std::istringstream words(row);
+  for (std::string word; words >> word;) cells.push_back(word);
+  while (cells.size() < columns_.size()) cells.push_back(tokenBlank(columns_[cells.size()].token));
+  return cells;
+}
+
+CellEditor::Selection CellEditor::selection() const {
+  Selection s;
+  if (!selecting_) return s;
+  s.active = true;
+  s.tick0 = std::min(anchorTick_, tick_); s.tick1 = std::max(anchorTick_, tick_);
+  s.cell0 = std::min(anchorCell_, cell_); s.cell1 = std::max(anchorCell_, cell_);
+  return s;
+}
+
+void CellEditor::extend(int rows, int cells) {
+  const bool was = selecting_;
+  const int fromTick = tick_, fromCell = cell_;
+  move(rows, cells);
+  selecting_ = true;
+  if (!was) { anchorTick_ = fromTick; anchorCell_ = fromCell; }
+}
+
+void CellEditor::selectAll() {
+  const int length = std::max(1, document_.project().song.length);
+  anchorTick_ = 0; anchorCell_ = 0;
+  tick_ = length - 1;
+  cell_ = std::max(0, static_cast<int>(columns_.size()) - 1);
+  selecting_ = true;
+}
+
+std::string CellEditor::copy() {
+  Selection s = selection();
+  if (!s.active) { s.tick0 = s.tick1 = tick_; s.cell0 = s.cell1 = cell_; }
+  clipboard_.clear();
+  std::string text;
+  for (int t = s.tick0; t <= s.tick1; t++) {
+    const Place at = placeAt(t);
+    std::vector<std::string> cells = cellsOf(at.pattern ? at.pattern->rows[static_cast<std::size_t>(at.row)] : std::string());
+    std::vector<std::string> line;
+    for (int c = s.cell0; c <= s.cell1 && c < static_cast<int>(cells.size()); c++) line.push_back(cells[static_cast<std::size_t>(c)]);
+    for (std::size_t i = 0; i < line.size(); i++) text += (i ? "\t" : "") + line[i];
+    text += "\n";
+    clipboard_.push_back(std::move(line));
+  }
+  return text;
+}
+
+bool CellEditor::cut() {
+  Selection s = selection();
+  if (!s.active) { s.tick0 = s.tick1 = tick_; s.cell0 = s.cell1 = cell_; }
+  copy();
+  std::vector<std::unique_ptr<Edit>> parts;
+  for (int t = s.tick0; t <= s.tick1; t++) {
+    const Place at = placeAt(t);
+    if (!at.pattern) continue;
+    std::string row = at.pattern->rows[static_cast<std::size_t>(at.row)];
+    for (int c = s.cell0; c <= s.cell1 && c < static_cast<int>(columns_.size()); c++) {
+      if (columns_[static_cast<std::size_t>(c)].kind == ColumnKind::Spacer) continue;
+      row = rowWithCell(row, columns_, c, tokenBlank(columns_[static_cast<std::size_t>(c)].token));
+    }
+    parts.push_back(std::make_unique<SetRow>(lane_, at.pattern->id, at.row, row));
+  }
+  selecting_ = false;
+  if (parts.empty()) return false;
+  document_.apply(std::make_unique<Batch>(lane_, "Cut", std::move(parts)));
+  return true;
+}
+
+bool CellEditor::paste() {
+  std::vector<std::unique_ptr<Edit>> parts;
+  for (std::size_t i = 0; i < clipboard_.size(); i++) {
+    const Place at = placeAt(tick_ + static_cast<int>(i));
+    if (!at.pattern) continue;
+    std::string row = at.pattern->rows[static_cast<std::size_t>(at.row)];
+    for (std::size_t j = 0; j < clipboard_[i].size(); j++) {
+      const int c = cell_ + static_cast<int>(j);
+      if (c >= static_cast<int>(columns_.size())) break;
+      if (columns_[static_cast<std::size_t>(c)].kind == ColumnKind::Spacer) continue;
+      row = rowWithCell(row, columns_, c, clipboard_[i][j]);
+    }
+    parts.push_back(std::make_unique<SetRow>(lane_, at.pattern->id, at.row, row));
+  }
+  selecting_ = false;
+  if (parts.empty()) return false;
+  document_.apply(std::make_unique<Batch>(lane_, "Paste", std::move(parts)));
+  return true;
+}
+
+bool CellEditor::paste(const std::string& text) {
+  std::vector<std::vector<std::string>> rows;
+  std::istringstream lines(text);
+  for (std::string line; std::getline(lines, line);) {
+    std::vector<std::string> cells;
+    std::istringstream words(line);
+    for (std::string cell; std::getline(words, cell, '\t');) cells.push_back(cell);
+    if (!cells.empty()) rows.push_back(std::move(cells));
+  }
+  if (rows.empty()) return false;
+  clipboard_ = std::move(rows);
+  return paste();
 }
 
 }  // namespace wax

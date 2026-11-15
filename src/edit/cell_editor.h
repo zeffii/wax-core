@@ -30,6 +30,19 @@ public:
   void moveTo(int tick, int cell);
   void move(int rows, int cells);
 
+  // A selection: a block of cells from where it was started to the cursor. Moving without extending drops it.
+  struct Selection { bool active = false; int tick0 = 0, tick1 = 0, cell0 = 0, cell1 = 0; };
+  Selection selection() const;
+  void extend(int rows, int cells);   // moves the cursor and keeps (or starts) the selection
+  void clearSelection() { selecting_ = false; }
+  void selectAll();                   // the whole lane
+  // Copy: the cells of the selection (or the cursor's cell) as text, rows on lines and cells split by tabs; also kept for paste.
+  std::string copy();
+  bool cut();                         // copy, then blank the cells
+  bool paste();                       // the kept cells, with their top left at the cursor (rows where no pattern plays are skipped)
+  bool paste(const std::string& text);   // text as copy() makes it
+  bool hasClipboard() const { return !clipboard_.empty(); }
+
   // Rows the cursor moves down after a cell is filled (0 stays where it is).
   void setStep(int rows) { step_ = rows < 0 ? 0 : rows; }
   int step() const { return step_; }
@@ -59,13 +72,18 @@ private:
   std::string lane_;
   std::vector<Column> columns_;
   int tick_ = 0, cell_ = 0, typed_ = 0, step_ = 1;
+  bool selecting_ = false;
+  int anchorTick_ = 0, anchorCell_ = 0;
+  std::vector<std::vector<std::string>> clipboard_;   // rows of cell texts
 
   struct Place {
     const Lane* lane = nullptr;
     const Pattern* pattern = nullptr;
     int row = 0;
   };
-  Place place() const;
+  Place place() const { return placeAt(tick_); }
+  Place placeAt(int tick) const;
+  std::vector<std::string> cellsOf(const std::string& row) const;   // a row's cell texts, padded with blanks to the columns
   bool createPatternHere();
   bool setCell(const std::string& text, bool foldIntoPrevious);
   void advance();

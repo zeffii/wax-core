@@ -113,6 +113,20 @@ private:
   bool removed_ = false;
 };
 
+// Several edits that are one step to undo (a paste, a cut). They must all change the same lane.
+class Batch final : public Edit {
+public:
+  Batch(std::string lane, std::string label, std::vector<std::unique_ptr<Edit>> parts) : lane_(std::move(lane)), label_(std::move(label)), parts_(std::move(parts)) {}
+  void apply(Project& project) override { for (auto& part : parts_) part->apply(project); }
+  void revert(Project& project) override { for (std::size_t i = parts_.size(); i-- > 0;) parts_[i]->revert(project); }
+  std::string label() const override { return label_; }
+  std::string lane() const override { return lane_; }
+
+private:
+  std::string lane_, label_;
+  std::vector<std::unique_ptr<Edit>> parts_;
+};
+
 // Beats in a bar, the top number of the time signature (the arrangement's shading and bars follow it). A drag folds into one undo step.
 class SetBeatsPerBar final : public Edit {
 public:

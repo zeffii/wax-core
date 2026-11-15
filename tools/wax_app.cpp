@@ -331,13 +331,24 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         session->editStatus = e.what();
       }
     }
+    if (ctrl && session->edit && session->screen == Screen::Pattern && !io.KeyAlt) {   // block editing: copy, cut, paste, select all
+      if (ImGui::IsKeyPressed(ImGuiKey_C, false)) ImGui::SetClipboardText(editor.copy().c_str());
+      if (ImGui::IsKeyPressed(ImGuiKey_X, false)) { ImGui::SetClipboardText(editor.copy().c_str()); edited |= editor.cut(); }
+      if (ImGui::IsKeyPressed(ImGuiKey_V, false)) {
+        const char* text = ImGui::GetClipboardText();
+        edited |= (text && *text) ? editor.paste(text) : editor.paste();
+      }
+      if (ImGui::IsKeyPressed(ImGuiKey_A, false)) editor.selectAll();
+    }
     const bool typing = session->edit && !ctrl && !io.KeyAlt && !session->envelopes.wantsKeys();
     if (typing) {
       const int before = editor.tick() * 4096 + editor.cell();
-      if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) editor.move(-1, 0);
-      if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) editor.move(1, 0);
-      if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) editor.move(0, -1);
-      if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) editor.move(0, 1);
+      const auto step = [&](int rows, int cells) { if (io.KeyShift) editor.extend(rows, cells); else editor.move(rows, cells); };
+      if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) step(-1, 0);
+      if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) step(1, 0);
+      if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) step(0, -1);
+      if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) step(0, 1);
+      if (ImGui::IsKeyPressed(ImGuiKey_Escape)) editor.clearSelection();
       const int bar = std::max(1, song.ticksPerBeat) * std::max(1, song.beatsPerBar);
       if (ImGui::IsKeyPressed(ImGuiKey_PageUp)) editor.move(-bar, 0);
       if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) editor.move(bar, 0);
@@ -430,6 +441,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
           cursor.tick = editor.tick();
           cursor.cell = editor.cell();
           cursor.scrollTo = session->scrollToCursor;
+          const CellEditor::Selection sel = editor.selection();
+          cursor.selected = sel.active; cursor.tick0 = sel.tick0; cursor.tick1 = sel.tick1; cursor.cell0 = sel.cell0; cursor.cell1 = sel.cell1;
           session->scrollToCursor = false;
           const app::PatternViewResult result = app::drawPatternView(
               session->rows[lane.id], session->player->engine().columnLabels(lane.id), song.ticksPerBeat, song.beatsPerBar,

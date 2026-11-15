@@ -58,6 +58,8 @@ PatternViewResult drawPatternView(const std::vector<std::vector<std::string>>& r
       for (int c = 0; c < columns; c++) {
         ImGui::TableSetColumnIndex(c + 1);
         const bool here = cursor.show && tick == cursor.tick && c == cursor.cell;
+        if (cursor.show && cursor.selected && tick >= cursor.tick0 && tick <= cursor.tick1 && c >= cursor.cell0 && c <= cursor.cell1)
+          ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, accentAlpha(55));
         if (here) {
           ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, kCursorCell);
           if (cursor.scrollTo) ImGui::SetScrollHereY(0.5f);
