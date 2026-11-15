@@ -98,4 +98,11 @@ bool iconButton(const char* name, const char* tip, bool on, float size) {
   return clicked;
 }
 
+void drawIcon(const char* name, ImVec2 min, float width, float aspect, ImU32 tint) {
+  SDL_Texture* texture = textureFor(name, std::max(8, static_cast<int>(std::lround(width))));   // (square; the drawing fills its top `aspect`)
+  if (!texture) return;
+  ImGui::GetForegroundDrawList()->AddImage(static_cast<ImTextureID>(reinterpret_cast<intptr_t>(texture)), min, ImVec2(min.x + width, min.y + width * aspect),
+                                           ImVec2(0, 0), ImVec2(1, aspect), tint);
+}
+
 }  // namespace wax::app

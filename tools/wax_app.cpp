@@ -10,8 +10,10 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <chrono>
 #include <cstdlib>
 #include <exception>
+#include <future>
 #include <fstream>
 #include <map>
 #include <sstream>
@@ -45,6 +47,7 @@
 #include "live/audio_out.h"
 #include "project/save.h"
 #include "live/player.h"
+#include "engine/offline.h"
 #include "project/project.h"
 
 namespace {
@@ -52,20 +55,22 @@ namespace {
 using namespace wax;
 
 // File dialogs answer on another thread; the window picks the answer up between frames.
+enum class DialogKind { Open, Save, Export };
 struct DialogAnswer {
   std::mutex mutex;
   std::string path;
-  bool save = false, ready = false;
+  DialogKind kind = DialogKind::Open;
+  bool ready = false;
 };
 DialogAnswer gAnswer;
-enum class DialogRequest { None, Open, SaveAs };
+enum class DialogRequest { None, Open, SaveAs, Export, New };
 DialogRequest gRequest = DialogRequest::None;   // set by the keys, carried out by the main loop (it has the window)
 
 void SDLCALL dialogDone(void* userdata, const char* const* files, int) {
   if (!files || !files[0]) return;   // cancelled or failed
   std::lock_guard<std::mutex> lock(gAnswer.mutex);
   gAnswer.path = files[0];
-  gAnswer.save = userdata != nullptr;
+  gAnswer.kind = userdata ? *static_cast<DialogKind*>(userdata) : DialogKind::Open;
   gAnswer.ready = true;
 }
 
@@ -74,6 +79,8 @@ struct Options {
   double rate = 48000;
   int threads = 1, midiPort = 0, frames = 3, playFrom = -1, buffer = 0;
   bool useNull = false;
+  bool splashForced = false;
+  bool splash = true;   // the Wax logo for a moment at start (not when taking a screenshot, unless --splash is given)
 };
 
 // One song, loaded: the project, the engine that plays it, the sound card and the MIDI input.
@@ -107,6 +114,7 @@ struct Session {
   int silenceTicks = 128;                // the length of silence Insert puts in
   bool wantTree = false;                 // open the machine tree (Shift+I, or the Instrument screen's add button)
   bool showKeys = true;                  // the shortcut sheet beside the Pattern grid
+  std::future<std::string> exporting;     // a render to a WAV file in the background: its answer is the message to show
   int pausedAt = -1;                     // the tick the song was paused at (-1: not paused)
   char projectName[64] = {0};            // the header's project name box
   bool nameFocused = false;
@@ -121,7 +129,8 @@ struct Session {
   int wantTick = -1;                     // and the cursor goes here
   std::string path;                      // the file this song was opened from, where Ctrl+S saves it
 
-  Session(const std::string& filePath, const Options& options) : project(loadProject(filePath)), path(filePath) {
+  Session(const std::string& filePath, const Options& options) : Session(loadProject(filePath), filePath, options) {}
+  Session(Project loaded, const std::string& filePath, const Options& options) : project(std::move(loaded)), path(filePath) {
     for (const Instrument& inst : project.instruments) if (inst.id != kMaster && !inst.isMeta) playable.push_back(inst.id);
     keyjazzInstrument = playable.empty() ? std::string() : playable.front();
     player = std::make_unique<Player>(project, options.rate, options.threads, keyjazzInstrument, true);
@@ -195,6 +204,69 @@ void loadTheme() {
   std::ifstream file(path);
   std::string name;
   if (file && std::getline(file, name)) app::setThemeByName(name.c_str());
+}
+
+// The first screen: the Wax logo with a thin loader bar along the bottom filling over a moment, then fading away (as the web app's splash).
+// `seconds` is the time since the window opened. Drawn over everything; returns false once it is gone.
+bool drawSplash(double seconds, const std::string& build) {
+  constexpr double kShow = 0.9, kFade = 0.3;
+  if (seconds >= kShow + kFade) return false;
+  const double fade = seconds <= kShow ? 1.0 : 1.0 - (seconds - kShow) / kFade;
+  const int alpha = static_cast<int>(255 * fade);
+  ImGuiViewport* viewport = ImGui::GetMainViewport();
+  const ImVec2 min = viewport->WorkPos, size = viewport->WorkSize;
+  ImDrawList* draw = ImGui::GetForegroundDrawList();
+  draw->AddRectFilled(min, ImVec2(min.x + size.x, min.y + size.y), app::withAlpha(app::kBg, alpha));
+  const float scale = ImGui::GetStyle().FontScaleDpi;
+  const float width = std::min(size.x * 0.46f, 520.0f * scale), aspect = 820.0f / 2320.0f;
+  app::drawIcon("wax-logo", ImVec2(min.x + (size.x - width) / 2, min.y + (size.y - width * aspect) / 2), width, aspect, app::withAlpha(app::kText, alpha));
+  const float bar = static_cast<float>(std::min(1.0, seconds / kShow));
+  draw->AddRectFilled(ImVec2(min.x, min.y + size.y - 3 * scale), ImVec2(min.x + size.x, min.y + size.y), app::withAlpha(app::kText, static_cast<int>(30 * fade)));
+  draw->AddRectFilled(ImVec2(min.x, min.y + size.y - 3 * scale), ImVec2(min.x + size.x * bar, min.y + size.y), app::withAlpha(app::kAccent, alpha));
+  if (!build.empty()) {
+    const ImVec2 text = ImGui::CalcTextSize(build.c_str());
+    draw->AddText(ImVec2(min.x + size.x - text.x - 12 * scale, min.y + size.y - text.y - 10 * scale), app::withAlpha(app::kDimText, static_cast<int>(alpha * 0.7f)), build.c_str());
+  }
+  return true;
+}
+
+// Renders the song as it is now to a WAV file on another thread; the answer (a message for the status line) arrives through `exporting`.
+void startExport(Session& session, const std::string& path) {
+  if (session.exporting.valid() && session.exporting.wait_for(std::chrono::seconds(0)) != std::future_status::ready) { session.editStatus = "an export is already running"; return; }
+  session.editStatus = "exporting " + path + " ...";
+  session.exporting = std::async(std::launch::async, [project = session.doc->project(), path]() -> std::string {
+    try {
+      RenderOptions render;
+      render.threads = 2;
+      const RenderResult result = renderSong(project, render);
+      writeWav(path, result.audio);
+      return "exported " + path + (result.warnings.empty() ? std::string() : "  (" + result.warnings.front() + ")");
+    } catch (const std::exception& e) {
+      return std::string("export failed: ") + e.what();
+    }
+  });
+}
+
+// A project with nothing in it but the master lane: the master's own machine, no samples, patterns or arrangement.
+Project emptyProject(const Project& from) {
+  Json file = Json::parse(serializeProject(from));
+  file["song"]["name"] = "untitled";
+  file["song"]["length"] = 256;
+  file["song"].erase("loop");
+  file["samples"] = Json::object();
+  Json instruments = Json::object();
+  instruments[std::string(kMaster)] = file["instruments"][std::string(kMaster)];
+  file["instruments"] = instruments;
+  Json lanes = Json::array();
+  for (Json lane : file["lanes"]) {
+    if (lane.value("id", std::string()) != kMaster) continue;
+    lane["patterns"] = Json::object();
+    lane["placements"] = Json::array();
+    lane.erase("mutes"); lane.erase("offs");
+    lanes.push_back(lane);
+  }
+  file["lanes"] = lanes;
+  return parseProject(file.dump());
 }
 
 void drawFrame(Session* session, const Options& options, const std::string& status, float& meterL, float& meterR, std::map<ImGuiKey, int>& held,
@@ -307,8 +379,10 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     ImGui::SameLine(0, 0); ImGui::SetCursorPosY(lineY);
     if (ImGui::BeginPopup("filemenu")) {
       if (app::textButton("Open...  Ctrl+O")) { gRequest = DialogRequest::Open; ImGui::CloseCurrentPopup(); }
+      if (app::textButton("New")) { gRequest = DialogRequest::New; ImGui::CloseCurrentPopup(); }
       if (app::textButton("Save  Ctrl+S")) { requestSave = true; ImGui::CloseCurrentPopup(); }
       if (app::textButton("Save as...  Ctrl+Shift+S")) { gRequest = DialogRequest::SaveAs; ImGui::CloseCurrentPopup(); }
+      if (app::textButton("Export WAV...")) { gRequest = DialogRequest::Export; ImGui::CloseCurrentPopup(); }
       ImGui::EndPopup();
     }
     ImGui::SameLine(0, 22 * hs);
@@ -384,7 +458,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     else if (ctrl && ImGui::IsKeyPressed(ImGuiKey_S, false)) requestSave = true;
     if (requestSave) {
       requestSave = false;
-      try {
+      if (session->path.empty()) gRequest = DialogRequest::SaveAs;   // a new song has no file yet
+      else try {
         saveProject(doc.project(), session->path);
         doc.markSaved();
         session->editStatus = "saved " + session->path;
@@ -881,6 +956,8 @@ bool parse(int argc, char** argv, Options& o) {
     else if (a == "--frames" && more) o.frames = std::max(1, std::atoi(argv[++i]));
     else if (a == "--play-from" && more) o.playFrom = std::atoi(argv[++i]);
     else if (a == "--null") o.useNull = true;
+    else if (a == "--splash") { o.splash = true; o.splashForced = true; }
+    else if (a == "--no-splash") o.splash = false;
     else if (!a.empty() && a[0] != '-' && o.path.empty()) o.path = a;
     else return false;
   }
@@ -945,6 +1022,7 @@ int main(int argc, char** argv) {
   int octave = 4, playFromRequest = -1, frame = 0;
   std::string selectedLane;
   bool follow = true, running = true;
+  bool showSplash = options.splash && (options.splashForced || (options.screenshot.empty() && !options.useNull));
   if (session && !options.screenshot.empty() && options.playFrom >= 0)
     session->player->ring().push({LiveCommand::Play, options.playFrom, 1});
   else if (session && !options.screenshot.empty())
@@ -970,22 +1048,41 @@ int main(int argc, char** argv) {
     if (!options.press.empty() && frame >= 4) feedKeys(options.press, frame - 4);   // (the first frames let the window settle)
     ImGui::NewFrame();
     drawFrame(session.get(), options, status, meterL, meterR, held, octave, selectedLane, follow, playFromRequest);
+    if (showSplash) showSplash = drawSplash(SDL_GetTicks() / 1000.0, "native");
+    if (gRequest == DialogRequest::New) {   // start over with an empty song (the old one is replaced: unsaved changes are lost)
+      gRequest = DialogRequest::None;
+      if (session) {
+        Project blank = emptyProject(session->doc->project());
+        session.reset();
+        try { session = std::make_unique<Session>(std::move(blank), std::string(), options); status.clear(); SDL_SetWindowTitle(window, "Wax - untitled"); }
+        catch (const std::exception& e) { status = std::string("Could not start a new song: ") + e.what(); }
+      }
+    }
     if (gRequest != DialogRequest::None) {
       static const SDL_DialogFileFilter filters[] = {{"Wax songs", "wax"}, {"All files", "*"}};
+      static const SDL_DialogFileFilter wavFilter[] = {{"WAV audio", "wav"}};
+      static DialogKind saveKind = DialogKind::Save, exportKind = DialogKind::Export;
       if (gRequest == DialogRequest::Open) SDL_ShowOpenFileDialog(dialogDone, nullptr, window, filters, 2, nullptr, false);
-      else if (session) SDL_ShowSaveFileDialog(dialogDone, &gAnswer, window, filters, 2, session->path.c_str());   // (non-null: a save)
+      else if (session && gRequest == DialogRequest::Export) {
+        std::string suggestion = session->path.empty() ? session->project.song.name + ".wav" : session->path;
+        if (suggestion.size() > 4 && suggestion.substr(suggestion.size() - 4) == ".wax") suggestion = suggestion.substr(0, suggestion.size() - 4) + ".wav";
+        SDL_ShowSaveFileDialog(dialogDone, &exportKind, window, wavFilter, 1, suggestion.c_str());
+      } else if (session) SDL_ShowSaveFileDialog(dialogDone, &saveKind, window, filters, 2, session->path.c_str());
       gRequest = DialogRequest::None;
     }
     {
       std::string chosen;
-      bool save = false;
+      DialogKind kind = DialogKind::Open;
       {
         std::lock_guard<std::mutex> lock(gAnswer.mutex);
-        if (gAnswer.ready) { chosen = gAnswer.path; save = gAnswer.save; gAnswer.ready = false; }
+        if (gAnswer.ready) { chosen = gAnswer.path; kind = gAnswer.kind; gAnswer.ready = false; }
       }
       if (!chosen.empty()) {
-        if (!save) open(chosen);
-        else if (session) {
+        if (kind == DialogKind::Open) open(chosen);
+        else if (kind == DialogKind::Export && session) {
+          if (chosen.size() < 4 || chosen.substr(chosen.size() - 4) != ".wav") chosen += ".wav";
+          startExport(*session, chosen);
+        } else if (session) {
           if (chosen.size() < 4 || chosen.substr(chosen.size() - 4) != ".wax") chosen += ".wax";
           try {
             saveProject(session->doc->project(), chosen);
@@ -998,6 +1095,7 @@ int main(int argc, char** argv) {
         }
       }
     }
+    if (session && session->exporting.valid() && session->exporting.wait_for(std::chrono::seconds(0)) == std::future_status::ready) session->editStatus = session->exporting.get();
     if (session) {   // an asterisk in the title while the song has changes that are not saved
       const bool unsaved = session->doc->modified();
       if (unsaved != titleUnsaved) {
