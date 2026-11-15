@@ -258,6 +258,22 @@ private:
   Placement placement_;
 };
 
+// A new instrument (a fresh machine of some kind) with a blank lane of its own at the end of the lanes. Undo takes both away again.
+class AddInstrument final : public Edit {
+public:
+  AddInstrument(std::string instrument, Json definition, std::string lane) : instrument_(std::move(instrument)), definition_(std::move(definition)), lane_(std::move(lane)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Add " + instrument_; }
+  std::string lane() const override { return lane_; }
+  std::string graphInstrument() const override { return instrument_; }
+
+private:
+  std::string instrument_;
+  Json definition_;
+  std::string lane_;
+};
+
 // An existing pattern placed on a lane at a tick (a placement already starting there is replaced; undo puts it back).
 class PlacePattern final : public Edit {
 public:

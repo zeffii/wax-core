@@ -143,6 +143,10 @@ struct Project {
 inline const std::string kMaster = "master";
 
 // Both throw std::runtime_error with a message meant for the user when the text is not a project this build can read.
+// One instrument as the file holds it ({ graph, noteColumns, exposed, commands, ... }) under an id, and a blank lane for it.
+Instrument instrumentFromJson(const std::string& id, const Json& data);
+Lane blankLane(const std::string& laneId, const std::string& instrumentId);
+
 Project parseProject(const std::string& text);
 Project loadProject(const std::string& path);
 

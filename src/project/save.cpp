@@ -51,6 +51,11 @@ std::string serializeProject(const Project& project) {
   Json lanes = Json::array();
   for (const Lane& lane : project.lanes) lanes.push_back(laneJson(lane));
   out["lanes"] = std::move(lanes);
+  // instruments added while editing: written as they were made
+  for (const Instrument& instrument : project.instruments) {
+    if (!out.contains("instruments") || !out["instruments"].is_object()) out["instruments"] = Json::object();
+    if (!out["instruments"].contains(instrument.id) && instrument.raw.is_object()) out["instruments"][instrument.id] = instrument.raw;
+  }
   // node parameters as edited
   for (const Instrument& instrument : project.instruments) {
     if (!out.contains("instruments") || !out["instruments"].contains(instrument.id)) continue;

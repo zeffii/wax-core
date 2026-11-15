@@ -145,6 +145,20 @@ std::vector<std::string> Project::nodeTypes() const {
   return {types.begin(), types.end()};
 }
 
+Instrument instrumentFromJson(const std::string& id, const Json& data) { return readInstrument(id, data); }
+
+Lane blankLane(const std::string& laneId, const std::string& instrumentId) {
+  Json data = Json::object();
+  data["id"] = laneId;
+  data["instrument"] = instrumentId;
+  data["patterns"] = Json::object();
+  data["placements"] = Json::array();
+  data["mutes"] = Json::array();
+  data["offs"] = Json::array();
+  data["curves"] = Json::array();
+  return readLane(data);
+}
+
 Project parseProject(const std::string& fileText) {
   Json data;
   try {

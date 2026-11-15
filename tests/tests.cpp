@@ -12,6 +12,7 @@
 #include "core/random.h"
 #include "engine/offline.h"
 #include "edit/cell_editor.h"
+#include "app/machines.h"
 #include "edit/document.h"
 #include "seq/loop.h"
 #include "edit/spline_ops.h"
@@ -761,6 +762,31 @@ void testPlacePattern() {
   std::printf("ok: place pattern\n");
 }
 
+void testAddInstrument() {
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax"));
+  wax::Engine engine(doc.project(), 44100);
+  const std::size_t instruments = doc.project().instruments.size(), lanes = doc.project().lanes.size();
+  const wax::Json kick = wax::app::machineJson("kick");
+  check(!kick.is_null(), "the machine table knows the kick");
+  doc.apply(std::make_unique<wax::AddInstrument>("kick", kick, "kick"));
+  check(doc.project().instruments.size() == instruments + 1 && doc.project().lanes.size() == lanes + 1, "an added machine brings its lane");
+  check(engine.sendGraph(doc.project(), "kick").empty(), "the new machine compiles while the song plays");
+  check(engine.sendLane(doc.project(), "kick"), "its lane is sent");
+  engine.applySentLanes();
+  check(!engine.laneColumns("kick").empty(), "the grid knows the new lane's columns");
+  engine.sequencer().play(0);
+  std::vector<float> l(wax::kEngineBlock), r(wax::kEngineBlock);
+  for (int b = 0; b < 50; b++) engine.sequencer().process(l.data(), r.data(), wax::kEngineBlock);
+  const wax::Project reread = wax::parseProject(wax::serializeProject(doc.project()));
+  check(reread.instruments.size() == instruments + 1 && reread.lanes.size() == lanes + 1, "the added machine and its lane are saved");
+  doc.undo();
+  check(doc.project().instruments.size() == instruments && doc.project().lanes.size() == lanes, "undo takes the machine and its lane away");
+  check(engine.sendLane(doc.project(), "kick"), "an undone lane is replaced by an empty one");
+  engine.applySentLanes();
+  for (int b = 0; b < 50; b++) engine.sequencer().process(l.data(), r.data(), wax::kEngineBlock);
+  std::printf("ok: add instrument\n");
+}
+
 void testMoveNode() {
   const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
   wax::Document doc(original);
@@ -827,6 +853,7 @@ int main() {
   testSongSettings();
   testLoop();
   testPlacePattern();
+  testAddInstrument();
   testAddNode();
   testUnits();
   testRewire();

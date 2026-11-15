@@ -64,6 +64,8 @@ private:
   std::vector<std::string> instrumentIds_;
   std::map<std::string, std::vector<std::string>> labels_;
   std::map<std::string, std::vector<Column>> columns_;
+  std::map<std::string, std::string> laneInstrument_;   // the instrument each lane plays, so a lane taken away can be replaced by an empty one
+  void rememberLane(const PreparedLane& lane);          // its columns, their labels and its instrument, for the grid
 };
 
 }  // namespace wax

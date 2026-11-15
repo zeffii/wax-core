@@ -102,18 +102,7 @@ Engine::Engine(const Project& project, double sampleRate, int threads)
   }
   for (const PreparedLane& lane : prepareSong(project, registry_)) {
     sequencer_.setLane(lane);
-    columns_[lane.id] = lane.columns;
-    std::vector<std::string>& names = labels_[lane.id];
-    for (const Column& column : lane.columns) {
-      switch (column.kind) {
-        case ColumnKind::Note: names.push_back("N" + std::to_string(column.nc + 1)); break;
-        case ColumnKind::Vel: names.push_back("V" + std::to_string(column.nc + 1)); break;
-        case ColumnKind::Trig: names.push_back("T" + std::to_string(column.tc + 1)); break;
-        case ColumnKind::Param: names.push_back(column.param); break;
-        case ColumnKind::Cmd: names.push_back("CMD"); break;
-        case ColumnKind::Spacer: names.push_back(""); break;
-      }
-    }
+    rememberLane(lane);
   }
 
   if (project.song.raw.contains("nodeseq") && project.song.raw["nodeseq"].is_object()) {
@@ -126,6 +115,23 @@ Engine::Engine(const Project& project, double sampleRate, int threads)
 
 }
 
+void Engine::rememberLane(const PreparedLane& lane) {
+  columns_[lane.id] = lane.columns;
+  laneInstrument_[lane.id] = lane.instrument;
+  std::vector<std::string>& names = labels_[lane.id];
+  names.clear();
+  for (const Column& column : lane.columns) {
+    switch (column.kind) {
+      case ColumnKind::Note: names.push_back("N" + std::to_string(column.nc + 1)); break;
+      case ColumnKind::Vel: names.push_back("V" + std::to_string(column.nc + 1)); break;
+      case ColumnKind::Trig: names.push_back("T" + std::to_string(column.tc + 1)); break;
+      case ColumnKind::Param: names.push_back(column.param); break;
+      case ColumnKind::Cmd: names.push_back("CMD"); break;
+      case ColumnKind::Spacer: names.push_back(""); break;
+    }
+  }
+}
+
 void Engine::setParam(const std::string& address, double value) {
   if (registry_.slotOf(address) >= 0) registry_.set(address, value);
 }
@@ -133,9 +139,17 @@ void Engine::setParam(const std::string& address, double value) {
 bool Engine::sendLane(const Project& project, const std::string& laneId) {
   for (const Lane& source : project.lanes) {
     if (source.id != laneId) continue;
-    return sent_.push(sequencer_.buildLane(prepareLane(project, source, registry_)));
+    const PreparedLane prepared = prepareLane(project, source, registry_);
+    rememberLane(prepared);   // (a new lane's columns are known to the grid before its first block)
+    return sent_.push(sequencer_.buildLane(prepared));
   }
-  return true;   // a lane the project does not have: nothing to send
+  const auto was = laneInstrument_.find(laneId);   // a lane the project no longer has (an added instrument undone): an empty one takes its place
+  if (was == laneInstrument_.end()) return true;
+  PreparedLane empty;
+  empty.id = laneId;
+  empty.instrument = was->second;
+  rememberLane(empty);
+  return sent_.push(sequencer_.buildLane(empty));
 }
 
 void Engine::applySentLanes() {

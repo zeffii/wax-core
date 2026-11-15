@@ -81,6 +81,16 @@ void AddPattern::revert(Project& project) {
   }
 }
 
+void AddInstrument::apply(Project& project) {
+  project.instruments.push_back(instrumentFromJson(instrument_, definition_));
+  project.lanes.push_back(blankLane(lane_, instrument_));
+}
+
+void AddInstrument::revert(Project& project) {
+  for (std::size_t i = project.lanes.size(); i-- > 0;) if (project.lanes[i].id == lane_) { project.lanes.erase(project.lanes.begin() + static_cast<long>(i)); break; }
+  for (std::size_t i = project.instruments.size(); i-- > 0;) if (project.instruments[i].id == instrument_) { project.instruments.erase(project.instruments.begin() + static_cast<long>(i)); break; }
+}
+
 void PlacePattern::apply(Project& project) {
   for (Lane& lane : project.lanes) {
     if (lane.id != lane_) continue;

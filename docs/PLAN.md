@@ -154,3 +154,11 @@ The graph's right-click menu is the web's cascading insert menu (src/app/insert_
 columns, Up/Down/Left/Right/Enter, underlined hotkeys, "/" or Tab for a flat search (best match first). The grouping table is generated:
 `node tools/gen-insert-menu.mjs /path/to/webtracker > src/app/insert_menu_table.inc`. Not yet: replacing a node or inserting into a wire from the
 menu, and the Shift+I machine tree for adding an instrument with its own lane. `--clicks "r:x,y"` right-clicks in the headless harness.
+
+### Adding an instrument (machine tree)
+Shift+I, or "+ add" above the Instrument screen's list, opens the web's machine tree (src/app/machine_tree.cpp: groups fold open and shut, thin
+guide lines, arrows/Enter/letters). A pick adds a fresh instrument of that kind and a blank lane of its own, live: AddInstrument (one undo
+step), then the machine compiles into the running engine and its lane follows. The kinds and their fresh instruments are generated from the web app:
+`node tools/gen-machines.mjs /path/to/webtracker > src/app/machine_table.inc`. A machine whose nodes the native engine lacks, or that needs a
+sample, is greyed. Undo replaces the lane in the engine by an empty one (the idle instrument stays loaded). Not yet: the sampler, remove/rename
+instrument, lane duplicate/clone.

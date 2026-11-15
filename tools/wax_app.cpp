@@ -7,6 +7,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -23,6 +24,8 @@
 #include "app/envelope_window.h"
 #include "app/dx_window.h"
 #include "app/graph_view.h"
+#include "app/machine_tree.h"
+#include "app/machines.h"
 #include "app/pattern_list.h"
 #include "app/shortcut_sheet.h"
 #include "app/widgets.h"
@@ -98,6 +101,7 @@ struct Session {
   app::DxWindow dx;
   app::GraphViewState graphView;
   app::PatternListState patternList;     // the Song screen's pattern list
+  bool wantTree = false;                 // open the machine tree (Shift+I, or the Instrument screen's add button)
   bool showKeys = true;                  // the shortcut sheet beside the Pattern grid
   bool showMixer = true;                 // the mixer under the Song and Pattern screens (the status bar's toggle)
   Screen screen = Screen::Pattern;       // the screen shown (the rail at the left)
@@ -326,7 +330,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   ImGuiIO& io = ImGui::GetIO();
   bool edited = false;
   const bool ctrl = io.KeyCtrl;
-  if (!io.WantTextInput) {
+  const bool menuOpen = ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);   // a menu has the keys while it is open
+  if (!io.WantTextInput && !menuOpen) {
     if (ImGui::IsKeyPressed(ImGuiKey_LeftBracket, false)) octave = std::max(0, octave - 1);
     if (ImGui::IsKeyPressed(ImGuiKey_RightBracket, false)) octave = std::min(8, octave + 1);
     if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) player.ring().push({LiveCommand::Play, 0, 1});
@@ -352,6 +357,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         session->editStatus = e.what();
       }
     }
+    if (io.KeyShift && !ctrl && !io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_I, false)) session->wantTree = true;   // the machine tree
     if (ctrl && !io.KeyShift && !io.KeyAlt && session->screen == Screen::Pattern) {   // the song loop: start and end at the cursor row, switch
       const auto setPoint = [&](const char* which, int at) {
         std::string message;
@@ -531,6 +537,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (session->instrument.empty()) session->instrument = !laneInstrument.empty() ? laneInstrument : session->playable.empty() ? std::string(kMaster) : session->playable.front();
     ImGui::BeginChild("instlist", ImVec2(150 * scale, 0), false);
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Instrument");
+    ImGui::SameLine(0, 10 * scale);
+    if (app::textButton("+ add")) session->wantTree = true;
     for (const Instrument& inst : doc.project().instruments) {
       if (app::textButton(inst.id.c_str(), inst.id == session->instrument)) session->instrument = inst.id;
     }
@@ -567,6 +575,30 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       syncGraphs(doc, player.engine());
     }
   }
+  // The machine tree: a new instrument of the kind picked, with a blank lane of its own
+  if (session->wantTree) { session->wantTree = false; app::openMachineTree(); }
+  {
+    const std::string kind = app::drawMachineTree();
+    const Json definition = kind.empty() ? Json() : app::machineJson(kind);
+    if (!definition.is_null()) {
+      std::vector<std::string> instrumentIds, laneIds;
+      for (const Instrument& i : doc.project().instruments) instrumentIds.push_back(i.id);
+      for (const Lane& l : doc.project().lanes) laneIds.push_back(l.id);
+      const std::string instrumentId = app::uniqueName(kind, instrumentIds);
+      std::string laneBase = instrumentId;   // a second lane for 'clap2' is 'clap3', not 'clap22'
+      if (std::find(laneIds.begin(), laneIds.end(), laneBase) != laneIds.end()) { while (!laneBase.empty() && std::isdigit(static_cast<unsigned char>(laneBase.back()))) laneBase.pop_back(); if (laneBase.empty()) laneBase = instrumentId; }
+      const std::string laneId = app::uniqueName(laneBase, laneIds);
+      doc.apply(std::make_unique<AddInstrument>(instrumentId, definition, laneId));
+      std::vector<std::string> problems = syncGraphs(doc, player.engine());   // the machine first (it gives its parameters their slots), then its lane
+      for (const std::string& p : syncLanes(doc, player.engine())) problems.push_back(p);
+      session->editStatus = problems.empty() ? "Added " + instrumentId + "." : problems.front();
+      const Instrument& added = doc.project().instruments.back();
+      if (added.id != kMaster && !added.isMeta) session->playable.push_back(added.id);
+      session->wantLane = laneId;
+      session->instrument = instrumentId;
+    }
+  }
+
   // The status bar, as the web's footer: what the keyboard is doing, the cursor, the last message, undo and redo; at the right the audio
   // load, the mixer toggle, the limiter, panic and the theme.
   {
