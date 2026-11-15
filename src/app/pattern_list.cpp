@@ -18,12 +18,6 @@ const Pattern* find(const Lane* lane, const std::string& id) {
   return nullptr;
 }
 
-int placements(const Lane& lane, const std::string& id) {
-  int n = 0;
-  for (const Placement& p : lane.placements) n += p.pattern == id;
-  return n;
-}
-
 }  // namespace
 
 PatternListResult drawPatternList(PatternListState& state, const Lane* lane, float /*height: the list now fills what the controls leave*/) {
