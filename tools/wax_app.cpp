@@ -353,26 +353,6 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     }
     ImGui::SameLine();
   }
-  if (session->audio) {
-    static const int sizes[] = {0, 64, 128, 256, 512, 1024, 2048, 4096};
-    const int now = session->audio->bufferFrames();
-    char label[64];
-    std::snprintf(label, sizeof label, "buffer %d (%.1f ms)", now, 1000.0 * now / session->audio->sampleRate());
-    ImGui::SetNextItemWidth(190);
-    if (ImGui::BeginCombo("##buffer", label)) {
-      for (const int size : sizes) {
-        char item[32];
-        if (size == 0) std::snprintf(item, sizeof item, "card's own");
-        else std::snprintf(item, sizeof item, "%d (%.1f ms)", size, 1000.0 * size / session->audio->sampleRate());
-        if (ImGui::Selectable(item, size == now)) {
-          try { session->openAudio(options, size); }
-          catch (const std::exception& e) { session->audioName = std::string("no sound: ") + e.what(); }
-        }
-      }
-      ImGui::EndCombo();
-    }
-    ImGui::SameLine();
-  }
   // The File menu and the song settings (the web app's header LCD): bpm, swing, tpb and bar are spin boxes; len and time are read out.
   {
     const float hs = ImGui::GetStyle().FontScaleDpi;
@@ -871,6 +851,26 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       for (int i = 0; i < app::themeCount(); i++) if (ImGui::Selectable(app::themeName(i), i == app::themeIndex())) { app::setTheme(i); saveTheme(); }
       ImGui::EndCombo();
     }
+    group("Audio", "The sound card's buffer: smaller is quicker to respond, larger is safer against crackle.");
+  if (session->audio) {
+    static const int sizes[] = {0, 64, 128, 256, 512, 1024, 2048, 4096};
+    const int now = session->audio->bufferFrames();
+    char label[64];
+    std::snprintf(label, sizeof label, "buffer %d (%.1f ms)", now, 1000.0 * now / session->audio->sampleRate());
+    ImGui::SetNextItemWidth(260 * scale);
+    if (ImGui::BeginCombo("Audio buffer", label)) {
+      for (const int size : sizes) {
+        char item[32];
+        if (size == 0) std::snprintf(item, sizeof item, "card's own");
+        else std::snprintf(item, sizeof item, "%d (%.1f ms)", size, 1000.0 * size / session->audio->sampleRate());
+        if (ImGui::Selectable(item, size == now)) {
+          try { session->openAudio(options, size); }
+          catch (const std::exception& e) { session->audioName = std::string("no sound: ") + e.what(); }
+        }
+      }
+      ImGui::EndCombo();
+    }
+  }
     group("Playing", "How the screens behave while the song runs.");
     if (ImGui::Checkbox("Follow mode (the grids scroll with the playing row)", &follow)) { cfg.follow = follow; changed = true; }
     {
