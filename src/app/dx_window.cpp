@@ -74,12 +74,12 @@ void drawAlgorithm(ImDrawList* dl, int algorithmIndex, ImVec2 min, ImVec2 max, f
   dl->AddCircle(ImVec2(f.x + r * 1.5f, f.y - r * 0.9f), r * 0.7f, kWarm, 12, 1.0f);
   for (int i = 0; i < 6; i++) {
     const bool on = i == lit;
-    dl->AddCircleFilled(pos(i), r, on ? kAccent : IM_COL32(20, 26, 32, 255), 20);
+    dl->AddCircleFilled(pos(i), r, on ? kAccent : kField, 20);
     dl->AddCircle(pos(i), r, on ? kAccent : line, 20, 1.0f);
     if (textScale < 0.8f) continue;   // thumbnails: circles only
     const std::string label = std::to_string(i + 1);
     const ImVec2 size = ImGui::CalcTextSize(label.c_str());
-    dl->AddText(ImVec2(pos(i).x - size.x / 2, pos(i).y - size.y / 2), on ? IM_COL32(10, 14, 18, 255) : kDimText, label.c_str());
+    dl->AddText(ImVec2(pos(i).x - size.x / 2, pos(i).y - size.y / 2), on ? kHiFg : kDimText, label.c_str());
   }
 }
 
@@ -106,7 +106,7 @@ bool envelopeGraph(const char* id, int rate[4], int level[4], int& held, ImVec2 
     x += stepW[i] + (i == 3 ? gap : 0);
     p[i] = ImVec2(min.x + size.x * x / span, yOf(levelAt(i)));
   }
-  dl->AddLine(ImVec2(min.x, max.y), max, IM_COL32(255, 255, 255, 30));
+  dl->AddLine(ImVec2(min.x, max.y), max, textAlpha(30));
   dl->AddLine(pts[0], p[0], kAccent, 1.5f);
   for (int i = 1; i < 4; i++) dl->AddLine(p[i - 1], p[i], kAccent, 1.5f);
   bool changed = false;
@@ -202,7 +202,7 @@ bool drawDxWindow(DxWindow& window, Document& doc, const Engine& engine) {
       const float pic = 190 * scale;
       const ImVec2 origin = ImGui::GetCursorScreenPos();
       ImDrawList* dl = ImGui::GetWindowDrawList();
-      drawAlgorithm(dl, voice.alg, origin, ImVec2(origin.x + pic * 1.3f, origin.y + pic), scale, window.op, IM_COL32(150, 165, 176, 255));
+      drawAlgorithm(dl, voice.alg, origin, ImVec2(origin.x + pic * 1.3f, origin.y + pic), scale, window.op, kSoft);
       ImGui::InvisibleButton("dx_picture", ImVec2(pic * 1.3f, pic));
       if (ImGui::IsItemClicked()) {
         int rows = 1;
@@ -228,7 +228,7 @@ bool drawDxWindow(DxWindow& window, Document& doc, const Engine& engine) {
         if (ImGui::InvisibleButton("alg", ImVec2(tw, th))) voice.alg = a;
         ImGui::PopID();
         const bool on = a == voice.alg;
-        drawAlgorithm(dl, a, min, ImVec2(min.x + tw, min.y + th), scale * 0.5f, -1, on ? kAccent : IM_COL32(90, 102, 112, 255));
+        drawAlgorithm(dl, a, min, ImVec2(min.x + tw, min.y + th), scale * 0.5f, -1, on ? kAccent : kDimText);
       }
       ImGui::SetCursorScreenPos(ImVec2(top.x, top.y + 4 * (th + 6 * scale)));
       ImGui::Dummy(ImVec2(1, 1));
@@ -239,7 +239,7 @@ bool drawDxWindow(DxWindow& window, Document& doc, const Engine& engine) {
       ImGui::TextUnformatted("operators"); ImGui::SameLine(0, 14 * scale);
       for (int i = 0; i < 6; i++) {
         const bool muted = (mute >> i) & 1, soloed = (solo >> i) & 1;
-        ImGui::PushStyleColor(ImGuiCol_Text, soloed ? colour(kWarm) : muted ? colour(IM_COL32(90, 98, 106, 255)) : colour(kAccent));
+        ImGui::PushStyleColor(ImGuiCol_Text, soloed ? colour(kWarm) : muted ? colour(kDimText) : colour(kAccent));
         ImGui::Text("%d", i + 1);
         ImGui::PopStyleColor();
         if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) { doc.apply(std::make_unique<SetParam>(window.instrument, window.node, "mute", static_cast<double>(mute ^ (1 << i)))); changed = true; }

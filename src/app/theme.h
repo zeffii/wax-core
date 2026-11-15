@@ -1,19 +1,29 @@
-// The look of the window: dark slate, thin lines, flat. No purple and no pink.
+// The look of the window: colour themes (generated from the web app's themes.css, plus the native "slate"), thin lines, flat.
+// The colours are plain variables the views read; setTheme() changes them all at once and restyles ImGui.
 #pragma once
 
 #include "imgui.h"
 
 namespace wax::app {
 
+// Sets ImGui's sizes for the display scale (once) and the colours of the current theme.
 void applyTheme(float dpiScale);
 
-// Colours the views use besides ImGui's own.
-inline constexpr ImU32 kBeatRow = IM_COL32(255, 255, 255, 10);
-inline constexpr ImU32 kBarRow = IM_COL32(255, 255, 255, 22);
-inline constexpr ImU32 kPlayRow = IM_COL32(64, 180, 160, 70);
-inline constexpr ImU32 kCursorCell = IM_COL32(226, 164, 74, 90);
-inline constexpr ImU32 kDimText = IM_COL32(120, 134, 146, 255);
-inline constexpr ImU32 kAccent = IM_COL32(64, 190, 168, 255);
-inline constexpr ImU32 kWarm = IM_COL32(226, 164, 74, 255);
+int themeCount();
+const char* themeName(int index);
+int themeIndex();
+// Chooses a theme by position or by name (an unknown name leaves the theme as it is); restyles ImGui.
+void setTheme(int index);
+bool setThemeByName(const char* name);
+
+// The colours of the theme, for the views.
+inline ImU32 kBg, kText, kPanel, kField, kLine, kSoft, kDimText, kAccent, kWarm, kHiFg;
+inline ImU32 kBeatRow, kBarRow, kPlayRow, kCursorCell;
+
+inline ImU32 withAlpha(ImU32 c, int alpha) { return (c & 0x00FFFFFFu) | (static_cast<ImU32>(alpha < 0 ? 0 : alpha > 255 ? 255 : alpha) << 24); }
+inline ImU32 textAlpha(int a) { return withAlpha(kText, a); }
+inline ImU32 dimAlpha(int a) { return withAlpha(kDimText, a); }
+inline ImU32 accentAlpha(int a) { return withAlpha(kAccent, a); }
+inline ImU32 lineAlpha(int a) { return withAlpha(kLine, a); }
 
 }  // namespace wax::app

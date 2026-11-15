@@ -97,7 +97,7 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
     char number[16];
     std::snprintf(number, sizeof number, "%04d", t);
     if (playTick >= t && playTick < t + cell) draw->AddRectFilled(ImVec2(origin.x, y), ImVec2(origin.x + totalWidth, y + rowHeight), kPlayRow);
-    draw->AddText(ImVec2(origin.x + 2 * scale, y + scale), t % bar16 == 0 ? IM_COL32(205, 214, 222, 255) : kDimText, number);
+    draw->AddText(ImVec2(origin.x + 2 * scale, y + scale), t % bar16 == 0 ? kText : kDimText, number);
   }
 
   // the lanes
@@ -105,9 +105,9 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
   for (const Lane& lane : project.lanes) {
     const float w = laneWidth(lane, scale);
     const bool selected = lane.id == selectedLane;
-    const ImU32 blockFill = selected ? IM_COL32(64, 190, 168, 70) : IM_COL32(120, 134, 146, 50);
-    const ImU32 blockEdge = selected ? kAccent : IM_COL32(120, 134, 146, 140);
-    draw->AddLine(ImVec2(left, origin.y + headHeight), ImVec2(left, origin.y + headHeight + rowHeight * static_cast<float>(rows)), IM_COL32(60, 72, 84, 160));
+    const ImU32 blockFill = selected ? accentAlpha(70) : dimAlpha(50);
+    const ImU32 blockEdge = selected ? kAccent : dimAlpha(140);
+    draw->AddLine(ImVec2(left, origin.y + headHeight), ImVec2(left, origin.y + headHeight + rowHeight * static_cast<float>(rows)), lineAlpha(160));
     for (int r = first; r <= last; ++r) {
       const float y = origin.y + headHeight + static_cast<float>(r) * rowHeight;
       const int t0 = r * cell;
@@ -125,7 +125,7 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
           char label[48];
           std::snprintf(label, sizeof label, "%02X %s", pattern->index, pattern->name.c_str());
           draw->PushClipRect(ImVec2(left, y), ImVec2(left + w - 2 * scale, y + rowHeight), true);
-          draw->AddText(ImVec2(left + 5 * scale, y + scale), IM_COL32(215, 224, 230, 255), label);
+          draw->AddText(ImVec2(left + 5 * scale, y + scale), kText, label);
           draw->PopClipRect();
         }
       }
@@ -148,7 +148,7 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
     draw->PopClipRect();
     left += w;
   }
-  draw->AddLine(ImVec2(origin.x, headTop + headHeight - 1), ImVec2(origin.x + totalWidth, headTop + headHeight - 1), IM_COL32(60, 72, 84, 255));
+  draw->AddLine(ImVec2(origin.x, headTop + headHeight - 1), ImVec2(origin.x + totalWidth, headTop + headHeight - 1), kLine);
 
   ImGui::EndChild();
   return result;

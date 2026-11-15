@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
+#include <fstream>
 #include <map>
 #include <sstream>
 #include <memory>
@@ -62,7 +63,7 @@ void SDLCALL dialogDone(void* userdata, const char* const* files, int) {
 }
 
 struct Options {
-  std::string path, screenshot, press, clicks, envelope, dxnode, screen;   // clicks: "x,y;x,y" mouse clicks, one every 6 frames; envelope: "instrument.node" opens its envelope window   // press: keys to press one after another (for checking the window without a keyboard)
+  std::string path, screenshot, press, clicks, envelope, dxnode, screen, theme;   // clicks: "x,y;x,y" mouse clicks, one every 6 frames; envelope: "instrument.node" opens its envelope window   // press: keys to press one after another (for checking the window without a keyboard)
   double rate = 48000;
   int threads = 1, midiPort = 0, frames = 3, playFrom = -1, buffer = 0;
   bool useNull = false;
@@ -93,6 +94,7 @@ struct Session {
   app::EnvelopeWindow envelopes;
   app::DxWindow dx;
   app::GraphViewState graphView;
+  bool showMixer = true;                 // the mixer under the Song and Pattern screens (the status bar's toggle)
   bool lcdDragging = false;              // a drag in the header's song settings is in progress: its steps are one undo
   Screen screen = Screen::Pattern;       // the screen shown (the rail at the left)
   std::string instrument;                // the instrument shown on the Instrument screen
@@ -148,11 +150,32 @@ void drawMeter(const char* id, float level, ImVec2 size) {
   ImDrawList* draw = ImGui::GetWindowDrawList();
   const ImVec2 origin = ImGui::GetCursorScreenPos();
   ImGui::InvisibleButton(id, size);
-  draw->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + size.y), IM_COL32(30, 37, 44, 255), 2);
+  draw->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + size.y), app::kField, 2);
   const float db = level > 1e-5f ? 20.0f * std::log10(level) : -100.0f;
   const float fill = std::clamp((db + 60.0f) / 60.0f, 0.0f, 1.0f);
   draw->AddRectFilled(origin, ImVec2(origin.x + size.x * fill, origin.y + size.y),
                       db > -0.5f ? IM_COL32(220, 90, 70, 255) : app::kAccent, 2);
+}
+
+// The chosen theme is kept between runs in the user's preferences folder.
+std::string themeFile() {
+  char* dir = SDL_GetPrefPath("wax", "wax-app");
+  const std::string path = dir ? std::string(dir) + "theme.txt" : std::string();
+  if (dir) SDL_free(dir);
+  return path;
+}
+
+void saveTheme() {
+  const std::string path = themeFile();
+  if (path.empty()) return;
+  std::ofstream(path, std::ios::trunc) << app::themeName(app::themeIndex()) << "\n";
+}
+
+void loadTheme() {
+  const std::string path = themeFile();
+  std::ifstream file(path);
+  std::string name;
+  if (file && std::getline(file, name)) app::setThemeByName(name.c_str());
 }
 
 void drawFrame(Session* session, const Options& options, const std::string& status, float& meterL, float& meterR, std::map<ImGuiKey, int>& held,
@@ -234,20 +257,6 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     }
     ImGui::SameLine();
   }
-  if (session->audio) {
-    const double load = session->audio->load();
-    const bool tight = load > 0.7;
-    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(tight ? app::kWarm : app::kDimText), "cpu %.0f%%  late %ld",
-                       100 * load, session->audio->lateBuffers());
-    ImGui::SameLine();
-  }
-  ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "keys Z-M Q-I, octave %d ([ ])   midi: %s   audio: %s",
-                     octave, session->midiName.c_str(), session->audioName.c_str());
-  if (session->edit) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kWarm), "EDIT  (Enter to leave)");
-  else ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Enter to edit cells");
-  ImGui::SameLine();
-  ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "   undo: %s   redo: %s%s%s", doc.canUndo() ? doc.undoLabel().c_str() : "-",
-                     doc.canRedo() ? doc.redoLabel().c_str() : "-", session->editStatus.empty() ? "" : "   ", session->editStatus.c_str());
   // The File menu and the song settings (the web app's header LCD): bpm, swing, ticks per beat, beats per bar; len and time are read out.
   {
     const float hs = ImGui::GetStyle().FontScaleDpi;
@@ -380,8 +389,9 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (ImGui::IsKeyPressed(ImGuiKey_F10, false)) session->screen = Screen::Info;
     if (ImGui::IsKeyPressed(ImGuiKey_F11, false)) session->screen = Screen::Config;
   }
-  const bool mixerShown = session->screen == Screen::Song || session->screen == Screen::Pattern;
-  const float below = mixerShown ? -(app::mixerHeight() + 10) : 0.0f;
+  const bool mixerShown = session->showMixer && (session->screen == Screen::Song || session->screen == Screen::Pattern);
+  const float statusH = ImGui::GetTextLineHeightWithSpacing() + 6 * scale;
+  const float below = -(statusH + (mixerShown ? app::mixerHeight() + 10 : 0.0f));
   ImGui::BeginChild("rail", ImVec2(40 * scale, below), false);
   {
     const struct { const char* label; Screen screen; } entries[] = {{"Song", Screen::Song}, {"Pattern", Screen::Pattern}, {"Instrument", Screen::Instrument}, {"Info", Screen::Info}, {"Config", Screen::Config}};
@@ -472,6 +482,44 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       syncGraphs(doc, player.engine());
     }
   }
+  // The status bar, as the web's footer: what the keyboard is doing, the cursor, the last message, undo and redo; at the right the audio
+  // load, the mixer toggle, the limiter, panic and the theme.
+  {
+    ImGui::SetCursorPosY(ImGui::GetWindowHeight() - statusH + 3 * scale);
+    ImDrawList* bar = ImGui::GetWindowDrawList();
+    const ImVec2 at = ImGui::GetCursorScreenPos();
+    bar->AddLine(ImVec2(ImGui::GetWindowPos().x, at.y - 3 * scale), ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(), at.y - 3 * scale), app::lineAlpha(120));
+    if (session->edit) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kWarm), "EDIT");
+    else ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Enter: edit");
+    ImGui::SameLine(0, 14 * scale);
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "%s  tick %d  octave %d", selectedLane.c_str(), editor.tick(), octave);
+    ImGui::SameLine(0, 14 * scale);
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "undo: %s  redo: %s", doc.canUndo() ? doc.undoLabel().c_str() : "-", doc.canRedo() ? doc.redoLabel().c_str() : "-");
+    if (!session->editStatus.empty()) {
+      ImGui::SameLine(0, 14 * scale);
+      ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kWarm), "%s", session->editStatus.c_str());
+    }
+    ImGui::SameLine(std::max(ImGui::GetCursorPosX() + 20 * scale, ImGui::GetWindowWidth() - 520 * scale));
+    if (session->audio) {
+      const double load = session->audio->load();
+      ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(load > 0.7 ? app::kWarm : app::kDimText), "cpu %.0f%%  late %ld", 100 * load, session->audio->lateBuffers());
+      ImGui::SameLine(0, 14 * scale);
+    }
+    if (app::iconButton("mixer-toggle", "Mixer: a fader for each lane, along the bottom of the Song and Pattern screens", session->showMixer, 16)) session->showMixer = !session->showMixer;
+    ImGui::SameLine(0, 10 * scale);
+    const double limitOn = player.engine().registry().slotOf("master.m.limit") >= 0 ? player.engine().registry().get("master.m.limit") : 0;
+    if (app::textButton("Lim", limitOn > 0.5)) { doc.apply(std::make_unique<SetParam>("master", "m", "limit", limitOn > 0.5 ? 0.0 : 1.0)); syncParams(doc, player.engine()); }
+    ImGui::SameLine(0, 10 * scale);
+    if (app::textButton("panic")) player.ring().push({LiveCommand::AllOff, 0, 0});
+    ImGui::SameLine(0, 14 * scale);
+    ImGui::SetNextItemWidth(110 * scale);
+    if (ImGui::BeginCombo("##theme", app::themeName(app::themeIndex()), ImGuiComboFlags_HeightLarge)) {
+      for (int i = 0; i < app::themeCount(); i++) {
+        if (ImGui::Selectable(app::themeName(i), i == app::themeIndex())) { app::setTheme(i); saveTheme(); }
+      }
+      ImGui::EndCombo();
+    }
+  }
   ImGui::End();
 }
 
@@ -538,6 +586,7 @@ bool parse(int argc, char** argv, Options& o) {
     else if (a == "--envelope" && more) o.envelope = argv[++i];
     else if (a == "--dx" && more) o.dxnode = argv[++i];
     else if (a == "--screen" && more) o.screen = argv[++i];
+    else if (a == "--theme" && more) o.theme = argv[++i];
     else if (a == "--frames" && more) o.frames = std::max(1, std::atoi(argv[++i]));
     else if (a == "--play-from" && more) o.playFrom = std::atoi(argv[++i]);
     else if (a == "--null") o.useNull = true;
@@ -574,6 +623,8 @@ int main(int argc, char** argv) {
   float scale = SDL_GetWindowDisplayScale(window);
   if (scale <= 0) scale = 1;
   app::applyTheme(scale);
+  loadTheme();
+  if (!options.theme.empty()) app::setThemeByName(options.theme.c_str());
   ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
   ImGui_ImplSDLRenderer3_Init(renderer);
 

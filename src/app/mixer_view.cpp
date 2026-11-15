@@ -16,7 +16,7 @@ constexpr double kDbMin = -30, kDbMax = 6, kGainDefault = 0.8;
 constexpr int kMajorDb[] = {6, 0, -6, -12, -24};
 constexpr int kMinorDb[] = {3, -3, -9, -18};
 constexpr float kStripWidth = 73, kScaleWidth = 32, kCarveWidth = 150;
-constexpr ImU32 kRule = IM_COL32(60, 72, 84, 255);
+#define kRule kLine
 
 double posOfGain(double g) { return g < 0.0316 ? 0 : std::clamp((20 * std::log10(g) - kDbMin) / (kDbMax - kDbMin), 0.0, 1.0); }
 double gainAtPos(double p) { return p < 0.01 ? 0 : std::pow(10.0, (kDbMin + p * (kDbMax - kDbMin)) / 20); }
@@ -61,11 +61,11 @@ bool button(const char* id, const char* text, bool on, float width, float scale)
   ImGui::InvisibleButton(id, ImVec2(width, height));
   ImDrawList* draw = ImGui::GetWindowDrawList();
   const bool hovered = ImGui::IsItemHovered();
-  const ImU32 edge = on || hovered ? kAccent : IM_COL32(70, 100, 100, 255);
+  const ImU32 edge = on || hovered ? kAccent : kLine;
   if (on) draw->AddRectFilled(at, ImVec2(at.x + width, at.y + height), kAccent);
   draw->AddRect(at, ImVec2(at.x + width, at.y + height), edge);
   const float w = ImGui::CalcTextSize(text).x;
-  draw->AddText(ImVec2(at.x + (width - w) * 0.5f, at.y + scale), on ? IM_COL32(16, 22, 26, 255) : IM_COL32(205, 214, 222, 255), text);
+  draw->AddText(ImVec2(at.x + (width - w) * 0.5f, at.y + scale), on ? kField : kText, text);
   return ImGui::IsItemClicked();
 }
 
@@ -94,14 +94,14 @@ void carveBar(Context& cx, const char* label, const char* param, double lo, doub
   }
   const double unit = std::clamp((current(cx.engine, std::string("master.m.") + param, def) - lo) / (hi - lo), 0.0, 1.0);
   const float x = bar.x + barWidth * static_cast<float>(unit);
-  draw->AddRectFilled(bar, ImVec2(bar.x + barWidth, bar.y + height), IM_COL32(120, 134, 146, on ? 30 : 16));
-  draw->AddRectFilled(bar, ImVec2(x, bar.y + height), IM_COL32(64, 190, 168, on ? 70 : 30));
+  draw->AddRectFilled(bar, ImVec2(bar.x + barWidth, bar.y + height), dimAlpha(on ? 30 : 16));
+  draw->AddRectFilled(bar, ImVec2(x, bar.y + height), accentAlpha(on ? 70 : 30));
   draw->AddRectFilled(ImVec2(x - scale, bar.y), ImVec2(x + scale, bar.y + height), on ? kAccent : kDimText);
   char text[24];
   const double value = current(cx.engine, std::string("master.m.") + param, def);
   if (percent) std::snprintf(text, sizeof text, "%d%%", static_cast<int>(std::lround(value * 100)));
   else std::snprintf(text, sizeof text, format, value);
-  draw->AddText(ImVec2(bar.x + 4 * scale, bar.y), on ? IM_COL32(205, 214, 222, 255) : kDimText, text);
+  draw->AddText(ImVec2(bar.x + 4 * scale, bar.y), on ? kText : kDimText, text);
   ImGui::PopID();
   ImGui::SetCursorScreenPos(ImVec2(at.x, at.y + height + 3 * scale));
 }
@@ -189,14 +189,14 @@ bool drawMixer(MixerState& state, Document& doc, Engine& engine, const std::stri
         cx.setParam(lane.instrument, out->id, "gain", kGainDefault, false);
       }
       const double shown = current(engine, base + "gain", gain);
-      draw->AddRectFilled(ImVec2(track.x + 4 * scale, track.y), ImVec2(track.x + trackWidth - 4 * scale, track.y + trackHeight), IM_COL32(120, 134, 146, 26));
+      draw->AddRectFilled(ImVec2(track.x + 4 * scale, track.y), ImVec2(track.x + trackWidth - 4 * scale, track.y + trackHeight), dimAlpha(26));
       for (const int db : kMajorDb) {
         const float y = track.y + trackHeight * static_cast<float>(1 - posOfDb(db));
-        draw->AddLine(ImVec2(track.x + trackWidth - 5 * scale, y), ImVec2(track.x + trackWidth, y), IM_COL32(205, 214, 222, db == 0 ? 140 : 100));
+        draw->AddLine(ImVec2(track.x + trackWidth - 5 * scale, y), ImVec2(track.x + trackWidth, y), textAlpha(db == 0 ? 140 : 100));
       }
       for (const int db : kMinorDb) {
         const float y = track.y + trackHeight * static_cast<float>(1 - posOfDb(db));
-        draw->AddLine(ImVec2(track.x + trackWidth - 3 * scale, y), ImVec2(track.x + trackWidth, y), IM_COL32(205, 214, 222, 90));
+        draw->AddLine(ImVec2(track.x + trackWidth - 3 * scale, y), ImVec2(track.x + trackWidth, y), textAlpha(90));
       }
       // the instrument's level, drawn in the well: green, then amber, then red, uncovered from the bottom; grey when it is not in the mix
       {
@@ -211,9 +211,9 @@ bool drawMixer(MixerState& state, Document& doc, Engine& engine, const std::stri
           const float a = std::max(topY, to);
           if (from > a) draw->AddRectFilled(ImVec2(x0, a), ImVec2(x1, from), colour);
         };
-        band(bottom, amber, inMix ? IM_COL32(64, 190, 120, 230) : IM_COL32(120, 134, 146, 110));
-        band(amber, red, inMix ? IM_COL32(226, 190, 74, 230) : IM_COL32(120, 134, 146, 110));
-        band(red, track.y, inMix ? IM_COL32(226, 90, 74, 230) : IM_COL32(120, 134, 146, 110));
+        band(bottom, amber, inMix ? IM_COL32(64, 190, 120, 230) : dimAlpha(110));
+        band(amber, red, inMix ? IM_COL32(226, 190, 74, 230) : dimAlpha(110));
+        band(red, track.y, inMix ? IM_COL32(226, 90, 74, 230) : dimAlpha(110));
         if (held >= 1.0f && inMix) draw->AddCircleFilled(ImVec2(track.x + trackWidth * 0.5f, track.y - 4 * scale), 2.5f * scale, IM_COL32(226, 90, 74, 255));
       }
       const float capY = track.y + trackHeight * static_cast<float>(1 - posOfGain(shown));

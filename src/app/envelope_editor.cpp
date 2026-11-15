@@ -18,7 +18,7 @@ using bezier::Spline;
 
 constexpr ImU32 kPink = IM_COL32(236, 92, 152, 255);
 constexpr ImU32 kArm = IM_COL32(76, 186, 224, 255);
-constexpr ImU32 kInk = IM_COL32(205, 214, 222, 255);
+#define kInk kText
 constexpr double kLogK = 50;
 constexpr double kMinStep = 0.004;
 

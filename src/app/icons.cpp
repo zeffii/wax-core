@@ -73,7 +73,7 @@ bool iconButton(const char* name, const char* tip, bool on, float size) {
   ImGui::PopID();
   const bool hovered = ImGui::IsItemHovered();
   const ImVec2 min = ImGui::GetItemRectMin(), max = ImGui::GetItemRectMax();
-  const ImU32 tint = on ? kAccent : hovered ? IM_COL32(214, 224, 230, 255) : kDimText;
+  const ImU32 tint = on ? kAccent : hovered ? kText : kDimText;
   SDL_Texture* texture = textureFor(name, std::max(8, static_cast<int>(std::lround(side))));
   if (texture) {
     ImGui::GetWindowDrawList()->AddImage(static_cast<ImTextureID>(reinterpret_cast<intptr_t>(texture)), min, max, ImVec2(0, 0), ImVec2(1, 1), tint);

@@ -55,12 +55,12 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     if (a == tiles.end() || b == tiles.end()) continue;
     const ImVec2 p0(a->second.max.x, (a->second.min.y + a->second.max.y) / 2), p1(b->second.min.x, (b->second.min.y + b->second.max.y) / 2);
     const float k = std::max(24 * scale, std::fabs(p1.x - p0.x) * 0.4f);
-    dl->AddBezierCubic(p0, ImVec2(p0.x + k, p0.y), ImVec2(p1.x - k, p1.y), p1, IM_COL32(120, 134, 146, 190), 1.2f);
+    dl->AddBezierCubic(p0, ImVec2(p0.x + k, p0.y), ImVec2(p1.x - k, p1.y), p1, dimAlpha(190), 1.2f);
     dl->AddCircleFilled(p1, 2.5f * scale, kDimText);
     // the dot in the middle of the wire cuts it
     const ImVec2 mid((p0.x + p1.x) / 2, (p0.y + p1.y) / 2);
     const bool near = std::hypot(ImGui::GetIO().MousePos.x - mid.x, ImGui::GetIO().MousePos.y - mid.y) < 7 * scale && ImGui::IsWindowHovered();
-    dl->AddCircle(mid, 3.5f * scale, near ? kWarm : IM_COL32(120, 134, 146, 120), 12, 1.0f);
+    dl->AddCircle(mid, 3.5f * scale, near ? kWarm : dimAlpha(120), 12, 1.0f);
     if (near && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) { doc.apply(std::make_unique<Disconnect>(instrumentId, c.from, c.to)); moved = true; rewired = true; break; }
   }
   const NodeRegistry& types = builtinNodes();
@@ -70,8 +70,8 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
   for (const GraphNode& n : graph.nodes) {
     const Tile& t = tiles[n.id];
     const bool on = n.id == picked;
-    const ImU32 line = on ? kAccent : IM_COL32(150, 165, 176, 255);
-    const ImU32 fill = IM_COL32(20, 26, 32, 255);
+    const ImU32 line = on ? kAccent : kSoft;
+    const ImU32 fill = kField;
     const ImVec2 mid((t.min.x + t.max.x) / 2, (t.min.y + t.max.y) / 2);
     if (n.type == "out") {
       // the speaker: a small box and a cone
@@ -107,7 +107,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     if (n.type == "out") continue;   // the output has nothing to pull from
     const ImVec2 dot(t.max.x + 7 * scale, mid.y);
     const bool overDot = std::hypot(io.MousePos.x - dot.x, io.MousePos.y - dot.y) < 7 * scale && ImGui::IsWindowHovered();
-    dl->AddCircleFilled(dot, 3 * scale, state.wiring == n.id || overDot ? kWarm : IM_COL32(120, 134, 146, 160));
+    dl->AddCircleFilled(dot, 3 * scale, state.wiring == n.id || overDot ? kWarm : dimAlpha(160));
     if (overDot && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) { state.wiring = n.id; state.held.clear(); }
   }
   if (!state.wiring.empty()) {

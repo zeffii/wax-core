@@ -84,8 +84,8 @@ SliderResult slider(const char* id, const char* label, double& value, const Slid
   const float mid = track.y + trackHeight * 0.5f;
   const float x = track.x + width * static_cast<float>(unit);
   const ImU32 bar = active || hovered ? kWarm : kAccent;
-  draw->AddRectFilled(ImVec2(track.x, mid - 4 * scale), ImVec2(x, mid + 4 * scale), IM_COL32(64, 190, 168, 34));
-  draw->AddLine(ImVec2(track.x, mid), ImVec2(track.x + width, mid), IM_COL32(70, 84, 98, 255), 1);
+  draw->AddRectFilled(ImVec2(track.x, mid - 4 * scale), ImVec2(x, mid + 4 * scale), accentAlpha(34));
+  draw->AddLine(ImVec2(track.x, mid), ImVec2(track.x + width, mid), kLine, 1);
   draw->AddRectFilled(ImVec2(x - std::max(1.0f, scale), mid - 7 * scale), ImVec2(x + std::max(1.0f, scale), mid + 7 * scale), bar);
 
   // the name on the left, the value on the right
@@ -103,7 +103,7 @@ SliderResult slider(const char* id, const char* label, double& value, const Slid
 void groupDivider(float height) {
   const ImVec2 at = ImGui::GetCursorScreenPos();
   const float scale = ImGui::GetStyle().FontScaleDpi;
-  ImGui::GetWindowDrawList()->AddLine(ImVec2(at.x + 6 * scale, at.y), ImVec2(at.x + 6 * scale, at.y + height), IM_COL32(60, 72, 84, 255), 1);
+  ImGui::GetWindowDrawList()->AddLine(ImVec2(at.x + 6 * scale, at.y), ImVec2(at.x + 6 * scale, at.y + height), kLine, 1);
   ImGui::Dummy(ImVec2(12 * scale, height));
 }
 
@@ -115,7 +115,7 @@ bool textButton(const char* label, bool on) {
   ImGui::PopID();
   const bool hovered = ImGui::IsItemHovered();
   if (hovered) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-  ImGui::GetWindowDrawList()->AddText(at, on ? kAccent : hovered ? IM_COL32(205, 214, 222, 255) : kDimText, label);
+  ImGui::GetWindowDrawList()->AddText(at, on ? kAccent : hovered ? kText : kDimText, label);
   return ImGui::IsItemClicked();
 }
 

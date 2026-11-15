@@ -93,7 +93,7 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
     const float w = ImGui::GetContentRegionAvail().x, h = ImGui::GetTextLineHeight() + 4 * scale;
     ImDrawList* dl = ImGui::GetWindowDrawList();
     dl->AddRectFilled(p, ImVec2(p.x + w, p.y + h), kAccent);
-    dl->AddText(ImVec2(p.x + 6 * scale, p.y + 2 * scale), IM_COL32(12, 16, 20, 255), (picked->id + "  " + picked->type).c_str());
+    dl->AddText(ImVec2(p.x + 6 * scale, p.y + 2 * scale), kHiFg, (picked->id + "  " + picked->type).c_str());
     ImGui::Dummy(ImVec2(w, h));
   }
   if (!drawingsOf(picked->type).empty() && textButton("draw envelopes")) state.drawNode = picked->id;
@@ -121,7 +121,7 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
     // the name, as many characters as fit
     std::string name = spec.name;
     while (name.size() > 1 && ImGui::CalcTextSize(name.c_str()).x > nameW - 6 * scale) name.pop_back();
-    dl->AddText(ImVec2(p.x + 2 * scale, p.y + 1.5f * scale), dim ? IM_COL32(80, 90, 100, 255) : kDimText, name.c_str());
+    dl->AddText(ImVec2(p.x + 2 * scale, p.y + 1.5f * scale), dim ? kDimText : kDimText, name.c_str());
 
     ImGui::PushID(spec.name.c_str());
     ImGui::SetCursorScreenPos(barMin);
@@ -150,11 +150,11 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
     const double shown = set ? next : value;
 
     // the bar: a faint fill to the value, one thin accent mark, the value written inside
-    dl->AddRectFilled(barMin, barMax, IM_COL32(255, 255, 255, hovered ? 14 : 8));
+    dl->AddRectFilled(barMin, barMax, textAlpha(hovered ? 14 : 8));
     const float x = barMin.x + static_cast<float>(toPos(spec, shown)) * (barMax.x - barMin.x);
-    dl->AddRectFilled(barMin, ImVec2(x, barMax.y), IM_COL32(64, 190, 168, dim ? 20 : 48));
+    dl->AddRectFilled(barMin, ImVec2(x, barMax.y), accentAlpha(dim ? 20 : 48));
     dl->AddRectFilled(ImVec2(std::min(x, barMax.x - 2 * scale), barMin.y), ImVec2(std::min(x, barMax.x - 2 * scale) + 2 * scale, barMax.y), dim ? kDimText : kAccent);
-    dl->AddText(ImVec2(barMin.x + 4 * scale, p.y + 1.5f * scale), dim ? IM_COL32(110, 122, 132, 255) : IM_COL32(214, 224, 230, 255), displayValue(picked->type, spec, shown).c_str());
+    dl->AddText(ImVec2(barMin.x + 4 * scale, p.y + 1.5f * scale), dim ? kDimText : kText, displayValue(picked->type, spec, shown).c_str());
 
     if (ImGui::BeginPopupContextItem("rowmenu")) {
       static char text[64];
