@@ -26,7 +26,7 @@ int placements(const Lane& lane, const std::string& id) {
 
 }  // namespace
 
-PatternListResult drawPatternList(PatternListState& state, const Lane* lane, float height) {
+PatternListResult drawPatternList(PatternListState& state, const Lane* lane, float /*height: the list now fills what the controls leave*/) {
   PatternListResult result;
   const float scale = ImGui::GetStyle().FontScaleDpi;
   ImGui::BeginGroup();
