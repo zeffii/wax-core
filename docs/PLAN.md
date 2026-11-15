@@ -120,3 +120,20 @@ Test helpers: `wax-app song.wax --null --envelope inst.node --clicks "x,y;x,y" -
 - Graph view (`app/graph_view`): tiles + wires of the lane's instrument above the param panel; click picks the node, drag moves it (MoveNode, saved as x/y). Wiring: pull from a tile's right dot to another tile to connect (first free ports), click the dot on a wire to cut it, right-click a tile to delete it; all undoable and sent live (Connect/Disconnect/DeleteNode, `Engine::sendGraph`: the instrument is recompiled on the window thread and swapped in at a block start; notes sounding in it are cut). Add node: right-click empty space in the graph for a filtered list of types (AddNode, live: its parameter slots are allocated when the instrument is recompiled). Still to do: choosing ports on multi-port nodes, tile shapes by role from the web, zoom/pan.
 
 - Parameter view (`app/param_panel`, `app/units`): the web's docked list at the right of the lanes: inverted title strip, a row per parameter (name, bar with the value inside in real units from the generated units table), grip to resize (double-click resets), drag/wheel/double-click-reset, right-click menu to type a value (`2.5k`, `40%`) or reset; wired parameters are dimmed. Still to do: keys (Up/Down/Left/Right, only when the dock is hovered so keyjazz keeps playing), expose as pattern column, add a port, pin, tick snapping for time parameters, tooltips.
+
+## Web app parity map (read from webtracker master, build 774, 2026-11-15)
+
+The web app is built as screens behind a left rail, a header, and docks. The native window follows the same shape. State of each:
+
+- **Rail** (icons in the web, words here): Song F1, Pattern F2, Instrument F3, Sample F4, Script, Shader, DSP, Node Sequencer, Info F10, Config F11, plus Shortcuts, Manual, About.
+  Native: Song, Pattern, Instrument, Info (placeholder), Config (placeholder) with the F keys. Missing: Sample (piano roll/spectrogram/slicer), Script, Shader, DSP view, Node Sequencer, Manual/About.
+- **Header**: File menu (Open, Open from link, New, New keeping instruments, Save, Export WAV/MP4, Backups, save folder), play, pause, rec, follow, loop (Ctrl+B/E/L), then the LCD: len, bpm, swing, ticks per beat, beats per bar, time; project name.
+  Native: Play/Stop, Follow, status text, Ctrl+O/S. Missing: File menu, pause, rec, loop, editable LCD fields, project name, export.
+- **Song screen** (arrangement): vertical sequence with a pattern list at the side (width grip), lane rename/move buttons, pattern options. Native: the vertical sequence only.
+- **Pattern screen**: the grid with the shortcut sheet beside it (move, select, copy/paste, loop, Space writes the live value, etc.). Native: lane tabs and grid, typing and keyjazz; selection/copy/paste, loop keys and the live-value write are missing.
+- **Instrument screen**: instrument list on the left (voices, tracks), the graph in the middle, parameter dock at the right, node help (Shift+F1), exposed-parameter dock. Native: list, graph (tiles, wires, add/cut/delete live), param dock. Missing: voices/tracks fields, node help, exposed dock, instrument add/remove, meta machines.
+- **Mixer dock**: native mixer under Song and Pattern.
+- **Sample screen**: sample browser, roll bar, slicer. Not started.
+- **Docks and floats** to match later: scope rail, meters, perf meter, command bar (`|`), bounce dialog, console.
+
+What the user will most likely ask for next, in order: (1) the header's File menu and LCD fields, (2) the pattern screen's side shortcut sheet and selection/copy/paste, (3) the Song screen's pattern list at the side, (4) instrument list fields and node help, (5) the Sample screen, (6) look and feel tweaks towards the web (spacing, thin lines, flat text, no frames).

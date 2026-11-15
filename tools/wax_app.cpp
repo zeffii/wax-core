@@ -22,6 +22,7 @@
 #include "app/envelope_window.h"
 #include "app/dx_window.h"
 #include "app/graph_view.h"
+#include "app/widgets.h"
 #include "app/mixer_view.h"
 #include "app/param_panel.h"
 #include "app/pattern_view.h"
@@ -60,13 +61,15 @@ void SDLCALL dialogDone(void* userdata, const char* const* files, int) {
 }
 
 struct Options {
-  std::string path, screenshot, press, clicks, envelope, dxnode;   // clicks: "x,y;x,y" mouse clicks, one every 6 frames; envelope: "instrument.node" opens its envelope window   // press: keys to press one after another (for checking the window without a keyboard)
+  std::string path, screenshot, press, clicks, envelope, dxnode, screen;   // clicks: "x,y;x,y" mouse clicks, one every 6 frames; envelope: "instrument.node" opens its envelope window   // press: keys to press one after another (for checking the window without a keyboard)
   double rate = 48000;
   int threads = 1, midiPort = 0, frames = 3, playFrom = -1, buffer = 0;
   bool useNull = false;
 };
 
 // One song, loaded: the project, the engine that plays it, the sound card and the MIDI input.
+enum class Screen { Song, Pattern, Instrument, Info, Config };
+
 struct Session {
   Project project;
   std::unique_ptr<Player> player;
@@ -89,7 +92,8 @@ struct Session {
   app::EnvelopeWindow envelopes;
   app::DxWindow dx;
   app::GraphViewState graphView;
-  bool showGraph = true;
+  Screen screen = Screen::Pattern;       // the screen shown (the rail at the left)
+  std::string instrument;                // the instrument shown on the Instrument screen
   std::string wantLane;                  // a lane the arrangement asked for; its tab opens next frame
   int wantTick = -1;                     // and the cursor goes here
   std::string path;                      // the file this song was opened from, where Ctrl+S saves it
@@ -316,63 +320,91 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     }
   }
 
-  // The lanes (the panel below them takes the bottom of the window).
-  const float panelHeight = 3.6f * ImGui::GetTextLineHeightWithSpacing() + app::mixerHeight() + 12;
-  const float sequenceSpan = std::min(app::sequenceWidth(doc.project()), ImGui::GetContentRegionAvail().x * 0.45f);
-  ImGui::BeginChild("sequenceArea", ImVec2(sequenceSpan, -panelHeight), false);
+  // The screens, as in the web app's rail: Song (the arrangement), Pattern, Instrument, Info, Config. F1, F2, F3, F10 and F11 switch.
+  const float scale = ImGui::GetStyle().FontScaleDpi;
+  if (!io.WantTextInput) {
+    if (ImGui::IsKeyPressed(ImGuiKey_F1, false)) session->screen = Screen::Song;
+    if (ImGui::IsKeyPressed(ImGuiKey_F2, false)) session->screen = Screen::Pattern;
+    if (ImGui::IsKeyPressed(ImGuiKey_F3, false)) session->screen = Screen::Instrument;
+    if (ImGui::IsKeyPressed(ImGuiKey_F10, false)) session->screen = Screen::Info;
+    if (ImGui::IsKeyPressed(ImGuiKey_F11, false)) session->screen = Screen::Config;
+  }
+  const bool mixerShown = session->screen == Screen::Song || session->screen == Screen::Pattern;
+  const float below = mixerShown ? -(app::mixerHeight() + 10) : 0.0f;
+  ImGui::BeginChild("rail", ImVec2(92 * scale, below), false);
   {
-    const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, session->edit ? editor.tick() : -1, follow && playing && !session->edit);
-    if (!hit.lane.empty()) { session->wantLane = hit.lane; session->wantTick = hit.tick; }
+    const struct { const char* label; Screen screen; } entries[] = {{"Song", Screen::Song}, {"Pattern", Screen::Pattern}, {"Instrument", Screen::Instrument}, {"Info", Screen::Info}, {"Config", Screen::Config}};
+    for (const auto& entry : entries) if (app::textButton(entry.label, session->screen == entry.screen)) session->screen = entry.screen;
   }
   ImGui::EndChild();
   ImGui::SameLine();
-  ImGui::BeginChild("lanesArea", ImVec2(-app::paramDockSpan(session->panel), -panelHeight), false);
+  ImGui::BeginChild("screen", ImVec2(0, below), false);
   std::string laneInstrument;
-  if (ImGui::BeginTabBar("lanes")) {
-    for (const Lane& lane : doc.project().lanes) {
-      const std::string label = lane.id + (lane.instrument == lane.id ? "" : "  " + lane.instrument);
-      ImGuiTabItemFlags tabFlags = ImGuiTabItemFlags_None;
-      if (!session->pickedTab && lane.id != kMaster) { tabFlags |= ImGuiTabItemFlags_SetSelected; session->pickedTab = true; }
-      if (lane.id == session->wantLane) tabFlags |= ImGuiTabItemFlags_SetSelected;
-      if (ImGui::BeginTabItem(label.c_str(), nullptr, tabFlags)) {
-        selectedLane = lane.id;
-        laneInstrument = lane.instrument;
-        editor.setLane(lane.id, session->player->engine().laneColumns(lane.id));
-        if (lane.id == session->wantLane) {
-          if (session->wantTick >= 0) { editor.moveTo(session->wantTick, editor.cell()); session->scrollToCursor = true; }
-          session->wantLane.clear();
-          session->wantTick = -1;
+  for (const Lane& lane : doc.project().lanes) if (lane.id == selectedLane) laneInstrument = lane.instrument;
+  if (session->screen == Screen::Song) {
+    const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, session->edit ? editor.tick() : -1, follow && playing && !session->edit);
+    if (!hit.lane.empty()) { session->wantLane = hit.lane; session->wantTick = hit.tick; selectedLane = hit.lane; }
+  } else if (session->screen == Screen::Pattern) {
+    if (ImGui::BeginTabBar("lanes")) {
+      for (const Lane& lane : doc.project().lanes) {
+        const std::string label = lane.id + (lane.instrument == lane.id ? "" : "  " + lane.instrument);
+        ImGuiTabItemFlags tabFlags = ImGuiTabItemFlags_None;
+        if (!session->pickedTab && lane.id != kMaster) { tabFlags |= ImGuiTabItemFlags_SetSelected; session->pickedTab = true; }
+        if (lane.id == session->wantLane) tabFlags |= ImGuiTabItemFlags_SetSelected;
+        if (ImGui::BeginTabItem(label.c_str(), nullptr, tabFlags)) {
+          selectedLane = lane.id;
+          laneInstrument = lane.instrument;
+          editor.setLane(lane.id, session->player->engine().laneColumns(lane.id));
+          if (lane.id == session->wantLane) {
+            if (session->wantTick >= 0) { editor.moveTo(session->wantTick, editor.cell()); session->scrollToCursor = true; }
+            session->wantLane.clear();
+            session->wantTick = -1;
+          }
+          app::CursorView cursor;
+          cursor.show = session->edit;
+          cursor.tick = editor.tick();
+          cursor.cell = editor.cell();
+          cursor.scrollTo = session->scrollToCursor;
+          session->scrollToCursor = false;
+          const app::PatternViewResult result = app::drawPatternView(
+              session->rows[lane.id], session->player->engine().columnLabels(lane.id), song.ticksPerBeat, song.beatsPerBar,
+              playing ? tick : -1, follow && playing && !session->edit, cursor);
+          if (result.clickedTick >= 0) playFromRequest = result.clickedTick;
+          if (result.cell >= 0) editor.moveTo(result.cellTick, result.cell);
+          ImGui::EndTabItem();
         }
-        app::CursorView cursor;
-        cursor.show = session->edit;
-        cursor.tick = editor.tick();
-        cursor.cell = editor.cell();
-        cursor.scrollTo = session->scrollToCursor;
-        session->scrollToCursor = false;
-        const app::PatternViewResult result = app::drawPatternView(
-            session->rows[lane.id], session->player->engine().columnLabels(lane.id), song.ticksPerBeat, song.beatsPerBar,
-            playing ? tick : -1, follow && playing && !session->edit, cursor);
-        if (result.clickedTick >= 0) playFromRequest = result.clickedTick;
-        if (result.cell >= 0) editor.moveTo(result.cellTick, result.cell);
-        ImGui::EndTabItem();
       }
+      ImGui::EndTabBar();
     }
-    ImGui::EndTabBar();
+  } else if (session->screen == Screen::Instrument) {
+    // the instruments as flat text on the left, the graph in the middle, the parameter dock at the right
+    if (session->instrument.empty()) session->instrument = !laneInstrument.empty() ? laneInstrument : session->playable.empty() ? std::string(kMaster) : session->playable.front();
+    ImGui::BeginChild("instlist", ImVec2(150 * scale, 0), false);
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Instrument");
+    for (const Instrument& inst : doc.project().instruments) {
+      if (app::textButton(inst.id.c_str(), inst.id == session->instrument)) session->instrument = inst.id;
+    }
+    ImGui::EndChild();
+    ImGui::SameLine();
+    laneInstrument = session->instrument;
+    ImGui::BeginChild("instmain", ImVec2(-app::paramDockSpan(session->panel), 0), false);
+    if (session->panel.instrument != laneInstrument) { session->panel.instrument = laneInstrument; session->panel.node.clear(); }
+    app::drawGraphView(session->graphView, doc, laneInstrument, session->panel.node, 0);
+    ImGui::EndChild();
+    ImGui::SameLine();
+    if (app::drawParamPanel(session->panel, doc, player.engine(), laneInstrument, 0)) syncParams(doc, player.engine());
+  } else if (session->screen == Screen::Info) {
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Song info: notes, credits, greetings (to come).");
+  } else {
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Config (to come).");
   }
   ImGui::EndChild();
-  ImGui::SameLine();
-  if (!laneInstrument.empty() && app::drawParamPanel(session->panel, doc, player.engine(), laneInstrument, -panelHeight)) syncParams(doc, player.engine());
-  ImGui::Separator();
-  if (!laneInstrument.empty() && session->showGraph) {
-    if (session->panel.instrument != laneInstrument) { session->panel.instrument = laneInstrument; session->panel.node.clear(); }
-    app::drawGraphView(session->graphView, doc, laneInstrument, session->panel.node, 3.6f * ImGui::GetTextLineHeightWithSpacing());
-  }
   if (!session->panel.drawNode.empty()) { app::showEnvelopes(session->envelopes, laneInstrument, session->panel.drawNode); session->panel.drawNode.clear(); }
   ImGui::Separator();
   if (app::drawEnvelopeWindow(session->envelopes, doc, player.engine())) syncData(doc, player.engine());
   if (!session->panel.dxNode.empty()) { app::showDx(session->dx, laneInstrument, session->panel.dxNode); session->panel.dxNode.clear(); }
   if (app::drawDxWindow(session->dx, doc, player.engine())) { syncData(doc, player.engine()); syncParams(doc, player.engine()); }
-  if (app::drawMixer(session->mixer, doc, player.engine(), selectedLane)) {
+  if (mixerShown && app::drawMixer(session->mixer, doc, player.engine(), selectedLane)) {
     syncParams(doc, player.engine());
     const std::vector<std::string> problems = syncLanes(doc, player.engine());
     if (!problems.empty()) session->editStatus = problems.front();
@@ -450,6 +482,7 @@ bool parse(int argc, char** argv, Options& o) {
     else if (a == "--clicks" && more) o.clicks = argv[++i];
     else if (a == "--envelope" && more) o.envelope = argv[++i];
     else if (a == "--dx" && more) o.dxnode = argv[++i];
+    else if (a == "--screen" && more) o.screen = argv[++i];
     else if (a == "--frames" && more) o.frames = std::max(1, std::atoi(argv[++i]));
     else if (a == "--play-from" && more) o.playFrom = std::atoi(argv[++i]);
     else if (a == "--null") o.useNull = true;
@@ -494,6 +527,10 @@ int main(int argc, char** argv) {
     session.reset();   // the old sound stops before the new song is built
     try {
       session = std::make_unique<Session>(path, options);
+      if (options.screen == "song") session->screen = Screen::Song;
+      else if (options.screen == "instrument") session->screen = Screen::Instrument;
+      else if (options.screen == "info") session->screen = Screen::Info;
+      else if (options.screen == "config") session->screen = Screen::Config;
       std::string title = "Wax - " + session->project.song.name;
       SDL_SetWindowTitle(window, title.c_str());
       status.clear();
