@@ -52,18 +52,18 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
 
   const NodeType* type = types.find(picked->type);
   bool changed = false;
-  ImGui::BeginChild("knobs", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
+  ImGui::BeginChild("sliders", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
   for (std::size_t i = 0; i < type->params.size(); ++i) {
     const ParamSpec& spec = type->params[i];
     if (spec.name == "bypass") continue;
     const std::string address = instrumentId + "." + picked->id + "." + spec.name;
     double value = engine.registry().slotOf(address) >= 0 ? engine.registry().get(address) : picked->param(spec.name, spec.def);
-    KnobSpec k;
+    SliderSpec k;
     k.min = spec.min; k.max = spec.max; k.def = spec.def; k.isInt = spec.isInt;
     k.log = spec.min > 0 && spec.max / spec.min >= 100;
     if (i) ImGui::SameLine(0, 12);
     ImGui::BeginGroup();
-    const KnobResult r = knob(address.c_str(), spec.name.c_str(), value, k);
+    const SliderResult r = slider(address.c_str(), spec.name.c_str(), value, k);
     ImGui::EndGroup();
     if (r.changed) {
       doc.apply(std::make_unique<SetParam>(instrumentId, picked->id, spec.name, value), state.dragging);

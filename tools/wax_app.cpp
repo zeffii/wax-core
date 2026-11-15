@@ -18,7 +18,7 @@
 #include <string>
 #include <vector>
 
-#include "app/arrangement_view.h"
+#include "app/sequence_view.h"
 #include "app/param_panel.h"
 #include "app/pattern_view.h"
 #include "app/theme.h"
@@ -308,12 +308,15 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   }
 
   // The lanes (the panel below them takes the bottom of the window).
-  const float panelHeight = 118 * ImGui::GetIO().FontGlobalScale + 3 * ImGui::GetTextLineHeightWithSpacing();
+  const float panelHeight = 6.0f * ImGui::GetTextLineHeightWithSpacing();
+  const float sequenceSpan = std::min(app::sequenceWidth(doc.project()), ImGui::GetContentRegionAvail().x * 0.45f);
+  ImGui::BeginChild("sequenceArea", ImVec2(sequenceSpan, -panelHeight), false);
   {
-    const int playing_ = playing ? tick : -1;
-    const app::ArrangementResult hit = app::drawArrangement(doc.project(), selectedLane, playing_, session->edit ? editor.tick() : -1);
+    const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, session->edit ? editor.tick() : -1, follow && playing && !session->edit);
     if (!hit.lane.empty()) { session->wantLane = hit.lane; session->wantTick = hit.tick; }
   }
+  ImGui::EndChild();
+  ImGui::SameLine();
   ImGui::BeginChild("lanesArea", ImVec2(0, -panelHeight), false);
   std::string laneInstrument;
   if (ImGui::BeginTabBar("lanes")) {
