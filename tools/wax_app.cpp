@@ -18,6 +18,7 @@
 #include <string>
 #include <vector>
 
+#include "app/arrangement_view.h"
 #include "app/param_panel.h"
 #include "app/pattern_view.h"
 #include "app/theme.h"
@@ -80,6 +81,8 @@ struct Session {
   bool scrollToCursor = false;
   std::string editStatus;
   app::ParamPanelState panel;
+  std::string wantLane;                  // a lane the arrangement asked for; its tab opens next frame
+  int wantTick = -1;                     // and the cursor goes here
   std::string path;                      // the file this song was opened from, where Ctrl+S saves it
 
   Session(const std::string& filePath, const Options& options) : project(loadProject(filePath)), path(filePath) {
@@ -306,6 +309,11 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
 
   // The lanes (the panel below them takes the bottom of the window).
   const float panelHeight = 118 * ImGui::GetIO().FontGlobalScale + 3 * ImGui::GetTextLineHeightWithSpacing();
+  {
+    const int playing_ = playing ? tick : -1;
+    const app::ArrangementResult hit = app::drawArrangement(doc.project(), selectedLane, playing_, session->edit ? editor.tick() : -1);
+    if (!hit.lane.empty()) { session->wantLane = hit.lane; session->wantTick = hit.tick; }
+  }
   ImGui::BeginChild("lanesArea", ImVec2(0, -panelHeight), false);
   std::string laneInstrument;
   if (ImGui::BeginTabBar("lanes")) {
@@ -313,10 +321,16 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       const std::string label = lane.id + (lane.instrument == lane.id ? "" : "  " + lane.instrument);
       ImGuiTabItemFlags tabFlags = ImGuiTabItemFlags_None;
       if (!session->pickedTab && lane.id != kMaster) { tabFlags |= ImGuiTabItemFlags_SetSelected; session->pickedTab = true; }
+      if (lane.id == session->wantLane) tabFlags |= ImGuiTabItemFlags_SetSelected;
       if (ImGui::BeginTabItem(label.c_str(), nullptr, tabFlags)) {
         selectedLane = lane.id;
         laneInstrument = lane.instrument;
         editor.setLane(lane.id, session->player->engine().laneColumns(lane.id));
+        if (lane.id == session->wantLane) {
+          if (session->wantTick >= 0) { editor.moveTo(session->wantTick, editor.cell()); session->scrollToCursor = true; }
+          session->wantLane.clear();
+          session->wantTick = -1;
+        }
         app::CursorView cursor;
         cursor.show = session->edit;
         cursor.tick = editor.tick();
