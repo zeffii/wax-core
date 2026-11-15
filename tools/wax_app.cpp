@@ -297,6 +297,23 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
 
   bool requestSave = false;   // the File menu or Ctrl+S
 
+  {   // the File menu, then the transport, the project name and the song settings (the web app's header LCD) all on one line
+    const float hs = ImGui::GetStyle().FontScaleDpi;
+    ImGui::AlignTextToFramePadding();   // the words in this row sit on the same baseline as the text inside the boxes
+    const float lineY = ImGui::GetCursorPosY();
+    ImGui::SetCursorPosY(lineY + ImGui::GetStyle().FramePadding.y);   // (a text button does not apply the baseline offset itself)
+    if (app::textButton("File")) ImGui::OpenPopup("filemenu");
+    ImGui::SameLine(0, 0); ImGui::SetCursorPosY(lineY);
+    if (ImGui::BeginPopup("filemenu")) {
+      if (app::textButton("Open...  Ctrl+O")) { gRequest = DialogRequest::Open; ImGui::CloseCurrentPopup(); }
+      if (app::textButton("New")) { gRequest = DialogRequest::New; ImGui::CloseCurrentPopup(); }
+      if (app::textButton("Save  Ctrl+S")) { requestSave = true; ImGui::CloseCurrentPopup(); }
+      if (app::textButton("Save as...  Ctrl+Shift+S")) { gRequest = DialogRequest::SaveAs; ImGui::CloseCurrentPopup(); }
+      if (app::textButton("Export WAV...")) { gRequest = DialogRequest::Export; ImGui::CloseCurrentPopup(); }
+      ImGui::EndPopup();
+    }
+    ImGui::SameLine(0, 18 * hs);
+  }
   // The transport.
   const bool playing = player.playing();
   if (app::iconButton("play", playing ? "Stop (F8)" : session->pausedAt >= 0 ? "Carry on from the pause (F5)" : "Play (F5)", playing, 20)) {
@@ -330,31 +347,10 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (ImGui::IsItemDeactivatedAfterEdit() && session->projectName != song.name) doc.apply(std::make_unique<SetSongName>(session->projectName));
     ImGui::SameLine(0, 16 * ImGui::GetStyle().FontScaleDpi);
   }
-  ImGui::SameLine(ImGui::GetWindowWidth() - 260 * ImGui::GetStyle().FontScaleDpi);
-  meterL = std::max(player.levelLeft(), meterL * 0.9f);   // falls back a little each frame
-  meterR = std::max(player.levelRight(), meterR * 0.9f);
-  ImGui::BeginGroup();
-  drawMeter("##l", meterL, ImVec2(200 * ImGui::GetStyle().FontScaleDpi, 8));
-  drawMeter("##r", meterR, ImVec2(200 * ImGui::GetStyle().FontScaleDpi, 8));
-  ImGui::EndGroup();
 
-  // The File menu and the song settings (the web app's header LCD): bpm, swing, tpb and bar are spin boxes; len and time are read out.
+  // The song settings: bpm, swing, tpb and bar are spin boxes; len and time are read out.
   {
     const float hs = ImGui::GetStyle().FontScaleDpi;
-    ImGui::AlignTextToFramePadding();   // the words in this row sit on the same baseline as the text inside the boxes
-    const float lineY = ImGui::GetCursorPosY();
-    ImGui::SetCursorPosY(lineY + ImGui::GetStyle().FramePadding.y);   // (a text button does not apply the baseline offset itself)
-    if (app::textButton("File")) ImGui::OpenPopup("filemenu");
-    ImGui::SameLine(0, 0); ImGui::SetCursorPosY(lineY);
-    if (ImGui::BeginPopup("filemenu")) {
-      if (app::textButton("Open...  Ctrl+O")) { gRequest = DialogRequest::Open; ImGui::CloseCurrentPopup(); }
-      if (app::textButton("New")) { gRequest = DialogRequest::New; ImGui::CloseCurrentPopup(); }
-      if (app::textButton("Save  Ctrl+S")) { requestSave = true; ImGui::CloseCurrentPopup(); }
-      if (app::textButton("Save as...  Ctrl+Shift+S")) { gRequest = DialogRequest::SaveAs; ImGui::CloseCurrentPopup(); }
-      if (app::textButton("Export WAV...")) { gRequest = DialogRequest::Export; ImGui::CloseCurrentPopup(); }
-      ImGui::EndPopup();
-    }
-    ImGui::SameLine(0, 22 * hs);
     // bpm, swing, tpb and bar are set seldom, so each is a spin box (one fixed step per arrow click, one undo per click).
     const ImU32 dim = app::kDimText;
     auto stepper = [&](const char* id, const char* label, const char* text, int direction) {
@@ -398,6 +394,13 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     ImGui::AlignTextToFramePadding();
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "time %d:%02d", seconds / 60, seconds % 60);
   }
+  ImGui::SameLine(ImGui::GetWindowWidth() - 260 * ImGui::GetStyle().FontScaleDpi);
+  meterL = std::max(player.levelLeft(), meterL * 0.9f);   // falls back a little each frame
+  meterR = std::max(player.levelRight(), meterR * 0.9f);
+  ImGui::BeginGroup();
+  drawMeter("##l", meterL, ImVec2(200 * ImGui::GetStyle().FontScaleDpi, 8));
+  drawMeter("##r", meterR, ImVec2(200 * ImGui::GetStyle().FontScaleDpi, 8));
+  ImGui::EndGroup();
   ImGui::Separator();
 
   // The computer keyboard plays notes unless a text box has it. With Enter pressed it also types into the cell under the cursor.
