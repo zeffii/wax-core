@@ -23,6 +23,7 @@
 #include "app/envelope_window.h"
 #include "app/dx_window.h"
 #include "app/graph_view.h"
+#include "app/pattern_list.h"
 #include "app/shortcut_sheet.h"
 #include "app/widgets.h"
 #include "app/icons.h"
@@ -96,6 +97,7 @@ struct Session {
   app::EnvelopeWindow envelopes;
   app::DxWindow dx;
   app::GraphViewState graphView;
+  app::PatternListState patternList;     // the Song screen's pattern list
   bool showKeys = true;                  // the shortcut sheet beside the Pattern grid
   bool showMixer = true;                 // the mixer under the Song and Pattern screens (the status bar's toggle)
   Screen screen = Screen::Pattern;       // the screen shown (the rail at the left)
@@ -330,7 +332,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) player.ring().push({LiveCommand::Play, 0, 1});
     if (ImGui::IsKeyPressed(ImGuiKey_F8, false)) player.ring().push({LiveCommand::Stop, 0, 1});
     if (ImGui::IsKeyPressed(ImGuiKey_F9, false)) follow = !follow;
-    if (ImGui::IsKeyPressed(ImGuiKey_Space, false)) {
+    if (ImGui::IsKeyPressed(ImGuiKey_Space, false) && !(session->edit && session->screen == Screen::Song)) {   // (on the Song screen, editing, Space places a pattern)
       if (playing) player.ring().push({LiveCommand::Stop, 0, 1});
       else player.ring().push({LiveCommand::Play, 0, 1});
     }
@@ -458,8 +460,33 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   std::string laneInstrument;
   for (const Lane& lane : doc.project().lanes) if (lane.id == selectedLane) laneInstrument = lane.instrument;
   if (session->screen == Screen::Song) {
+    const float listW = session->patternList.width * scale;
+    ImGui::BeginChild("seqmain", ImVec2(-listW, 0), false, ImGuiWindowFlags_NoNav);
     const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, session->edit ? editor.tick() : -1, follow && playing && !session->edit);
     if (!hit.lane.empty()) { session->wantLane = hit.lane; session->wantTick = hit.tick; selectedLane = hit.lane; }
+    ImGui::EndChild();
+    ImGui::SameLine(0, 0);
+    const Lane* listed = nullptr;
+    for (const Lane& l : doc.project().lanes) if (l.id == selectedLane) listed = &l;
+    if (!listed) for (const Lane& l : doc.project().lanes) if (l.id != kMaster) { listed = &l; selectedLane = l.id; break; }   // none picked yet: the first lane
+    const app::PatternListResult listed2 = app::drawPatternList(session->patternList, listed, ImGui::GetContentRegionAvail().y);
+    bool listEdited = false;
+    if (listed) editor.setLane(listed->id, player.engine().laneColumns(listed->id));
+    if (listed2.create) listEdited |= editor.createPatternHere();
+    std::string toPlace = listed2.place;
+    if (session->edit && ImGui::IsKeyPressed(ImGuiKey_Space, false) && !ImGui::GetIO().WantTextInput) toPlace = session->patternList.picked;   // Space: the outlined pattern here
+    if (!toPlace.empty()) {
+      const int before = editor.tick();
+      if (editor.placePatternHere(toPlace)) {
+        listEdited = true;
+        if (listed) for (const Pattern& pat : listed->patterns) if (pat.id == toPlace) editor.moveTo(std::min(before + static_cast<int>(pat.rows.size()), song.length - 1), editor.cell());   // on to where it ends
+      }
+    }
+    if (ImGui::GetIO().KeyCtrl && !ImGui::GetIO().WantTextInput) {   // Ctrl+Up / Ctrl+Down step through the list
+      if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) app::stepPatternList(session->patternList, listed, -1);
+      if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) app::stepPatternList(session->patternList, listed, 1);
+    }
+    if (listEdited) { const std::vector<std::string> problems = syncLanes(doc, player.engine()); session->editStatus = problems.empty() ? std::string() : problems.front(); }
   } else if (session->screen == Screen::Pattern) {
     const float sheetW = session->showKeys ? 270 * scale : 0;
     ImGui::BeginChild("patmain", ImVec2(-sheetW, 0), false, ImGuiWindowFlags_NoNav);

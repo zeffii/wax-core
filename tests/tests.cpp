@@ -745,6 +745,22 @@ void testLoop() {
   std::printf("ok: song loop\n");
 }
 
+void testPlacePattern() {
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax"));
+  const wax::Lane* lane = nullptr;
+  for (const wax::Lane& l : doc.project().lanes) if (!l.patterns.empty() && l.id != "master") { lane = &l; break; }
+  check(lane != nullptr, "the song has a lane with a pattern");
+  const std::string id = lane->id, pattern = lane->patterns.front().id;
+  const std::size_t before = lane->placements.size();
+  const int tick = doc.project().song.length - 4;
+  doc.apply(std::make_unique<wax::PlacePattern>(id, pattern, tick, 4));
+  const wax::Lane& after = doc.project().lanes[static_cast<std::size_t>(lane - doc.project().lanes.data())];
+  check(after.placements.size() >= before && after.placements.back().start == tick && after.placements.back().pattern == pattern, "a placed pattern is the last placement");
+  doc.undo();
+  check(doc.project().lanes[static_cast<std::size_t>(lane - doc.project().lanes.data())].placements.size() == before, "undo takes the placement away and brings back what it replaced");
+  std::printf("ok: place pattern\n");
+}
+
 void testMoveNode() {
   const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
   wax::Document doc(original);
@@ -810,6 +826,7 @@ int main() {
   testBlockEdit();
   testSongSettings();
   testLoop();
+  testPlacePattern();
   testAddNode();
   testUnits();
   testRewire();

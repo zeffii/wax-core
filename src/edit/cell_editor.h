@@ -67,6 +67,11 @@ public:
   // The text a cell would hold with a row's cells set and padded with blanks; what typing writes into the pattern.
   static std::string rowWithCell(const std::string& row, const std::vector<Column>& columns, int cell, const std::string& text);
 
+  // Puts the lane's pattern `patternId` at the cursor row (what plays under it is covered); false when there is no room or no such pattern.
+  bool placePatternHere(const std::string& patternId);
+  // A new blank pattern at the cursor row (rounded down to a multiple of the new-pattern length); false when one starts or plays there.
+  bool createPatternHere();
+
 private:
   Document& document_;
   std::string lane_;
@@ -84,7 +89,6 @@ private:
   Place place() const { return placeAt(tick_); }
   Place placeAt(int tick) const;
   std::vector<std::string> cellsOf(const std::string& row) const;   // a row's cell texts, padded with blanks to the columns
-  bool createPatternHere();
   bool setCell(const std::string& text, bool foldIntoPrevious);
   void advance();
 };

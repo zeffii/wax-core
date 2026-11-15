@@ -258,6 +258,21 @@ private:
   Placement placement_;
 };
 
+// An existing pattern placed on a lane at a tick (a placement already starting there is replaced; undo puts it back).
+class PlacePattern final : public Edit {
+public:
+  PlacePattern(std::string lane, std::string pattern, int start, int length) : lane_(std::move(lane)), pattern_(std::move(pattern)), start_(start), length_(length) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Place pattern"; }
+  std::string lane() const override { return lane_; }
+
+private:
+  std::string lane_, pattern_;
+  int start_, length_;
+  std::vector<Placement> replaced_;
+};
+
 // Puts blank text in a row's place and pushes the rows below it down one; the last row falls off the end (it comes back on undo).
 class InsertRow final : public Edit {
 public:

@@ -107,6 +107,21 @@ CellEditor::Place CellEditor::placeAt(int tick) const {
 
 bool CellEditor::onPattern() const { return place().pattern != nullptr; }
 
+bool CellEditor::placePatternHere(const std::string& patternId) {
+  const Project& project = document_.project();
+  for (const Lane& lane : project.lanes) {
+    if (lane.id != lane_) continue;
+    for (const Pattern& pattern : lane.patterns) {
+      if (pattern.id != patternId) continue;
+      const int length = std::min(static_cast<int>(pattern.rows.size()), project.song.length - tick_);
+      if (length < 1) return false;
+      document_.apply(std::make_unique<PlacePattern>(lane_, patternId, tick_, length));
+      return true;
+    }
+  }
+  return false;
+}
+
 bool CellEditor::createPatternHere() {
   const Project& project = document_.project();
   const Lane* lane = nullptr;

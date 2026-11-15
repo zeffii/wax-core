@@ -81,6 +81,36 @@ void AddPattern::revert(Project& project) {
   }
 }
 
+void PlacePattern::apply(Project& project) {
+  for (Lane& lane : project.lanes) {
+    if (lane.id != lane_) continue;
+    replaced_.clear();
+    for (std::size_t i = lane.placements.size(); i-- > 0;) {
+      if (lane.placements[i].start != start_) continue;
+      replaced_.push_back(lane.placements[i]);
+      lane.placements.erase(lane.placements.begin() + static_cast<long>(i));
+    }
+    Placement placement;
+    placement.pattern = pattern_;
+    placement.start = start_;
+    placement.length = length_;
+    lane.placements.push_back(placement);
+    return;
+  }
+  throw std::out_of_range("no lane " + lane_);
+}
+
+void PlacePattern::revert(Project& project) {
+  for (Lane& lane : project.lanes) {
+    if (lane.id != lane_) continue;
+    for (std::size_t i = lane.placements.size(); i-- > 0;) {
+      if (lane.placements[i].pattern == pattern_ && lane.placements[i].start == start_) { lane.placements.erase(lane.placements.begin() + static_cast<long>(i)); break; }
+    }
+    for (const Placement& p : replaced_) lane.placements.push_back(p);
+    return;
+  }
+}
+
 bool AddPattern::absorb(const Edit& next) {
   const auto* row = dynamic_cast<const SetRow*>(&next);
   if (!row || row->lane() != lane_ || row->patternId() != pattern_.id) return false;

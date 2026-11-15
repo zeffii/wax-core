@@ -285,7 +285,7 @@ if(WAX_LIVE)
     add_executable(wax-app tools/wax_app.cpp src/app/theme.cpp src/app/pattern_view.cpp src/app/widgets.cpp src/app/param_panel.cpp src/app/sequence_view.cpp src/app/mixer_view.cpp src/app/envelope_editor.cpp src/app/envelope_window.cpp
   src/app/dx_window.cpp
   src/app/graph_view.cpp
-  src/app/node_look.cpp src/app/shortcut_sheet.cpp src/app/icons.cpp)
+  src/app/node_look.cpp src/app/shortcut_sheet.cpp src/app/pattern_list.cpp src/app/icons.cpp)
     target_include_directories(wax-app PRIVATE third_party/imgui third_party)
     target_compile_definitions(wax-app PRIVATE WAX_ICON_DIR="${CMAKE_SOURCE_DIR}/art/icons")
     target_link_libraries(wax-app PRIVATE waxcore waxlive waximgui)
