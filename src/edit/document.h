@@ -208,6 +208,53 @@ private:
   int columns_, old_ = 1;
 };
 
+// A parameter shown, or no longer shown, as a pattern column of its instrument (the web's "Expose as pattern column"). A new column gets
+// a three-letter label, one hex digit for a toggle or a short list, two for the rest, and a log scale where the range is wide.
+// The lanes that play the instrument are rebuilt.
+class SetExposed final : public Edit {
+public:
+  SetExposed(std::string instrument, std::string node, std::string param, bool on) : instrument_(std::move(instrument)), node_(std::move(node)), param_(std::move(param)), on_(on) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return std::string(on_ ? "Expose " : "Hide ") + param_; }
+  bool allLanes() const override { return true; }
+
+private:
+  std::string instrument_, node_, param_;
+  bool on_;
+  std::vector<Exposed> before_;
+};
+
+// The width of an exposed parameter's column: 4 bits is one hex digit, 8 two (the usual), 16 four.
+class SetExposedBits final : public Edit {
+public:
+  SetExposedBits(std::string instrument, std::string node, std::string param, int bits) : instrument_(std::move(instrument)), node_(std::move(node)), param_(std::move(param)), bits_(bits) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Width of " + param_; }
+  bool allLanes() const override { return true; }
+
+private:
+  std::string instrument_, node_, param_;
+  int bits_, old_ = 8;
+};
+
+// A parameter given an input port (so a wire can drive it), or without one: taking it away cuts the wires into it.
+class SetPort final : public Edit {
+public:
+  SetPort(std::string instrument, std::string node, std::string param, bool on) : instrument_(std::move(instrument)), node_(std::move(node)), param_(std::move(param)), on_(on) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return std::string(on_ ? "Add port " : "Remove port ") + param_; }
+  std::string graphInstrument() const override { return instrument_; }
+
+private:
+  std::string instrument_, node_, param_;
+  bool on_;
+  std::vector<std::string> portsBefore_;
+  std::vector<Connection> connectionsBefore_;
+};
+
 // An instrument one place earlier (direction -1) or later (+1) in the list. The master stays first.
 class MoveInstrument final : public Edit {
 public:

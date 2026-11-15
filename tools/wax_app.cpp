@@ -720,6 +720,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
           int voices = current->graph.voices;
           bool never = current->graph.neverSleeps;
           ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kText), "%s", name.c_str());
+          if (!session->panel.open && app::textButton("Show parameters")) session->panel.open = true;   // (its close button hid the window)
           ImGui::AlignTextToFramePadding();
           ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "voices");
           ImGui::SameLine();
@@ -943,12 +944,16 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     // the instruments as flat text on the left, the graph in the middle, the parameter dock at the right
     if (session->instrument.empty()) session->instrument = !laneInstrument.empty() ? laneInstrument : session->playable.empty() ? std::string(kMaster) : session->playable.front();
     laneInstrument = session->instrument;
-    ImGui::BeginChild("instmain", ImVec2(-app::paramDockSpan(session->panel), 0), false);
+    ImGui::BeginChild("instmain", ImVec2(0, 0), false);
     if (session->panel.instrument != laneInstrument) { session->panel.instrument = laneInstrument; session->panel.node.clear(); }
     app::drawGraphView(session->graphView, doc, laneInstrument, session->panel.node, 0);
+    const ImVec2 graphMin = ImGui::GetWindowPos(), graphMax(graphMin.x + ImGui::GetWindowWidth(), graphMin.y + ImGui::GetWindowHeight());
     ImGui::EndChild();
-    ImGui::SameLine();
-    if (app::drawParamPanel(session->panel, doc, player.engine(), laneInstrument, 0)) syncParams(doc, player.engine());
+    if (app::drawParamPanel(session->panel, doc, player.engine(), laneInstrument, graphMin, graphMax)) {   // the parameters float over the graph
+      syncParams(doc, player.engine());
+      const std::vector<std::string> graphProblems = syncGraphs(doc, player.engine()), laneProblems = syncLanes(doc, player.engine());
+      session->editStatus = !graphProblems.empty() ? graphProblems.front() : !laneProblems.empty() ? laneProblems.front() : std::string();
+    }
   } else if (session->screen == Screen::Info) {
     // Song info: plain text saved with the project (notes, credits, greetings). One undo step each time the box is left.
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Song info: notes, credits, greetings. Plain text, saved with the project.");

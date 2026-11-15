@@ -1031,6 +1031,41 @@ void testPresets() {
   std::printf("ok: presets\n");
 }
 
+void testGraphSaved() {
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/cloves.wax"));
+  const wax::Instrument& first = doc.project().instruments[1];
+  const std::string id = first.id;
+  const wax::Connection wire = first.graph.connections.front();
+  const std::size_t wires = first.graph.connections.size(), nodes = first.graph.nodes.size();
+  doc.apply(std::make_unique<wax::Disconnect>(id, wire.from, wire.to));
+  doc.apply(std::make_unique<wax::AddNode>(id, "gain", "extra_gain", 40, 40));
+  const wax::Project reread = wax::parseProject(wax::serializeProject(doc.project()));
+  check(reread.instruments[1].graph.connections.size() == wires - 1, "a cut wire is saved");
+  check(reread.instruments[1].graph.nodes.size() == nodes + 1, "an added node is saved");
+  doc.apply(std::make_unique<wax::DeleteNode>(id, "extra_gain"));
+  check(wax::parseProject(wax::serializeProject(doc.project())).instruments[1].graph.nodes.size() == nodes, "a deleted node leaves the file");
+  std::printf("ok: graph saved\n");
+}
+
+void testExposePort() {
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/cloves.wax"));
+  const wax::Instrument& first = doc.project().instruments[1];
+  const std::string id = first.id;
+  const std::size_t shown = first.exposed.size();
+  const wax::Exposed one = first.exposed.front();
+  doc.apply(std::make_unique<wax::SetExposed>(id, one.node, one.param, false));
+  check(doc.project().instruments[1].exposed.size() == shown - 1, "a parameter is hidden");
+  check(wax::parseProject(wax::serializeProject(doc.project())).instruments[1].exposed.size() == shown - 1, "the hiding is saved");
+  doc.undo();
+  doc.apply(std::make_unique<wax::SetExposedBits>(id, one.node, one.param, 16));
+  check(wax::parseProject(wax::serializeProject(doc.project())).instruments[1].exposed.front().bits == 16, "the width is saved");
+  doc.undo();
+  doc.apply(std::make_unique<wax::SetPort>(id, one.node, one.param, true));
+  check(!wax::parseProject(wax::serializeProject(doc.project())).instruments[1].graph.nodes.front().ports.empty() || doc.project().instruments[1].graph.nodes.size() > 1, "a port is added");
+  doc.undo();
+  std::printf("ok: expose and port\n");
+}
+
 void testMoveNode() {
   const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
   wax::Document doc(original);
@@ -1107,6 +1142,8 @@ int main() {
   testInstrumentSetup();
   testInstrumentManage();
   testPresets();
+  testGraphSaved();
+  testExposePort();
   testAddNode();
   testUnits();
   testRewire();

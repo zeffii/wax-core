@@ -44,32 +44,25 @@ double fromPos(const ParamSpec& spec, double p) {
 
 }  // namespace
 
-float paramDockSpan(const ParamPanelState& state) {
-  const float scale = ImGui::GetStyle().FontScaleDpi;
-  const float width = state.width > 0 ? state.width : kNormalWidth * scale;
-  return width + (kGrip + 4) * scale;
+// The hex a parameter's pattern cell holds for a value, `digits` wide.
+std::string cellHex(const ParamSpec& spec, bool log, double value, int digits) {
+  const double denom = digits == 1 ? 15 : digits == 4 ? 65535 : 255;
+  double x;
+  if (spec.isInt) x = value - spec.min;
+  else if (log && spec.min > 0) x = (std::log(std::max(value, spec.min)) - std::log(spec.min)) / (std::log(spec.max) - std::log(spec.min)) * denom;
+  else x = spec.max > spec.min ? (value - spec.min) / (spec.max - spec.min) * denom : 0;
+  char text[16];
+  std::snprintf(text, sizeof text, "%0*X", digits, static_cast<unsigned>(std::clamp(std::round(x), 0.0, denom)));
+  return text;
 }
 
-bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine, const std::string& instrumentId, float height) {
+bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine, const std::string& instrumentId, ImVec2 areaMin, ImVec2 areaMax) {
   const float scale = ImGui::GetStyle().FontScaleDpi;
-  if (state.width <= 0) state.width = kNormalWidth * scale;
   const Instrument* instrument = findInstrument(doc.project(), instrumentId);
   if (state.instrument != instrumentId) { state.instrument = instrumentId; state.node.clear(); state.dragging = false; }
   const NodeRegistry& types = builtinNodes();
+  if (!state.open) return false;
 
-  // the grip on the left edge: drag to resize, double-click for the usual width
-  ImGui::InvisibleButton("dockgrip", ImVec2(kGrip * scale, height));
-  if (ImGui::IsItemHovered() || ImGui::IsItemActive()) {
-    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-    const ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
-    ImGui::GetWindowDrawList()->AddLine(ImVec2(a.x + kGrip * scale / 2, a.y), ImVec2(a.x + kGrip * scale / 2, b.y), kAccent, 1.0f);
-  }
-  if (ImGui::IsItemActive()) state.width = std::clamp(state.width - ImGui::GetIO().MouseDelta.x, kMinWidth * scale, kMaxWidth * scale);
-  if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) state.width = kNormalWidth * scale;
-  ImGui::SameLine(0, 0);
-
-  bool changed = false;
-  ImGui::BeginChild("paramdock", ImVec2(state.width, height), false, ImGuiWindowFlags_NoNav);
   const GraphNode* picked = nullptr;
   const NodeType* type = nullptr;
   if (instrument) {
@@ -80,22 +73,29 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
       if (node.id == state.node) { picked = &node; type = t; }
     }
   }
-  if (!picked) {
-    ImGui::TextColored(colour(kDimText), "no parameters");
-    ImGui::EndChild();
+  if (picked) state.node = picked->id;
+
+  // the window: first at the top right of the graph, then wherever the user puts it
+  const float width = kNormalWidth * 1.25f * scale;
+  if (!state.placed) {
+    ImGui::SetNextWindowPos(ImVec2(std::max(areaMin.x, areaMax.x - width - 12 * scale), areaMin.y + 12 * scale), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(width, std::min(areaMax.y - areaMin.y - 24 * scale, 380 * scale)), ImGuiCond_Always);
+  }
+  const std::string title = picked ? picked->id + "  " + picked->type + "###params" : "no parameters###params";
+  ImGui::PushStyleColor(ImGuiCol_TitleBg, colour(kAccent));
+  ImGui::PushStyleColor(ImGuiCol_TitleBgActive, colour(kAccent));
+  ImGui::PushStyleColor(ImGuiCol_Text, colour(kHiFg));
+  const bool visible = ImGui::Begin(title.c_str(), &state.open, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings);
+  ImGui::PopStyleColor(3);
+  state.placed = true;
+  bool changed = false;
+  if (!visible || !picked || !instrument) {
+    if (visible && !picked) ImGui::TextColored(colour(kDimText), "no parameters");
+    ImGui::End();
     return false;
   }
-  state.node = picked->id;
+  ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 0.85f);   // a small face: more rows fit
 
-  // the title strip: the node's name, inverted
-  {
-    const ImVec2 p = ImGui::GetCursorScreenPos();
-    const float w = ImGui::GetContentRegionAvail().x, h = ImGui::GetTextLineHeight() + 4 * scale;
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddRectFilled(p, ImVec2(p.x + w, p.y + h), kAccent);
-    dl->AddText(ImVec2(p.x + 6 * scale, p.y + 2 * scale), kHiFg, (picked->id + "  " + picked->type).c_str());
-    ImGui::Dummy(ImVec2(w, h));
-  }
   if (!drawingsOf(picked->type).empty() && textButton("draw envelopes")) state.drawNode = picked->id;
   if (picked->type == "dvii" && textButton("edit voice")) state.dxNode = picked->id;
 
@@ -105,7 +105,6 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
     if (c.to.rfind(prefix, 0) == 0) wired.insert(c.to.substr(prefix.size()));
   }
 
-  ImGui::BeginChild("rows", ImVec2(0, 0), false, ImGuiWindowFlags_NoNav);
   const float rowH = ImGui::GetTextLineHeight() + 3 * scale;
   const float total = ImGui::GetContentRegionAvail().x;
   const float nameW = std::clamp(total * 0.36f, 52 * scale, 160 * scale);
@@ -121,7 +120,11 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
     // the name, as many characters as fit
     std::string name = spec.name;
     while (name.size() > 1 && ImGui::CalcTextSize(name.c_str()).x > nameW - 6 * scale) name.pop_back();
-    dl->AddText(ImVec2(p.x + 2 * scale, p.y + 1.5f * scale), dim ? kDimText : kDimText, name.c_str());
+    const Exposed* shownAs = nullptr;   // the pattern column this parameter is, if any
+    for (const Exposed& e : instrument->exposed) if (e.node == picked->id && e.param == spec.name) shownAs = &e;
+    const bool hasPort = std::find(picked->ports.begin(), picked->ports.end(), spec.name) != picked->ports.end();
+    dl->AddText(ImVec2(p.x + 2 * scale + (hasPort ? 7 * scale : 0), p.y + 1.5f * scale), kDimText, name.c_str());
+    if (hasPort) dl->AddCircleFilled(ImVec2(p.x + 4 * scale, p.y + rowH * 0.5f), 2.5f * scale, kAccent);   // a dot: it has a port
 
     ImGui::PushID(spec.name.c_str());
     ImGui::SetCursorScreenPos(barMin);
@@ -155,6 +158,11 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
     dl->AddRectFilled(barMin, ImVec2(x, barMax.y), accentAlpha(dim ? 20 : 48));
     dl->AddRectFilled(ImVec2(std::min(x, barMax.x - 2 * scale), barMin.y), ImVec2(std::min(x, barMax.x - 2 * scale) + 2 * scale, barMax.y), dim ? kDimText : kAccent);
     dl->AddText(ImVec2(barMin.x + 4 * scale, p.y + 1.5f * scale), dim ? kDimText : kText, displayValue(picked->type, spec, shown).c_str());
+    if (shownAs) {   // the pattern column: its label and the hex its cell holds for this value, at the right of the bar
+      const int digits = shownAs->bits == 16 ? 4 : shownAs->bits == 4 ? 1 : 2;
+      const std::string tag = shownAs->label + " " + cellHex(spec, shownAs->log, shown, digits);
+      dl->AddText(ImVec2(barMax.x - ImGui::CalcTextSize(tag.c_str()).x - 4 * scale, p.y + 1.5f * scale), kAccent, tag.c_str());
+    }
 
     if (ImGui::BeginPopupContextItem("rowmenu")) {
       static char text[64];
@@ -170,14 +178,26 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
         ImGui::CloseCurrentPopup();
       }
       if (textButton("reset")) { doc.apply(std::make_unique<SetParam>(instrumentId, picked->id, spec.name, spec.def)); changed = true; ImGui::CloseCurrentPopup(); }
+      ImGui::Separator();
+      if (textButton(shownAs ? "Remove pattern column" : "Expose as pattern column")) {
+        doc.apply(std::make_unique<SetExposed>(instrumentId, picked->id, spec.name, shownAs == nullptr)); changed = true; ImGui::CloseCurrentPopup();
+      } else if (shownAs) {   // the column's width: one, two or four hex digits
+        for (const auto& [label, bits] : {std::pair<const char*, int>{"1hex", 4}, {"2hex", 8}, {"4hex", 16}}) {
+          const std::string text = std::string(shownAs->bits == bits ? "\xe2\x97\x8f " : "\xe2\x97\x8b ") + "width " + label;
+          if (textButton(text.c_str())) { doc.apply(std::make_unique<SetExposedBits>(instrumentId, picked->id, spec.name, bits)); changed = true; ImGui::CloseCurrentPopup(); break; }
+        }
+      }
+      if (textButton(hasPort ? "Remove the port" : "Add a port (wire a node in)")) {
+        doc.apply(std::make_unique<SetPort>(instrumentId, picked->id, spec.name, !hasPort)); changed = true; ImGui::CloseCurrentPopup();
+      }
       ImGui::EndPopup();
     }
     ImGui::PopID();
     ImGui::SetCursorScreenPos(ImVec2(p.x, p.y + rowH));
     ImGui::Dummy(ImVec2(1, 0));
   }
-  ImGui::EndChild();
-  ImGui::EndChild();
+  ImGui::PopFont();
+  ImGui::End();
   return changed;
 }
 

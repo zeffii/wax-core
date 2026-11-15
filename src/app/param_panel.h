@@ -1,12 +1,14 @@
-// The parameter panel, as the web app's parameter view: a docked vertical list at the right, a title strip with the node's name, and
-// one row per parameter: its name, then a bar with the value written inside it. A grip on the left edge sets the width.
-// Drag a bar to set the value (double-click resets, the wheel nudges), right-click for a menu to type a value or reset.
+// The parameter panel, as the web app's parameter view, here a window that floats over the graph: a title with the node's name, and one
+// row per parameter: its name, then a bar with the value written inside it. Drag a bar to set the value (double-click resets, the wheel
+// nudges), right-click for a menu to type a value, reset, show the parameter as a pattern column (and its width) or give it a port.
+// Rows of a parameter shown as a column carry its label and the cell's hex; a dot marks a parameter with a port.
 #pragma once
 
 #include <string>
 
 #include "edit/document.h"
 #include "engine/engine.h"
+#include "imgui.h"
 
 namespace wax::app {
 
@@ -16,14 +18,13 @@ struct ParamPanelState {
   std::string drawNode;     // set when the user asked to draw this node's envelopes (the caller opens the window and clears it)
   std::string dxNode;       // set when the user asked for the DX loader of this node
   bool dragging = false;    // a drag is in progress: its steps are one undo
-  float width = 0;          // the dock's width in points (0: the usual 210, scaled)
+  bool placed = false;      // the window has been put at the graph's corner once; after that it stays where the user left it
+  bool open = true;         // the window is shown (the close button hides it; the Instrument screen's tab brings it back)
 };
 
-// The room the dock takes (grip included), for the caller to leave at the right of the window.
-float paramDockSpan(const ParamPanelState& state);
-
-// Draws the dock in a column of this height (negative: what is left, as for BeginChild). Changes go through `doc` as SetParam edits;
-// the caller then runs syncParams. Returns true when a parameter changed.
-bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine, const std::string& instrument, float height);
+// Draws the window floating over the graph area (screen rectangle `areaMin`..`areaMax`: where it first appears, at the top right).
+// Changes go through `doc` as SetParam edits (and SetExposed, SetExposedBits, SetPort); the caller then runs syncParams, syncLanes and
+// syncGraphs. Returns true when a parameter changed.
+bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine, const std::string& instrument, ImVec2 areaMin, ImVec2 areaMax);
 
 }  // namespace wax::app

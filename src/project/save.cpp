@@ -78,20 +78,54 @@ std::string serializeProject(const Project& project) {
     if (instrument.raw.is_object() && instrument.raw.contains("presets")) definition["presets"] = instrument.raw["presets"];   // presets as edited
     else definition.erase("presets");
     if (instrument.noteColumns != definition.value("noteColumns", 1) && instrument.noteColumns > 0) definition["noteColumns"] = instrument.noteColumns;   // tracks as edited
+    {   // the parameters shown as pattern columns, as edited: entries the file has keep what it holds about them
+      Json shown = Json::array();
+      const Json fileExposed = definition.contains("exposed") ? definition["exposed"] : Json::array();
+      for (const Exposed& e : instrument.exposed) {
+        Json entry = Json::object();
+        for (const Json& candidate : fileExposed) if (candidate.value("node", std::string()) == e.node && candidate.value("param", std::string()) == e.param) entry = candidate;
+        entry["node"] = e.node;
+        entry["param"] = e.param;
+        if (!e.label.empty()) entry["label"] = e.label;
+        if (!e.longName.empty()) entry["long"] = e.longName;
+        if (e.bits != 8) entry["bits"] = e.bits; else entry.erase("bits");
+        if (e.log) entry["scale"] = "log"; else entry.erase("scale");
+        shown.push_back(std::move(entry));
+      }
+      if (shown != fileExposed) definition["exposed"] = std::move(shown);
+    }
     Json& graph = definition["graph"];
     if (graph.is_object()) {   // voices and sleep as edited
       if (instrument.graph.voices != 1 || graph.contains("voices")) graph["voices"] = instrument.graph.voices;
       if (instrument.graph.neverSleeps) graph["sleep"] = "never"; else graph.erase("sleep");
     }
-    if (!graph.is_object() || !graph.contains("nodes")) continue;
-    for (Json& node : graph["nodes"]) {
-      for (const GraphNode& edited : instrument.graph.nodes) {
-        if (edited.id != node.value("id", std::string())) continue;
-        if (edited.params.is_object() && (!edited.params.empty() || node.contains("params"))) node["params"] = edited.params;
-        if (edited.placed) { node["x"] = edited.x; node["y"] = edited.y; }
-        if (edited.data.is_object() && !(node.contains("data") && node["data"] == edited.data)) node["data"] = edited.data;
+    if (!graph.is_object()) continue;
+    // the nodes as edited: those the file has keep what it holds about them (and their place in the list), new ones are written out,
+    // deleted ones leave
+    const Json fileNodes = graph.contains("nodes") ? graph["nodes"] : Json::array();
+    Json nodes = Json::array();
+    for (const GraphNode& edited : instrument.graph.nodes) {
+      Json node = Json::object();
+      bool inFile = false;
+      for (const Json& candidate : fileNodes) if (candidate.value("id", std::string()) == edited.id) { node = candidate; inFile = true; }
+      if (!inFile) { node["id"] = edited.id; node["type"] = edited.type; }
+      if (edited.params.is_object() && (!edited.params.empty() || node.contains("params"))) node["params"] = edited.params;
+      if (!edited.ports.empty()) node["ports"] = edited.ports; else node.erase("ports");
+      if (!inFile) {
+        if (!edited.alias.empty()) node["alias"] = edited.alias;
+        if (edited.stereo) node["stereo"] = true;
       }
+      if (!edited.source.empty()) node["source"] = edited.source;
+      if (!edited.parts.is_null()) node["parts"] = edited.parts;
+      if (edited.placed) { node["x"] = edited.x; node["y"] = edited.y; }
+      if (edited.data.is_object() && !(node.contains("data") && node["data"] == edited.data)) node["data"] = edited.data;
+      nodes.push_back(std::move(node));
     }
+    graph["nodes"] = std::move(nodes);
+    // the wiring as edited (left as the file has it when nothing changed)
+    Json wires = Json::array();
+    for (const Connection& c : instrument.graph.connections) wires.push_back(Json::array({c.from, c.to}));
+    if (!graph.contains("connections") || graph["connections"] != wires) graph["connections"] = std::move(wires);
   }
   // the instruments in the order of the list (moving one changes it)
   if (out.contains("instruments") && out["instruments"].is_object()) {

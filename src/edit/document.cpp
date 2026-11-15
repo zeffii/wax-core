@@ -1,6 +1,8 @@
 #include <algorithm>
+#include <cctype>
 #include <set>
 #include "edit/document.h"
+#include "core/node_registry.h"
 
 #include <sstream>
 #include <stdexcept>
@@ -605,6 +607,75 @@ void CloneLaneWithMachine::revert(Project& project) {
   if (lane >= 0) project.lanes.erase(project.lanes.begin() + lane);
   const int machine = instrumentIndex(project, instrumentCopy_);
   if (machine >= 0) project.instruments.erase(project.instruments.begin() + machine);
+}
+
+void SetExposed::apply(Project& project) {
+  Instrument& instrument = instrumentNamed(project, instrument_);
+  before_ = instrument.exposed;
+  const auto found = std::find_if(instrument.exposed.begin(), instrument.exposed.end(), [&](const Exposed& e) { return e.node == node_ && e.param == param_; });
+  if (!on_) { if (found != instrument.exposed.end()) instrument.exposed.erase(found); return; }
+  if (found != instrument.exposed.end()) return;
+  const GraphNode* node = nullptr;
+  for (const GraphNode& n : instrument.graph.nodes) if (n.id == node_) node = &n;
+  const NodeType* type = node ? builtinNodes().find(node->type) : nullptr;
+  if (!type) throw std::out_of_range("no node " + node_);
+  const ParamSpec* spec = nullptr;
+  for (const ParamSpec& p : type->params) if (p.name == param_) spec = &p;
+  if (!spec) throw std::out_of_range("no parameter " + param_);
+  Exposed added;
+  added.node = node_;
+  added.param = param_;
+  added.label = param_.substr(0, 3);
+  if (!added.label.empty()) added.label[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(added.label[0])));
+  const auto taken = [&](const std::string& label) { for (const Exposed& e : instrument.exposed) if (e.label == label) return true; return false; };
+  while (taken(added.label)) {   // "Cut", "Cu2", "Cu3"...
+    const int digit = added.label.size() > 2 && std::isdigit(static_cast<unsigned char>(added.label[2])) ? added.label[2] - '0' + 1 : 2;
+    added.label = added.label.substr(0, 2) + std::to_string(digit);
+  }
+  if (spec->isInt && spec->max - spec->min < 16) added.bits = 4;
+  added.log = spec->min > 0 && spec->max / spec->min >= 50;
+  instrument.exposed.push_back(std::move(added));
+}
+
+void SetExposed::revert(Project& project) { instrumentNamed(project, instrument_).exposed = before_; }
+
+void SetExposedBits::apply(Project& project) {
+  for (Exposed& e : instrumentNamed(project, instrument_).exposed) {
+    if (e.node != node_ || e.param != param_) continue;
+    old_ = e.bits;
+    e.bits = bits_;
+    return;
+  }
+  throw std::out_of_range(param_ + " is not shown as a column");
+}
+
+void SetExposedBits::revert(Project& project) {
+  for (Exposed& e : instrumentNamed(project, instrument_).exposed) if (e.node == node_ && e.param == param_) e.bits = old_;
+}
+
+void SetPort::apply(Project& project) {
+  Instrument& instrument = instrumentNamed(project, instrument_);
+  for (GraphNode& node : instrument.graph.nodes) {
+    if (node.id != node_) continue;
+    portsBefore_ = node.ports;
+    connectionsBefore_ = instrument.graph.connections;
+    const auto at = std::find(node.ports.begin(), node.ports.end(), param_);
+    if (on_ && at == node.ports.end()) node.ports.push_back(param_);
+    if (!on_ && at != node.ports.end()) {
+      node.ports.erase(at);
+      const std::string target = node_ + ".@" + param_;
+      auto& wires = instrument.graph.connections;
+      wires.erase(std::remove_if(wires.begin(), wires.end(), [&](const Connection& c) { return c.to == target; }), wires.end());
+    }
+    return;
+  }
+  throw std::out_of_range("no node " + node_);
+}
+
+void SetPort::revert(Project& project) {
+  Instrument& instrument = instrumentNamed(project, instrument_);
+  for (GraphNode& node : instrument.graph.nodes) if (node.id == node_) node.ports = portsBefore_;
+  instrument.graph.connections = connectionsBefore_;
 }
 
 void MoveInstrument::apply(Project& project) {
