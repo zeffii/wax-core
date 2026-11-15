@@ -62,6 +62,7 @@ PatternViewResult drawPatternView(const std::vector<std::vector<std::string>>& r
       }
       char number[16];
       std::snprintf(number, sizeof number, "%03d", tick);
+      if (tick == playTick && std::string(cursor.playhead) == "marker") number[0] = '>';   // (the marker: a > in the first place of the tick)
       ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(tick % beat == 0 ? kWarm : kDimText));
       if (ImGui::Selectable(number, false, ImGuiSelectableFlags_None)) result.clickedTick = tick;
       ImGui::PopStyleColor();
@@ -82,7 +83,7 @@ PatternViewResult drawPatternView(const std::vector<std::vector<std::string>>& r
       }
     }
   }
-  if (playY >= 0) {   // the playhead: a thin line across the table, moving down through the row as the song plays
+  if (playY >= 0 && std::string(cursor.playhead) == "line") {   // the playhead: a thin line across the table, moving down through the row as the song plays
     const float y = playY + cursor.playFrac * rowHeight;
     const ImVec2 from = ImGui::GetWindowPos();
     ImDrawList* draw = ImGui::GetWindowDrawList();

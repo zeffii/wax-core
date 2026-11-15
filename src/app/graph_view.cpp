@@ -8,6 +8,7 @@
 #include <set>
 
 #include "app/node_look.h"
+#include "app/config.h"
 #include "app/theme.h"
 #include "app/widgets.h"
 #include "core/node_registry.h"
@@ -27,10 +28,10 @@ std::string portOfAddress(const std::string& address) { const auto dot = address
 // What each kind of wire is coloured (the web app's defaults).
 ImU32 kindColour(PortKind kind) {
   switch (kind) {
-    case PortKind::Control: return IM_COL32(0xe0, 0x94, 0x29, 255);
-    case PortKind::Stereo: return IM_COL32(0xb1, 0x77, 0xc5, 255);
-    case PortKind::Param: return IM_COL32(0xf4, 0x85, 0x7b, 255);
-    default: return IM_COL32(0x5e, 0x94, 0xc9, 255);
+    case PortKind::Control: return settings().wireControl;
+    case PortKind::Stereo: return settings().wireStereo;
+    case PortKind::Param: return settings().wireParam;
+    default: return settings().wireAudio;
   }
 }
 
@@ -210,7 +211,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     const ImVec2 p1 = portPos(b->second, false, indexOf(b->second.inputs, toPort), scale);
     const PortKind kind = kindOf(a->second, fromPort);
     const float width = (kind == PortKind::Stereo ? 3.0f : 1.75f) * 0.65f * std::max(1.0f, scale);
-    drawWire(dl, p0, p1, kindColour(kind), width, kind == PortKind::Control || kind == PortKind::Param, scale);
+    drawWire(dl, p0, p1, kindColour(kind), width, settings().wireDashed && (kind == PortKind::Control || kind == PortKind::Param), scale);
     // the dot in the middle of a wire cuts it (shown while the mouse is near)
     const ImVec2 mid = bezierAt(p0, p1, wireArm(p0, p1, scale), 0.5f);
     const bool near = windowHovered && std::hypot(io.MousePos.x - mid.x, io.MousePos.y - mid.y) < 7 * scale && hover.node.empty() && state.wiring.empty();

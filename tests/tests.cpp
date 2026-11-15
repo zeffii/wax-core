@@ -878,6 +878,10 @@ void testSongLength() {
   std::size_t back = 0;
   for (const wax::Lane& l : doc.project().lanes) back += l.placements.size();
   check(doc.project().song.length == length && back == placements, "undo brings the placements back");
+  doc.apply(std::make_unique<wax::SetSongInfo>("hello\ngreetings"));
+  check(wax::parseProject(wax::serializeProject(doc.project())).song.raw.value("info", std::string()) == "hello\ngreetings", "the song info is saved");
+  doc.undo();
+  check(!doc.project().song.raw.contains("info"), "song info undone");
   doc.apply(std::make_unique<wax::SetSongName>("my song"));
   check(wax::parseProject(wax::serializeProject(doc.project())).song.name == "my song", "the name is saved");
   std::printf("ok: song length and name\n");

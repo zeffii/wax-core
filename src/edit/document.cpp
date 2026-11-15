@@ -173,6 +173,15 @@ constexpr int kMaxSong = 65536;
 int movedBy(int t, int at, int n) { return t >= at ? t + n : t; }
 }  // namespace
 
+void SetSongInfo::apply(Project& project) {
+  old_ = project.song.raw.contains("info") ? project.song.raw["info"] : Json();
+  if (text_.empty()) project.song.raw.erase("info"); else project.song.raw["info"] = text_;
+}
+
+void SetSongInfo::revert(Project& project) {
+  if (old_.is_null()) project.song.raw.erase("info"); else project.song.raw["info"] = old_;
+}
+
 void SetSongLength::apply(Project& project) {
   const int length = ticks_ / 16 * 16;
   if (length < 16 || length > kMaxSong) throw std::out_of_range("a song is 16 to 65536 ticks long");

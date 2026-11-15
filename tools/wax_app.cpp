@@ -24,6 +24,7 @@
 
 #include "app/sequence_view.h"
 #include "app/envelope_window.h"
+#include "app/config.h"
 #include "app/dx_window.h"
 #include "app/graph_view.h"
 #include "app/machine_tree.h"
@@ -115,6 +116,8 @@ struct Session {
   bool wantTree = false;                 // open the machine tree (Shift+I, or the Instrument screen's add button)
   bool showKeys = true;                  // the shortcut sheet beside the Pattern grid
   std::future<std::string> exporting;     // a render to a WAV file in the background: its answer is the message to show
+  std::vector<char> infoText = std::vector<char>(65536, 0);   // the Info screen's text while it is being edited (up to 64 KB)
+  bool infoFocused = false;
   int pausedAt = -1;                     // the tick the song was paused at (-1: not paused)
   char projectName[64] = {0};            // the header's project name box
   bool nameFocused = false;
@@ -762,6 +765,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
           cursor.tick = editor.tick();
           cursor.cell = editor.cell();
           cursor.scrollTo = session->scrollToCursor;
+          cursor.playhead = app::settings().playhead.c_str();
           const CellEditor::Selection sel = editor.selection();
           { const LoopRange lr = loopOf(song); cursor.loop = song.raw.is_object() && song.raw.contains("loop") && song.raw["loop"].is_object(); cursor.loopOn = lr.on; cursor.loopStart = lr.start; cursor.loopEnd = lr.end; }
           {   // how far through the playing row we are: the time since the tick changed over one tick's length
@@ -795,9 +799,62 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     ImGui::SameLine();
     if (app::drawParamPanel(session->panel, doc, player.engine(), laneInstrument, 0)) syncParams(doc, player.engine());
   } else if (session->screen == Screen::Info) {
-    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Song info: notes, credits, greetings (to come).");
+    // Song info: plain text saved with the project (notes, credits, greetings). One undo step each time the box is left.
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Song info: notes, credits, greetings. Plain text, saved with the project.");
+    const std::string stored = song.raw.is_object() && song.raw.contains("info") && song.raw["info"].is_string() ? song.raw["info"].get<std::string>() : std::string();
+    if (!session->infoFocused) std::snprintf(session->infoText.data(), session->infoText.size(), "%s", stored.c_str());
+    ImGui::InputTextMultiline("##info", session->infoText.data(), session->infoText.size(), ImVec2(-1, -1));
+    session->infoFocused = ImGui::IsItemActive();
+    if (ImGui::IsItemDeactivatedAfterEdit() && std::string(session->infoText.data()) != stored) doc.apply(std::make_unique<SetSongInfo>(session->infoText.data()));
   } else {
-    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Config (to come).");
+    // Config: the settings, in groups as in the web app; each change is kept at once.
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Settings are kept on this computer (config.json in the preferences folder).");
+    app::Settings& cfg = app::settings();
+    bool changed = false;
+    const auto group = [&](const char* title, const char* blurb) {
+      ImGui::Spacing();
+      ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kAccent), "%s", title);
+      ImGui::SameLine(0, 12 * scale);
+      ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "%s", blurb);
+    };
+    const auto colour = [&](const char* label, ImU32& value) {
+      float rgb[3] = {(value & 255) / 255.0f, ((value >> 8) & 255) / 255.0f, ((value >> 16) & 255) / 255.0f};
+      ImGui::PushID(label);
+      if (ImGui::ColorEdit3("##c", rgb, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
+        value = IM_COL32(static_cast<int>(rgb[0] * 255 + 0.5f), static_cast<int>(rgb[1] * 255 + 0.5f), static_cast<int>(rgb[2] * 255 + 0.5f), 255);
+        changed = true;
+      }
+      ImGui::PopID();
+      ImGui::SameLine();
+      ImGui::TextUnformatted(label);
+    };
+    group("Look", "Colours. Applied at once.");
+    ImGui::SetNextItemWidth(180 * scale);
+    if (ImGui::BeginCombo("Colour theme", app::themeName(app::themeIndex()), ImGuiComboFlags_HeightLarge)) {
+      for (int i = 0; i < app::themeCount(); i++) if (ImGui::Selectable(app::themeName(i), i == app::themeIndex())) { app::setTheme(i); saveTheme(); }
+      ImGui::EndCombo();
+    }
+    group("Playing", "How the screens behave while the song runs.");
+    if (ImGui::Checkbox("Follow mode (the grids scroll with the playing row)", &follow)) { cfg.follow = follow; changed = true; }
+    {
+      static const struct { const char* id; const char* label; } looks[] = {{"marker", "a > in the tick column and a tinted row"}, {"line", "a thin line gliding through the playing row"}, {"band", "the tinted row alone"}};
+      const char* shown = looks[1].label;
+      for (const auto& look : looks) if (cfg.playhead == look.id) shown = look.label;
+      ImGui::SetNextItemWidth(430 * scale);
+      if (ImGui::BeginCombo("Playhead", shown)) {
+        for (const auto& look : looks) if (ImGui::Selectable(look.label, cfg.playhead == look.id)) { cfg.playhead = look.id; changed = true; }
+        ImGui::EndCombo();
+      }
+    }
+    group("Graph", "Wire colours by kind of signal, and dashed control wires.");
+    colour("Wire colour: audio", cfg.wireAudio);
+    colour("Wire colour: control", cfg.wireControl);
+    colour("Wire colour: stereo", cfg.wireStereo);
+    colour("Wire colour: parameter", cfg.wireParam);
+    if (ImGui::Checkbox("Control wires are dashed", &cfg.wireDashed)) changed = true;
+    ImGui::Spacing();
+    if (app::textButton("Reset to defaults")) { app::resetSettings(); follow = cfg.follow; changed = true; }
+    if (changed) app::saveSettings();
   }
   ImGui::EndChild();
   if (!session->panel.drawNode.empty()) { app::showEnvelopes(session->envelopes, laneInstrument, session->panel.drawNode); session->panel.drawNode.clear(); }
@@ -992,6 +1049,7 @@ int main(int argc, char** argv) {
   if (scale <= 0) scale = 1;
   app::applyTheme(scale);
   loadTheme();
+  app::loadSettings();
   if (!options.theme.empty()) app::setThemeByName(options.theme.c_str());
   ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
   ImGui_ImplSDLRenderer3_Init(renderer);
@@ -1021,7 +1079,7 @@ int main(int argc, char** argv) {
   std::map<ImGuiKey, int> held;
   int octave = 4, playFromRequest = -1, frame = 0;
   std::string selectedLane;
-  bool follow = true, running = true;
+  bool follow = app::settings().follow, running = true;
   bool showSplash = options.splash && (options.splashForced || (options.screenshot.empty() && !options.useNull));
   if (session && !options.screenshot.empty() && options.playFrom >= 0)
     session->player->ring().push({LiveCommand::Play, options.playFrom, 1});

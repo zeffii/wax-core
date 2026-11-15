@@ -383,6 +383,19 @@ private:
   Json loopBefore_;
 };
 
+// The song's info text (notes, credits, greetings); empty takes it away.
+class SetSongInfo final : public Edit {
+public:
+  explicit SetSongInfo(std::string text) : text_(std::move(text)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Song info"; }
+
+private:
+  std::string text_;
+  Json old_;
+};
+
 // The project's name.
 class SetSongName final : public Edit {
 public:

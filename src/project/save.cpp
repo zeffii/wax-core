@@ -101,6 +101,8 @@ std::string serializeProject(const Project& project) {
     if (project.song.length != song.value("length", project.song.length)) song["length"] = project.song.length;
     if (project.song.beatsPerBar != song.value("beatsPerBar", 4)) song["beatsPerBar"] = project.song.beatsPerBar;
     // the loop as edited (set, switched off, or taken away)
+    if (project.song.raw.is_object() && project.song.raw.contains("info") && project.song.raw["info"].is_string()) song["info"] = project.song.raw["info"];
+    else song.erase("info");
     if (project.song.raw.is_object() && project.song.raw.contains("loop")) song["loop"] = project.song.raw["loop"];
     else song.erase("loop");
   }
