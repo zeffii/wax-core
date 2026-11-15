@@ -604,6 +604,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Pattern view");
         if (ImGui::Checkbox("All lanes side by side", &app::settings().patternAll)) app::saveSettings();
         if (ImGui::Checkbox("Tint patterns by colour", &app::settings().tintPatterns)) app::saveSettings();
+        if (ImGui::Checkbox("Hide empty columns", &app::settings().hideEmpty)) app::saveSettings();
+        if (ImGui::Checkbox("Follow the playing row", &follow)) { app::settings().follow = follow; app::saveSettings(); }
       }
       if (session->screen == Screen::Song) {
     {   // the lane under the cursor: rename, move, duplicate, remove (the web's lane tools)
@@ -922,6 +924,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       app::CursorView cursor;
       cursor.lane = cursorLane;
       cursor.show = session->edit;
+      cursor.hideEmpty = app::settings().hideEmpty;
       cursor.tick = editor.tick();
       cursor.cell = editor.cell();
       cursor.scrollTo = session->scrollToCursor;

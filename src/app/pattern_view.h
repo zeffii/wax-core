@@ -24,6 +24,7 @@ struct PatternLane {
 struct CursorView {
   int lane = 0;                          // which of the lanes shown holds the cursor
 
+  bool hideEmpty = false;                // columns with nothing in them anywhere are left out (the cursor's column stays)
   bool show = false;
   int tick = -1, cell = -1;
   bool scrollTo = false;

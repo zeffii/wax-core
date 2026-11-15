@@ -21,6 +21,19 @@ std::vector<std::vector<std::string>> flattenLane(const Lane& lane, int songLeng
   return rows;
 }
 
+// A cell with nothing in it: only dots (and blanks).
+static bool cellIsEmpty(const std::string& cell) {
+  for (const char ch : cell) if (ch != '.' && ch != ' ') return false;
+  return true;
+}
+
+// Whether column `c` of the lane has anything in it at any tick.
+static bool columnUsed(const std::vector<std::vector<std::string>>& rows, int c) {
+  for (const std::vector<std::string>& cells : rows)
+    if (c < static_cast<int>(cells.size()) && !cellIsEmpty(cells[static_cast<std::size_t>(c)])) return true;
+  return false;
+}
+
 PatternViewResult drawPatternView(const std::vector<PatternLane>& lanes, int ticksPerBeat, int beatsPerBar, int playTick, bool follow, const CursorView& cursor) {
   PatternViewResult result;
   if (lanes.empty() || !lanes.front().rows || !lanes.front().labels) return result;
@@ -31,11 +44,19 @@ PatternViewResult drawPatternView(const std::vector<PatternLane>& lanes, int tic
   const bool several = lanes.size() > 1;
   const ImGuiTableFlags flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX | ImGuiTableFlags_BordersInnerV |
                                 ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings;
+  const ImGuiTableFlags tableFlags = cursor.hideEmpty ? flags | ImGuiTableFlags_Hideable : flags;   // (hiding columns needs the flag)
   const float infoHeight = ImGui::GetTextLineHeightWithSpacing();   // room for the line under the grid
-  if (!ImGui::BeginTable("pattern", columns + 1, flags, ImVec2(0, std::max(60.0f, ImGui::GetContentRegionAvail().y - infoHeight)))) return result;
+  if (!ImGui::BeginTable("pattern", columns + 1, tableFlags, ImVec2(0, std::max(60.0f, ImGui::GetContentRegionAvail().y - infoHeight)))) return result;
   ImGui::TableSetupScrollFreeze(1, several ? 2 : 1);
   ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed);
   for (const PatternLane& lane : lanes) for (const std::string& label : *lane.labels) ImGui::TableSetupColumn(label.c_str());
+  if (cursor.hideEmpty) {
+    for (std::size_t li = 0; li < lanes.size(); li++)
+      for (int c = 0; c < static_cast<int>(lanes[li].labels->size()); c++) {
+        const bool keep = (static_cast<int>(li) == cursor.lane && c == cursor.cell) || columnUsed(*lanes[li].rows, c);
+        ImGui::TableSetColumnEnabled(firstColumn[li] + c, keep);
+      }
+  }
   if (several) {   // the lanes' names over their columns
     ImGui::TableNextRow();
     for (std::size_t li = 0; li < lanes.size(); li++) {
@@ -85,7 +106,7 @@ PatternViewResult drawPatternView(const std::vector<PatternLane>& lanes, int tic
         const ImU32 patternTint = static_cast<std::size_t>(tick) < lane.tint.size() ? lane.tint[static_cast<std::size_t>(tick)] : 0;
         const bool cursorLane = static_cast<int>(li) == cursor.lane;
         for (int c = 0; c < laneColumns; c++) {
-          ImGui::TableSetColumnIndex(firstColumn[li] + c);
+          if (!ImGui::TableSetColumnIndex(firstColumn[li] + c)) continue;   // (a column left out)
           if (patternTint) ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, patternTint);
           const bool here = cursor.show && cursorLane && tick == cursor.tick && c == cursor.cell;
           if (cursor.show && cursorLane && cursor.selected && tick >= cursor.tick0 && tick <= cursor.tick1 && c >= cursor.cell0 && c <= cursor.cell1)
