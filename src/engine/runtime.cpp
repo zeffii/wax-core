@@ -237,6 +237,7 @@ std::unique_ptr<GraphRuntime::RunNode> GraphRuntime::makeNode(const CompiledNode
 void GraphRuntime::load(const CompiledGraph& source) {
   const std::string id = source.instrument;
   graphs_[id] = std::make_unique<CompiledGraph>(source);
+  levels_.try_emplace(id);
   const CompiledGraph& compiled = *graphs_[id];
   resetOrder();
   followMap_.reset();
@@ -780,6 +781,17 @@ void GraphRuntime::process(float* left, float* right, int n) {
   };
   for (std::size_t i = 0; i < order.size(); i++) if (order[i] != "master") aftermath(order[i], i, false);
 
+  // What each instrument sounded at: the loudest sample of the block, kept for the mixer's meters (whether or not it goes into the mix).
+  for (std::size_t i = 0; i < order.size(); i++) {
+    if (order[i] == "master") continue;
+    Instrument* inst = find(order[i]);
+    const auto meter = levels_.find(order[i]);
+    if (!inst || meter == levels_.end() || killed_.count(order[i])) continue;
+    float loudest = 0;
+    for (int k = 0; k < n; k++) loudest = std::max(loudest, std::max(std::abs(inst->left[k]), std::abs(inst->right[k])));
+    if (loudest > meter->second.load(std::memory_order_relaxed)) meter->second.store(loudest, std::memory_order_relaxed);
+  }
+
   // The mix, added up in the order of the instruments.
   for (std::size_t i = 0; i < order.size(); i++) {
     if (order[i] == "master" || !mixesIn_[i]) continue;
@@ -809,6 +821,11 @@ void GraphRuntime::process(float* left, float* right, int n) {
 
 // What one instrument does in a block, up to its finished sound in inst.left and inst.right. True when that sound goes into the mix.
 // It touches only the instrument itself and reads what the instruments it hears made before it.
+float GraphRuntime::takeLevel(const std::string& instrument) {
+  const auto meter = levels_.find(instrument);
+  return meter == levels_.end() ? 0.0f : meter->second.exchange(0, std::memory_order_relaxed);
+}
+
 bool GraphRuntime::renderInstrument(const std::string& id, int n) {
   Instrument* found = find(id);
   if (!found) return false;

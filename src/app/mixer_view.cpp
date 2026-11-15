@@ -136,7 +136,7 @@ void drawScale(float trackTop, float trackHeight, float scale) {
 
 float mixerHeight() { return 178.0f * ImGui::GetStyle().FontScaleDpi; }
 
-bool drawMixer(MixerState& state, Document& doc, const Engine& engine, const std::string& selectedLane) {
+bool drawMixer(MixerState& state, Document& doc, Engine& engine, const std::string& selectedLane) {
   Context cx{state, doc, engine};
   cx.scale = ImGui::GetStyle().FontScaleDpi;
   const float scale = cx.scale;
@@ -197,6 +197,24 @@ bool drawMixer(MixerState& state, Document& doc, const Engine& engine, const std
       for (const int db : kMinorDb) {
         const float y = track.y + trackHeight * static_cast<float>(1 - posOfDb(db));
         draw->AddLine(ImVec2(track.x + trackWidth - 3 * scale, y), ImVec2(track.x + trackWidth, y), IM_COL32(205, 214, 222, 90));
+      }
+      // the instrument's level, drawn in the well: green, then amber, then red, uncovered from the bottom; grey when it is not in the mix
+      {
+        const bool inMix = current(engine, base + "master", 1) >= 0.5;
+        float& held = state.held[lane.instrument];
+        held = std::max(engine.takeLevel(lane.instrument), held * 0.82f);
+        const float h = trackHeight * static_cast<float>(posOfGain(held));
+        const float x0 = track.x + 4 * scale, x1 = track.x + trackWidth - 4 * scale, bottom = track.y + trackHeight;
+        const float amber = bottom - trackHeight * static_cast<float>(posOfDb(-3)), red = bottom - trackHeight * static_cast<float>(posOfDb(0));
+        const float topY = bottom - h;
+        const auto band = [&](float from, float to, ImU32 colour) {   // from and to are y values, from is the lower edge
+          const float a = std::max(topY, to);
+          if (from > a) draw->AddRectFilled(ImVec2(x0, a), ImVec2(x1, from), colour);
+        };
+        band(bottom, amber, inMix ? IM_COL32(64, 190, 120, 230) : IM_COL32(120, 134, 146, 110));
+        band(amber, red, inMix ? IM_COL32(226, 190, 74, 230) : IM_COL32(120, 134, 146, 110));
+        band(red, track.y, inMix ? IM_COL32(226, 90, 74, 230) : IM_COL32(120, 134, 146, 110));
+        if (held >= 1.0f && inMix) draw->AddCircleFilled(ImVec2(track.x + trackWidth * 0.5f, track.y - 4 * scale), 2.5f * scale, IM_COL32(226, 90, 74, 255));
       }
       const float capY = track.y + trackHeight * static_cast<float>(1 - posOfGain(shown));
       draw->AddRectFilled(ImVec2(track.x + scale, capY - scale), ImVec2(track.x + trackWidth - scale, capY + scale), ImGui::IsItemActive() ? kWarm : kAccent);

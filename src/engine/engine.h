@@ -27,6 +27,8 @@ public:
 
   GraphRuntime& runtime() { return runtime_; }
   const ParamRegistry& registry() const { return registry_; }
+  // The loudest sample an instrument made since the last call (for the mixer's meters).
+  float takeLevel(const std::string& instrument) { return runtime_.takeLevel(instrument); }
   // A parameter's value now (the window thread; the audio thread picks it up in its next block). Unknown addresses are ignored.
   void setParam(const std::string& address, double value);
   Sequencer& sequencer() { return sequencer_; }

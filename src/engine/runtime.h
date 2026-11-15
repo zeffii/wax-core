@@ -51,6 +51,9 @@ public:
   // Allocates buffers and node state for an instrument (again, when it is already loaded). Never called per block.
   void load(const CompiledGraph& compiled);
 
+  // The loudest sample an instrument made since the last call (the window thread asks; the mixer's meters). 0 for an unknown one.
+  float takeLevel(const std::string& instrument);
+
   // A note for an instrument: to its arp when it has one, else to its voices (see deliver).
   void note(const std::string& instrument, const NoteEvent& event);
 
@@ -126,6 +129,7 @@ private:
 
   std::vector<std::string> loadOrder_;                                        // instrument ids, in the order they were first loaded
   std::unordered_map<std::string, std::unique_ptr<Instrument>> instruments_;
+  std::unordered_map<std::string, std::atomic<float>> levels_;   // per instrument, for the meters: added in load(), never removed
   std::unordered_map<std::string, std::unique_ptr<CompiledGraph>> graphs_;    // kept to rebuild an instrument that went bad
 
   bool sleepIdle_ = true;

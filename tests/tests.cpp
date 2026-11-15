@@ -452,6 +452,22 @@ void testSave() {
   std::printf("ok: saving\n");
 }
 
+void testLevels() {
+  const wax::Project song = wax::loadProject(std::string(WAX_TEST_SONGS) + "/jawharp.wax");
+  wax::Engine engine(song, 44100);
+  check(engine.takeLevel("lone") == 0, "an instrument that has not sounded has no level");
+  engine.sequencer().play(500);
+  std::vector<float> l(wax::kEngineBlock), r(wax::kEngineBlock);
+  float loudest = 0;
+  for (int b = 0; b < 400; b++) {
+    engine.sequencer().process(l.data(), r.data(), wax::kEngineBlock);
+    loudest = std::max(loudest, engine.takeLevel("lone"));
+  }
+  check(loudest > 0.001f, "a playing instrument reports a level");
+  check(engine.takeLevel("lone") == 0 && engine.takeLevel("nosuch") == 0, "asking resets it, and an unknown instrument has none");
+  std::printf("ok: levels\n");
+}
+
 void testSetParam() {
   const std::string songs = WAX_TEST_SONGS;
   wax::Document doc(wax::loadProject(songs + "/jawharp.wax"));
@@ -484,6 +500,7 @@ void testSetParam() {
 }
 
 int main() {
+  testLevels();
   testSetParam();
   testSave();
   testNewPattern();
