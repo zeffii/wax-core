@@ -21,17 +21,28 @@ std::vector<std::vector<std::string>> flattenLane(const Lane& lane, int songLeng
   return rows;
 }
 
-PatternViewResult drawPatternView(const std::vector<std::vector<std::string>>& rows, const std::vector<std::string>& labels,
-                                  int ticksPerBeat, int beatsPerBar, int playTick, bool follow, const CursorView& cursor) {
+PatternViewResult drawPatternView(const std::vector<PatternLane>& lanes, int ticksPerBeat, int beatsPerBar, int playTick, bool follow, const CursorView& cursor) {
   PatternViewResult result;
-  const int columns = static_cast<int>(labels.size());
+  if (lanes.empty() || !lanes.front().rows || !lanes.front().labels) return result;
+  const std::vector<std::vector<std::string>>& rows = *lanes.front().rows;   // (every lane has the song's rows)
+  std::vector<int> firstColumn;   // where each lane's columns start (after the row number column)
+  int columns = 0;
+  for (const PatternLane& lane : lanes) { firstColumn.push_back(columns + 1); columns += static_cast<int>(lane.labels->size()); }
+  const bool several = lanes.size() > 1;
   const ImGuiTableFlags flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX | ImGuiTableFlags_BordersInnerV |
                                 ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings;
   const float infoHeight = ImGui::GetTextLineHeightWithSpacing();   // room for the line under the grid
   if (!ImGui::BeginTable("pattern", columns + 1, flags, ImVec2(0, std::max(60.0f, ImGui::GetContentRegionAvail().y - infoHeight)))) return result;
-  ImGui::TableSetupScrollFreeze(1, 1);
+  ImGui::TableSetupScrollFreeze(1, several ? 2 : 1);
   ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed);
-  for (const std::string& label : labels) ImGui::TableSetupColumn(label.c_str());
+  for (const PatternLane& lane : lanes) for (const std::string& label : *lane.labels) ImGui::TableSetupColumn(label.c_str());
+  if (several) {   // the lanes' names over their columns
+    ImGui::TableNextRow();
+    for (std::size_t li = 0; li < lanes.size(); li++) {
+      ImGui::TableSetColumnIndex(firstColumn[li]);
+      ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(static_cast<int>(li) == cursor.lane ? kAccent : kDimText), "%s", lanes[li].id.c_str());
+    }
+  }
   ImGui::TableHeadersRow();
 
   const float rowHeight = ImGui::GetTextLineHeightWithSpacing();
@@ -67,20 +78,27 @@ PatternViewResult drawPatternView(const std::vector<std::vector<std::string>>& r
       ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(tick % beat == 0 ? kWarm : kDimText));
       if (ImGui::Selectable(number, false, ImGuiSelectableFlags_None)) result.clickedTick = tick;
       ImGui::PopStyleColor();
-      const std::vector<std::string>& cells = rows[static_cast<std::size_t>(tick)];
-      for (int c = 0; c < columns; c++) {
-        ImGui::TableSetColumnIndex(c + 1);
-        const bool here = cursor.show && tick == cursor.tick && c == cursor.cell;
-        if (cursor.show && cursor.selected && tick >= cursor.tick0 && tick <= cursor.tick1 && c >= cursor.cell0 && c <= cursor.cell1)
-          ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, accentAlpha(55));
-        if (here) {
-          ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, kCursorCell);
-          if (cursor.scrollTo) ImGui::SetScrollHereY(0.5f);
+      for (std::size_t li = 0; li < lanes.size(); li++) {
+        const PatternLane& lane = lanes[li];
+        const std::vector<std::string>& cells = (*lane.rows)[static_cast<std::size_t>(tick)];
+        const int laneColumns = static_cast<int>(lane.labels->size());
+        const ImU32 patternTint = static_cast<std::size_t>(tick) < lane.tint.size() ? lane.tint[static_cast<std::size_t>(tick)] : 0;
+        const bool cursorLane = static_cast<int>(li) == cursor.lane;
+        for (int c = 0; c < laneColumns; c++) {
+          ImGui::TableSetColumnIndex(firstColumn[li] + c);
+          if (patternTint) ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, patternTint);
+          const bool here = cursor.show && cursorLane && tick == cursor.tick && c == cursor.cell;
+          if (cursor.show && cursorLane && cursor.selected && tick >= cursor.tick0 && tick <= cursor.tick1 && c >= cursor.cell0 && c <= cursor.cell1)
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, accentAlpha(55));
+          if (here) {
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, kCursorCell);
+            if (cursor.scrollTo) ImGui::SetScrollHereY(0.5f);
+          }
+          const bool filled = c < static_cast<int>(cells.size());
+          ImGui::PushID(tick * 4096 + firstColumn[li] + c);
+          if (ImGui::Selectable(filled ? cells[static_cast<std::size_t>(c)].c_str() : "   ", false, ImGuiSelectableFlags_None)) { result.cellTick = tick; result.cell = c; result.lane = static_cast<int>(li); }
+          ImGui::PopID();
         }
-        const bool filled = c < static_cast<int>(cells.size());
-        ImGui::PushID(tick * 4096 + c);
-        if (ImGui::Selectable(filled ? cells[static_cast<std::size_t>(c)].c_str() : "   ", false, ImGuiSelectableFlags_None)) { result.cellTick = tick; result.cell = c; }
-        ImGui::PopID();
       }
     }
   }

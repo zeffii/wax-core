@@ -573,7 +573,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       if (session->screen == Screen::Instrument) session->browserTab = 1;
       else if (session->screen == Screen::Song || session->screen == Screen::Pattern) session->browserTab = 0;
     }
-    const bool hasOptions = session->screen == Screen::Song || session->screen == Screen::Instrument;
+    const bool hasOptions = session->screen == Screen::Song || session->screen == Screen::Pattern || session->screen == Screen::Instrument;
     const float panelH = ImGui::GetContentRegionAvail().y;
     float optionsH = hasOptions ? (session->browserOptions > 0 ? session->browserOptions * scale : panelH * 0.5f) : 0.0f;
     optionsH = std::clamp(optionsH, 0.0f, std::max(0.0f, panelH - 120 * scale));
@@ -600,6 +600,11 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       ImGui::BeginChild("browseroptions", ImVec2(0, 0), false, ImGuiWindowFlags_NoNav);
       // a button goes on the same line when it fits, else it wraps to the next (the browser is narrow)
       const auto fits = [&](const char* label) { return ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x - ImGui::GetItemRectMax().x > ImGui::CalcTextSize(label).x + 24 * scale; };   // room to the right of the last item
+      if (session->screen == Screen::Pattern) {   // how the grid is shown
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Pattern view");
+        if (ImGui::Checkbox("All lanes side by side", &app::settings().patternAll)) app::saveSettings();
+        if (ImGui::Checkbox("Tint patterns by colour", &app::settings().tintPatterns)) app::saveSettings();
+      }
       if (session->screen == Screen::Song) {
     {   // the lane under the cursor: rename, move, duplicate, remove (the web's lane tools)
       const Lane* current = nullptr;
@@ -893,7 +898,73 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   } else if (session->screen == Screen::Pattern) {
     const float sheetW = session->showKeys ? 270 * scale : 0;
     ImGui::BeginChild("patmain", ImVec2(-sheetW, 0), false, ImGuiWindowFlags_NoNav);
-    if (ImGui::BeginTabBar("lanes")) {
+    // the grid of the lanes shown (one, picked by its tab, or all of them side by side), the cursor in lane `cursorLane` of them
+    const auto drawGrid = [&](const std::vector<const Lane*>& shown, int cursorLane) {
+      std::vector<app::PatternLane> grids;
+      for (const Lane* shownLane : shown) {
+        app::PatternLane grid;
+        grid.id = shownLane->id;
+        grid.rows = &session->rows[shownLane->id];
+        grid.labels = &session->player->engine().columnLabels(shownLane->id);
+        if (app::settings().tintPatterns) {   // each pattern's rows in the pattern's colour, faintly
+          grid.tint.assign(static_cast<std::size_t>(song.length), 0);
+          for (const Placement& placement : shownLane->placements)
+            for (const Pattern& pat : shownLane->patterns) {
+              if (pat.id != placement.pattern) continue;
+              const ImU32 colour = app::patternColour(pat, 34);
+              const int end = std::min({song.length, placement.start + placement.length, placement.start + static_cast<int>(pat.rows.size())});
+              for (int t = std::max(0, placement.start); t < end; t++) grid.tint[static_cast<std::size_t>(t)] = colour;
+            }
+        }
+        grids.push_back(std::move(grid));
+      }
+      const Lane& cursorOwner = *shown[static_cast<std::size_t>(cursorLane)];
+      app::CursorView cursor;
+      cursor.lane = cursorLane;
+      cursor.show = session->edit;
+      cursor.tick = editor.tick();
+      cursor.cell = editor.cell();
+      cursor.scrollTo = session->scrollToCursor;
+      cursor.playhead = app::settings().playhead.c_str();
+      const CellEditor::Selection sel = editor.selection();
+      { const LoopRange lr = loopOf(song); cursor.loop = song.raw.is_object() && song.raw.contains("loop") && song.raw["loop"].is_object(); cursor.loopOn = lr.on; cursor.loopStart = lr.start; cursor.loopEnd = lr.end; }
+      {   // how far through the playing row we are: the time since the tick changed over one tick's length
+        static int lastTick = -1; static double changedAt = 0;
+        if (tick != lastTick) { lastTick = tick; changedAt = ImGui::GetTime(); }
+        const double tickSeconds = 60.0 / (std::max(1.0, song.bpm) * std::max(1, song.ticksPerBeat));
+        cursor.playFrac = playing ? static_cast<float>(std::clamp((ImGui::GetTime() - changedAt) / tickSeconds, 0.0, 1.0)) : 0.0f;
+      }
+      cursor.info = app::describeColumn(doc.project(), cursorOwner, session->player->engine().laneColumns(cursorOwner.id), session->rows[cursorOwner.id], editor.tick(), editor.cell());
+      cursor.selected = sel.active; cursor.tick0 = sel.tick0; cursor.tick1 = sel.tick1; cursor.cell0 = sel.cell0; cursor.cell1 = sel.cell1;
+      session->scrollToCursor = false;
+      const app::PatternViewResult result = app::drawPatternView(grids, song.ticksPerBeat, song.beatsPerBar, playing ? tick : -1, follow && playing && !session->edit, cursor);
+      if (result.clickedTick >= 0) playFromRequest = result.clickedTick;
+      if (result.cell >= 0 && result.lane >= 0) {
+        const Lane& clicked = *shown[static_cast<std::size_t>(result.lane)];
+        if (clicked.id != editor.lane()) { selectedLane = clicked.id; editor.setLane(clicked.id, session->player->engine().laneColumns(clicked.id)); }
+        editor.moveTo(result.cellTick, result.cell);
+      }
+    };
+    if (app::settings().patternAll) {
+      std::vector<const Lane*> shown;
+      int cursorLane = 0;
+      for (const Lane& lane : doc.project().lanes) { if (lane.id == selectedLane) cursorLane = static_cast<int>(shown.size()); shown.push_back(&lane); }
+      if (!shown.empty()) {
+        if (!session->wantLane.empty()) {   // a lane asked for (a click in the Song screen)
+          for (std::size_t i = 0; i < shown.size(); i++) if (shown[i]->id == session->wantLane) cursorLane = static_cast<int>(i);
+        }
+        const Lane& owner = *shown[static_cast<std::size_t>(cursorLane)];
+        selectedLane = owner.id;
+        laneInstrument = owner.instrument;
+        editor.setLane(owner.id, session->player->engine().laneColumns(owner.id));
+        if (!session->wantLane.empty()) {
+          if (session->wantTick >= 0) { editor.moveTo(session->wantTick, editor.cell()); session->scrollToCursor = true; }
+          session->wantLane.clear();
+          session->wantTick = -1;
+        }
+        drawGrid(shown, cursorLane);
+      }
+    } else if (ImGui::BeginTabBar("lanes")) {
       for (const Lane& lane : doc.project().lanes) {
         const std::string label = lane.id + (lane.instrument == lane.id ? "" : "  " + lane.instrument);
         ImGuiTabItemFlags tabFlags = ImGuiTabItemFlags_None;
@@ -911,28 +982,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
             session->wantLane.clear();
             session->wantTick = -1;
           }
-          app::CursorView cursor;
-          cursor.show = session->edit;
-          cursor.tick = editor.tick();
-          cursor.cell = editor.cell();
-          cursor.scrollTo = session->scrollToCursor;
-          cursor.playhead = app::settings().playhead.c_str();
-          const CellEditor::Selection sel = editor.selection();
-          { const LoopRange lr = loopOf(song); cursor.loop = song.raw.is_object() && song.raw.contains("loop") && song.raw["loop"].is_object(); cursor.loopOn = lr.on; cursor.loopStart = lr.start; cursor.loopEnd = lr.end; }
-          {   // how far through the playing row we are: the time since the tick changed over one tick's length
-            static int lastTick = -1; static double changedAt = 0;
-            if (tick != lastTick) { lastTick = tick; changedAt = ImGui::GetTime(); }
-            const double tickSeconds = 60.0 / (std::max(1.0, song.bpm) * std::max(1, song.ticksPerBeat));
-            cursor.playFrac = playing ? static_cast<float>(std::clamp((ImGui::GetTime() - changedAt) / tickSeconds, 0.0, 1.0)) : 0.0f;
-          }
-          cursor.info = app::describeColumn(doc.project(), lane, session->player->engine().laneColumns(lane.id), session->rows[lane.id], editor.tick(), editor.cell());
-          cursor.selected = sel.active; cursor.tick0 = sel.tick0; cursor.tick1 = sel.tick1; cursor.cell0 = sel.cell0; cursor.cell1 = sel.cell1;
-          session->scrollToCursor = false;
-          const app::PatternViewResult result = app::drawPatternView(
-              session->rows[lane.id], session->player->engine().columnLabels(lane.id), song.ticksPerBeat, song.beatsPerBar,
-              playing ? tick : -1, follow && playing && !session->edit, cursor);
-          if (result.clickedTick >= 0) playFromRequest = result.clickedTick;
-          if (result.cell >= 0) editor.moveTo(result.cellTick, result.cell);
+          drawGrid({&lane}, 0);
           ImGui::EndTabItem();
         }
       }

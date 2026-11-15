@@ -55,6 +55,8 @@ void loadSettings() {
   s.follow = data.value("follow", s.follow);
   s.arrangementRow = data.value("arrangementRow", s.arrangementRow);
   s.insertCut = data.value("insertCut", s.insertCut);
+  s.patternAll = data.value("patternAll", s.patternAll);
+  s.tintPatterns = data.value("tintPatterns", s.tintPatterns);
 }
 
 void saveSettings() {
@@ -62,7 +64,7 @@ void saveSettings() {
   if (path.empty()) return;
   const Settings& s = gSettings;
   Json data = {{"wireAudio", hexOf(s.wireAudio)}, {"wireControl", hexOf(s.wireControl)}, {"wireStereo", hexOf(s.wireStereo)},
-               {"wireParam", hexOf(s.wireParam)}, {"wireDashed", s.wireDashed}, {"playhead", s.playhead}, {"follow", s.follow}, {"arrangementRow", s.arrangementRow}, {"insertCut", s.insertCut}};
+               {"wireParam", hexOf(s.wireParam)}, {"wireDashed", s.wireDashed}, {"playhead", s.playhead}, {"follow", s.follow}, {"arrangementRow", s.arrangementRow}, {"insertCut", s.insertCut}, {"patternAll", s.patternAll}, {"tintPatterns", s.tintPatterns}};
   std::ofstream(path, std::ios::trunc) << data.dump(1) << "\n";
 }
 

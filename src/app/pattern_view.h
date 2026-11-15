@@ -13,7 +13,17 @@ namespace wax::app {
 std::vector<std::vector<std::string>> flattenLane(const Lane& lane, int songLength);
 
 // The editing cursor to draw, and whether the view should scroll to keep it in sight.
+// One lane's grid: its cells (rows[tick][column]), the column headings, and the tint of each row (the colour of the pattern that plays there).
+struct PatternLane {
+  std::string id;
+  const std::vector<std::vector<std::string>>* rows = nullptr;
+  const std::vector<std::string>* labels = nullptr;
+  std::vector<unsigned int> tint;   // per tick, an ImU32 colour (0: none); empty: no tint
+};
+
 struct CursorView {
+  int lane = 0;                          // which of the lanes shown holds the cursor
+
   bool show = false;
   int tick = -1, cell = -1;
   bool scrollTo = false;
@@ -30,10 +40,11 @@ struct CursorView {
 struct PatternViewResult {
   int clickedTick = -1;   // a row number was clicked: play from here
   int cellTick = -1, cell = -1;   // a cell was clicked
+  int lane = -1;                  // ...in this one of the lanes shown
 };
 
-// `labels`: the column headings. `playTick`: the row to highlight (-1: none). `follow`: scroll to keep it in view.
-PatternViewResult drawPatternView(const std::vector<std::vector<std::string>>& rows, const std::vector<std::string>& labels,
-                                  int ticksPerBeat, int beatsPerBar, int playTick, bool follow, const CursorView& cursor = {});
+// One lane (the solo view) or several side by side, the lane's name over its columns. `playTick`: the row to highlight (-1: none).
+// `follow`: scroll to keep it in view.
+PatternViewResult drawPatternView(const std::vector<PatternLane>& lanes, int ticksPerBeat, int beatsPerBar, int playTick, bool follow, const CursorView& cursor = {});
 
 }  // namespace wax::app

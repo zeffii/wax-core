@@ -20,6 +20,8 @@ struct Settings {
   std::string playhead = "line";
   bool follow = true;   // the grids scroll with the playing row
   bool insertCut = false;   // Insert silence cuts a pattern that runs across the cursor row (off: it stays whole)
+  bool patternAll = false;     // the Pattern screen shows every lane side by side (off: one lane, picked by its tab)
+  bool tintPatterns = true;    // the Pattern screen tints each pattern's rows with the pattern's colour
   int arrangementRow = 0;   // the Song screen's row size in ticks (Ctrl+wheel); 0: a bar
 };
 
