@@ -7,6 +7,7 @@
 
 #include "imgui.h"
 
+#include "app/insert_menu.h"
 #include "edit/document.h"
 
 namespace wax::app {
@@ -16,7 +17,7 @@ struct GraphViewState {
   float grabX = 0, grabY = 0;   // where on the tile it was taken
   std::string wiring;        // the node a new wire is being pulled from (its right-hand dot)
   ImVec2 addAt{0, 0};        // where the add-node menu was opened (web pixels)
-  char filter[48] = {0};     // what is typed in the add-node menu
+  InsertMenuState menu;      // the add-node menu (right-click on empty space)
   std::string deleteNode;    // set by the right-click menu; the caller never needs to clear it
 };
 

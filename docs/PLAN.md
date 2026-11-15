@@ -148,3 +148,9 @@ tilelayout.js), glyphs and per-type shapes come from the web app: `node tools/ge
 records each glyph by running the web's own drawing code. Ports sit on the tile edge (the real port, so wiring picks the port; parameter
 ports hang in a strip of dots under the tile), wires are coloured by kind (dashed for control/param), nodes snap to the 24px dot grid
 (Ctrl for free). Not yet: node faces (the arpeggiator's step mask), hover tips on ports, wire selection, pull-out/inline insert.
+
+### Add-node menu
+The graph's right-click menu is the web's cascading insert menu (src/app/insert_menu.cpp, a port of graph/menu.js): categories, groups, nodes in
+columns, Up/Down/Left/Right/Enter, underlined hotkeys, "/" or Tab for a flat search (best match first). The grouping table is generated:
+`node tools/gen-insert-menu.mjs /path/to/webtracker > src/app/insert_menu_table.inc`. Not yet: replacing a node or inserting into a wire from the
+menu, and the Shift+I machine tree for adding an instrument with its own lane. `--clicks "r:x,y"` right-clicks in the headless harness.

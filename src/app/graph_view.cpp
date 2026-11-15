@@ -339,36 +339,28 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       }
     }
   }
-  // right-click on empty space: add a node (a flat list of the types, filtered as you type)
-  if (ImGui::IsWindowHovered(ImGuiHoveredFlags_None) && !ImGui::IsAnyItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+  // right-click on empty space: the add-node menu (a cascading tree, as in the web app)
+  if (ImGui::IsWindowHovered(ImGuiHoveredFlags_None) && !ImGui::IsAnyItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right) && hover.node.empty()) {
     state.addAt = ImVec2((io.MousePos.x - origin.x) / scale, (io.MousePos.y - origin.y) / scale);
-    state.filter[0] = 0;
-    ImGui::OpenPopup("addnode");
+    openInsertMenu(state.menu, "addnode");
   }
-  if (ImGui::BeginPopup("addnode")) {
-    if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
-    ImGui::SetNextItemWidth(140 * scale);
-    ImGui::InputText("##filter", state.filter, sizeof state.filter);
-    ImGui::BeginChild("types", ImVec2(160 * scale, 220 * scale), false, ImGuiWindowFlags_NoNav);
-    for (const std::string& name : types.typeNames()) {
-      if (name == "out" || (state.filter[0] && name.find(state.filter) == std::string::npos)) continue;
-      if (textButton(name.c_str())) {
-        std::string id = name;
-        for (int k = 1;; k++) {
-          bool taken = false;
-          for (const GraphNode& n : graph.nodes) taken |= n.id == id;
-          if (!taken) break;
-          id = name + std::to_string(k);
-        }
-        doc.apply(std::make_unique<AddNode>(instrumentId, name, id, std::max(0.0f, state.addAt.x), std::max(0.0f, state.addAt.y)));
-        picked = id;
-        moved = true;
-        ImGui::CloseCurrentPopup();
-        break;
+  {
+    std::set<std::string> available;
+    for (const std::string& name : types.typeNames()) if (name != "out" && name != "tempo") available.insert(name);
+    const std::string name = drawInsertMenu(state.menu, "addnode", available);
+    if (!name.empty()) {
+      std::string id = name;
+      for (int k = 1;; k++) {
+        bool taken = false;
+        for (const GraphNode& n : graph.nodes) taken |= n.id == id;
+        if (!taken) break;
+        id = name + std::to_string(k);
       }
+      float x = std::round(state.addAt.x / kGrid) * kGrid, y = std::round(state.addAt.y / kGrid) * kGrid;
+      doc.apply(std::make_unique<AddNode>(instrumentId, name, id, std::max(0.0f, x), std::max(0.0f, y)));
+      picked = id;
+      moved = true;
     }
-    ImGui::EndChild();
-    ImGui::EndPopup();
   }
   ImGui::SetCursorScreenPos(ImVec2(origin.x + right + 40 * scale, origin.y + bottom + 40 * scale));
   ImGui::Dummy(ImVec2(1, 1));

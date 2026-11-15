@@ -626,17 +626,19 @@ ImGuiKey keyNamed(const std::string& name) {
 // "100,200;150,220" -> a click at each place, one every six frames: the pointer moves, goes down two frames later and up two after that.
 void feedClicks(const std::string& script, int frame) {
   std::vector<std::pair<float, float>> places;
+  std::vector<int> buttons;   // 0 left, 1 right ("r:x,y")
   std::stringstream stream(script);
   for (std::string item; std::getline(stream, item, ';');) {
     float x = 0, y = 0;
-    if (std::sscanf(item.c_str(), "%f,%f", &x, &y) == 2) places.emplace_back(x, y);
+    const bool right = item.rfind("r:", 0) == 0;
+    if (std::sscanf(item.c_str() + (right ? 2 : 0), "%f,%f", &x, &y) == 2) { places.emplace_back(x, y); buttons.push_back(right ? 1 : 0); }
   }
   const int index = frame / 6, phase = frame % 6;
   if (index < 0 || index >= static_cast<int>(places.size())) return;
   ImGuiIO& io = ImGui::GetIO();
   if (phase == 0) io.AddMousePosEvent(places[static_cast<std::size_t>(index)].first, places[static_cast<std::size_t>(index)].second);
-  if (phase == 2) io.AddMouseButtonEvent(0, true);
-  if (phase == 4) io.AddMouseButtonEvent(0, false);
+  if (phase == 2) io.AddMouseButtonEvent(buttons[static_cast<std::size_t>(index)], true);
+  if (phase == 4) io.AddMouseButtonEvent(buttons[static_cast<std::size_t>(index)], false);
 }
 
 void feedKeys(const std::string& script, int frame) {
