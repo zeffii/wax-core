@@ -1,4 +1,5 @@
 #include "project/save.h"
+#include "core/js_math.h"
 
 #include <cstdio>
 #include <filesystem>
@@ -63,6 +64,20 @@ std::string serializeProject(const Project& project) {
         if (edited.data.is_object() && !(node.contains("data") && node["data"] == edited.data)) node["data"] = edited.data;
       }
     }
+  }
+  // the song's tempo settings are the master tempo node's parameters as edited (the header's bpm, swing and ticks per beat);
+  // a setting is written only when it differs from what the file holds, so a song that was not touched is saved as it was
+  for (const Instrument& instrument : project.instruments) {
+    if (instrument.id != "master" || !out.contains("song")) continue;
+    Json& song = out["song"];
+    for (const GraphNode& node : instrument.graph.nodes) {
+      if (node.id != "m" || !node.params.is_object()) continue;
+      const auto number = [&](const char* name) { return node.params.contains(name) && node.params[name].is_number() ? node.params[name].get<double>() : 0.0; };
+      if (node.params.contains("bpm") && number("bpm") != song.value("bpm", 120.0)) song["bpm"] = number("bpm");
+      if (node.params.contains("swing") && number("swing") != jsRound(song.value("swing", 0.5) * 100)) song["swing"] = number("swing") / 100.0;
+      if (node.params.contains("tpb") && number("tpb") != song.value("ticksPerBeat", 4)) song["ticksPerBeat"] = number("tpb");
+    }
+    if (project.song.beatsPerBar != song.value("beatsPerBar", 4)) song["beatsPerBar"] = project.song.beatsPerBar;
   }
   return out.dump(1);
 }

@@ -92,6 +92,7 @@ struct Session {
   app::EnvelopeWindow envelopes;
   app::DxWindow dx;
   app::GraphViewState graphView;
+  bool lcdDragging = false;              // a drag in the header's song settings is in progress: its steps are one undo
   Screen screen = Screen::Pattern;       // the screen shown (the rail at the left)
   std::string instrument;                // the instrument shown on the Instrument screen
   std::string wantLane;                  // a lane the arrangement asked for; its tab opens next frame
@@ -175,6 +176,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     session->rowsRevision = doc.revision();
   }
 
+  bool requestSave = false;   // the File menu or Ctrl+S
+
   // The transport.
   const bool playing = player.playing();
   if (ImGui::Button(playing ? "Stop" : "Play", ImVec2(70, 0))) {
@@ -244,6 +247,48 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   ImGui::SameLine();
   ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "   undo: %s   redo: %s%s%s", doc.canUndo() ? doc.undoLabel().c_str() : "-",
                      doc.canRedo() ? doc.redoLabel().c_str() : "-", session->editStatus.empty() ? "" : "   ", session->editStatus.c_str());
+  // The File menu and the song settings (the web app's header LCD): bpm, swing, ticks per beat, beats per bar; len and time are read out.
+  {
+    const float hs = ImGui::GetStyle().FontScaleDpi;
+    if (app::textButton("File")) ImGui::OpenPopup("filemenu");
+    if (ImGui::BeginPopup("filemenu")) {
+      if (app::textButton("Open...  Ctrl+O")) { gRequest = DialogRequest::Open; ImGui::CloseCurrentPopup(); }
+      if (app::textButton("Save  Ctrl+S")) { requestSave = true; ImGui::CloseCurrentPopup(); }
+      if (app::textButton("Save as...  Ctrl+Shift+S")) { gRequest = DialogRequest::SaveAs; ImGui::CloseCurrentPopup(); }
+      ImGui::EndPopup();
+    }
+    ImGui::SameLine(0, 22 * hs);
+    const NodeType* tempo = builtinNodes().find("tempo");
+    struct Field { const char* id; const char* label; const char* param; };
+    const Field fields[] = {{"lcd_bpm", "bpm", "bpm"}, {"lcd_swing", "swing", "swing"}, {"lcd_tpb", "ticks", "tpb"}};
+    bool lcdActive = false;
+    for (const Field& f : fields) {
+      const ParamSpec* spec = nullptr;
+      for (const ParamSpec& p : tempo->params) if (p.name == f.param) spec = &p;
+      const std::string address = std::string("master.m.") + f.param;
+      double value = player.engine().registry().slotOf(address) >= 0 ? player.engine().registry().get(address) : spec->def;
+      app::SliderSpec k;
+      k.min = f.param == std::string("bpm") ? 20 : f.param == std::string("swing") ? 50 : 1;
+      k.max = f.param == std::string("bpm") ? 400 : f.param == std::string("swing") ? 75 : 24;
+      k.def = spec->def; k.isInt = f.param != std::string("bpm"); k.width = 90;
+      const app::SliderResult r = app::slider(f.id, f.label, value, k);
+      lcdActive |= r.active;
+      if (r.changed) {
+        doc.apply(std::make_unique<SetParam>("master", "m", f.param, value), session->lcdDragging);
+        syncParams(doc, player.engine());
+      }
+      ImGui::SameLine(0, 14 * hs);
+    }
+    double bpb = song.beatsPerBar;
+    app::SliderSpec bk; bk.min = 1; bk.max = 16; bk.def = 4; bk.isInt = true; bk.width = 90;
+    const app::SliderResult br = app::slider("lcd_bpb", "beats/bar", bpb, bk);
+    lcdActive |= br.active;
+    if (br.changed) doc.apply(std::make_unique<SetBeatsPerBar>(static_cast<int>(bpb)), session->lcdDragging);
+    session->lcdDragging = lcdActive;
+    ImGui::SameLine(0, 18 * hs);
+    const int seconds = static_cast<int>(song.length * 60.0 / std::max(1, song.ticksPerBeat) / std::max(20.0, song.bpm));
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "len %d   time %d:%02d", song.length, seconds / 60, seconds % 60);
+  }
   ImGui::Separator();
 
   // The computer keyboard plays notes unless a text box has it. With Enter pressed it also types into the cell under the cursor.
@@ -262,7 +307,9 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Y)) { doc.redo(); edited = true; }
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_O, false)) gRequest = DialogRequest::Open;
     if (ctrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S, false)) gRequest = DialogRequest::SaveAs;
-    else if (ctrl && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
+    else if (ctrl && ImGui::IsKeyPressed(ImGuiKey_S, false)) requestSave = true;
+    if (requestSave) {
+      requestSave = false;
       try {
         saveProject(doc.project(), session->path);
         doc.markSaved();

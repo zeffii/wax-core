@@ -113,6 +113,25 @@ private:
   bool removed_ = false;
 };
 
+// Beats in a bar, the top number of the time signature (the arrangement's shading and bars follow it). A drag folds into one undo step.
+class SetBeatsPerBar final : public Edit {
+public:
+  explicit SetBeatsPerBar(int value) : value_(value) {}
+  void apply(Project& project) override { if (!captured_) { before_ = project.song.beatsPerBar; captured_ = true; } project.song.beatsPerBar = value_; }
+  void revert(Project& project) override { project.song.beatsPerBar = before_; }
+  std::string label() const override { return "Set beats per bar"; }
+  bool absorb(const Edit& next) override {
+    const auto* other = dynamic_cast<const SetBeatsPerBar*>(&next);
+    if (!other) return false;
+    value_ = other->value_;
+    return true;
+  }
+
+private:
+  int value_, before_ = 4;
+  bool captured_ = false;
+};
+
 // A new node of a type, placed at x, y with its parameters at their defaults. Undo takes it out again.
 class AddNode final : public Edit {
 public:

@@ -661,6 +661,18 @@ void testAddNode() {
   std::printf("ok: add node\n");
 }
 
+void testSongSettings() {
+  const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
+  wax::Document doc(original);
+  doc.apply(std::make_unique<wax::SetParam>("master", "m", "bpm", 150));
+  doc.apply(std::make_unique<wax::SetParam>("master", "m", "swing", 60));
+  doc.apply(std::make_unique<wax::SetParam>("master", "m", "tpb", 6));
+  doc.apply(std::make_unique<wax::SetBeatsPerBar>(3));
+  const wax::Project reread = wax::parseProject(wax::serializeProject(doc.project()));
+  check(reread.song.bpm == 150 && reread.song.swing == 0.6 && reread.song.ticksPerBeat == 6 && reread.song.beatsPerBar == 3, "the header's tempo settings are saved with the song");
+  std::printf("ok: song settings\n");
+}
+
 void testMoveNode() {
   const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
   wax::Document doc(original);
@@ -723,6 +735,7 @@ void testSetParam() {
 }
 
 int main() {
+  testSongSettings();
   testAddNode();
   testUnits();
   testRewire();
