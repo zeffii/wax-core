@@ -103,6 +103,7 @@ struct Session {
   app::PatternListState patternList;     // the Song screen's pattern list
   char laneName[40] = {0};               // the rename box on the Song screen
   std::string laneNameFor;               // the lane that text belongs to
+  int silenceTicks = 128;                // the length of silence Insert puts in
   bool wantTree = false;                 // open the machine tree (Shift+I, or the Instrument screen's add button)
   bool showKeys = true;                  // the shortcut sheet beside the Pattern grid
   bool showMixer = true;                 // the mixer under the Song and Pattern screens (the status bar's toggle)
@@ -515,6 +516,27 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         }
         if (laneEdited) { const std::vector<std::string> problems = syncLanes(doc, player.engine()); session->editStatus = problems.empty() ? std::string() : problems.front(); }
         if (!laneEdited) { /* a move changes order only */ }
+      }
+    }
+    {   // insert silence at the cursor row: everything from there on moves later (the web's Insert box)
+      const auto insert = [&](int ticks) {
+        doc.apply(std::make_unique<InsertSilence>(editor.tick(), ticks));
+        const std::vector<std::string> problems = syncLanes(doc, player.engine());
+        syncLoop(doc, player.engine());
+        session->editStatus = problems.empty() ? std::string() : problems.front();
+      };
+      ImGui::AlignTextToFramePadding();
+      ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "insert silence");
+      ImGui::SameLine();
+      char text[16]; std::snprintf(text, sizeof text, "%d", session->silenceTicks);
+      const int step = app::spinBox("##silence", text, 56 * scale);
+      session->silenceTicks = std::clamp(session->silenceTicks + step * 16, 1, 65536);
+      ImGui::SameLine(0, 8 * scale);
+      if (app::textButton("Insert")) insert(session->silenceTicks);
+      for (const int preset : {16, 32, 48, 64, 128, 256, 512}) {
+        ImGui::SameLine(0, 6 * scale);
+        char label[16]; std::snprintf(label, sizeof label, "%d", preset);
+        if (app::textButton(label)) { session->silenceTicks = preset; insert(preset); }
       }
     }
     const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, session->edit ? editor.tick() : -1, follow && playing && !session->edit);

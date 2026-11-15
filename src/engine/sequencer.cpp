@@ -90,6 +90,7 @@ void Sequencer::setSong(const SongSettings& song) {
   const SongSettings old = song_;
   const bool hadMaster = songSet_ && old.master.present();
   song_ = song;
+  length_.store(song.length, std::memory_order_relaxed);
   songSet_ = true;
   runtime_.masterSlots = song.master;
   const bool changed = !hadMaster || old.bpm != song.bpm || old.ticksPerBeat != song.ticksPerBeat || old.swing != song.swing;
@@ -179,7 +180,7 @@ void Sequencer::setLane(const PreparedLane& prepared) { installLane(buildLane(pr
 void Sequencer::play(int from, bool once) {
   if (playing_) releaseAll();   // jumping while playing: what rings is let go first
   resetTempo();
-  tick_ = from >= 0 && from < song_.length ? from : 0;
+  tick_ = from >= 0 && from < length_.load(std::memory_order_relaxed) ? from : 0;
   songPos_ = tick_;
   countdown_ = 0;
   subIdx_ = 0;
@@ -394,9 +395,9 @@ void Sequencer::fireTick() {
   }
   if (std::abs(songPos_ - tick_) > 1.5) songPos_ = tick_;   // the end of the song: back on the grid
   const int loopEnd = loopEnd_.load(std::memory_order_relaxed), loopStart = loopStart_.load(std::memory_order_relaxed);
-  if (!once_ && loopEnd > loopStart && loopEnd <= song_.length) {
+  if (!once_ && loopEnd > loopStart && loopEnd <= length_.load(std::memory_order_relaxed)) {
     if (++tick_ >= loopEnd) tick_ = loopStart;   // the song loop: back to its start (a song played once ignores it)
-  } else if (++tick_ >= song_.length) {
+  } else if (++tick_ >= length_.load(std::memory_order_relaxed)) {
     tick_ = 0;
   }
   if (once_ && tick_ == 0) wrapped_ = true;

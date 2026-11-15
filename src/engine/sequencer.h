@@ -49,6 +49,7 @@ public:
   // stops (every note is released) instead of starting again from the top.
   void play(int from = 0, bool once = false);
   // The song loop (audio thread reads it each tick): ticks start to end, end not included; end <= start: no loop, the whole song plays round.
+  void setLength(int ticks) { length_.store(ticks, std::memory_order_relaxed); }   // the song's length in ticks (live: inserting silence)
   void setLoop(int start, int end) { loopStart_.store(start, std::memory_order_relaxed); loopEnd_.store(end, std::memory_order_relaxed); }
   void stop();
 
@@ -101,6 +102,7 @@ private:
   bool playing_ = false;
   bool once_ = false;
   std::atomic<int> loopStart_{0}, loopEnd_{0};
+  std::atomic<int> length_{16};
   bool wrapped_ = false;   // once: the last row has fired
   bool gainSet_ = false;
   double gain_ = 1;        // the master volume the last span ended on

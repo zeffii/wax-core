@@ -168,6 +168,40 @@ Lane& laneNamed(Project& project, const std::string& id) {
 }
 }  // namespace
 
+namespace {
+constexpr int kMaxSong = 65536;
+int movedBy(int t, int at, int n) { return t >= at ? t + n : t; }
+}  // namespace
+
+void InsertSilence::apply(Project& project) {
+  if (ticks_ < 1) throw std::out_of_range("insert at least one tick");
+  if (project.song.length + ticks_ > kMaxSong) throw std::out_of_range("the song would pass 65536 ticks");
+  at_ = tick_ / 16 * 16;
+  for (Lane& lane : project.lanes) {
+    for (Placement& p : lane.placements) p.start = movedBy(p.start, at_, ticks_);
+    for (int& t : lane.mutes) t = movedBy(t, at_, ticks_);
+    for (int& t : lane.offs) t = movedBy(t, at_, ticks_);
+  }
+  project.song.length += ticks_;
+  loopBefore_ = project.song.raw.contains("loop") ? project.song.raw["loop"] : Json();
+  if (project.song.raw.contains("loop") && project.song.raw["loop"].is_object()) {
+    Json& loop = project.song.raw["loop"];
+    loop["start"] = movedBy(loop.value("start", 0), at_, ticks_);
+    const int end = loop.value("end", 0);
+    loop["end"] = end > at_ ? end + ticks_ : end;
+  }
+}
+
+void InsertSilence::revert(Project& project) {
+  for (Lane& lane : project.lanes) {
+    for (Placement& p : lane.placements) if (p.start >= at_ + ticks_) p.start -= ticks_;
+    for (int& t : lane.mutes) if (t >= at_ + ticks_) t -= ticks_;
+    for (int& t : lane.offs) if (t >= at_ + ticks_) t -= ticks_;
+  }
+  project.song.length -= ticks_;
+  if (loopBefore_.is_null()) project.song.raw.erase("loop"); else project.song.raw["loop"] = loopBefore_;
+}
+
 void RenamePattern::apply(Project& project) {
   for (Pattern& p : laneNamed(project, lane_).patterns) if (p.id == pattern_) { old_ = p.name; p.name = name_; return; }
   throw std::out_of_range("no pattern " + pattern_);
@@ -476,6 +510,7 @@ void Document::touched(const Edit& edit) {
   revision_++;
   if (!edit.lane().empty()) changed_.insert(edit.lane());
   if (!edit.otherLane().empty()) changed_.insert(edit.otherLane());
+  if (edit.allLanes()) for (const Lane& l : project_.lanes) changed_.insert(l.id);
   if (!edit.paramAddress().empty()) changedParams_.insert(edit.paramAddress());
   if (!edit.dataNode().empty()) changedData_.insert(edit.dataNode());
   if (edit.songLoop()) loopChanged_ = true;

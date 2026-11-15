@@ -19,6 +19,7 @@ public:
   virtual void apply(Project& project) = 0;
   virtual void revert(Project& project) = 0;
   virtual std::string label() const = 0;               // "Set cell", shown next to Undo in the window
+  virtual bool allLanes() const { return false; }   // every lane changes (inserting silence)
   virtual std::string otherLane() const { return {}; }  // a second lane whose sound this changes (the old name of a renamed lane)
   virtual std::string lane() const { return {}; }      // the lane whose sound this changes ("" when none)
   virtual std::string paramAddress() const { return {}; }   // "instrument.node.param" of the parameter this sets ("" when none)
@@ -331,6 +332,23 @@ private:
   Lane removed_;
   int laneAt_ = -1, instrumentAt_ = -1;
   Instrument instrument_;
+};
+
+// `ticks` of silence at the row holding `tick`: in every lane the placements starting at or after the row, the mutes and the note-offs
+// move later, the loop follows, and the song grows (a pattern crossing the row stays whole). Undo takes it all back.
+class InsertSilence final : public Edit {
+public:
+  InsertSilence(int tick, int ticks) : tick_(tick), ticks_(ticks) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Insert silence"; }
+  bool allLanes() const override { return true; }
+  bool songLoop() const override { return true; }
+
+private:
+  int tick_, ticks_;
+  int at_ = 0;
+  Json loopBefore_;
 };
 
 // A pattern under another name.

@@ -66,6 +66,7 @@ std::vector<std::string> syncGraphs(Document& document, Engine& engine) {
 
 void syncLoop(Document& document, Engine& engine) {
   if (!document.takeLoopChanged()) return;
+  engine.setLength(document.project().song.length);
   const LoopRange loop = loopOf(document.project().song);
   engine.setLoop(loop.on ? loop.start : 0, loop.on ? loop.end : 0);
 }

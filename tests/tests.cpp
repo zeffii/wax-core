@@ -833,6 +833,25 @@ void testPatternRenameClone() {
   std::printf("ok: pattern rename and clone\n");
 }
 
+void testInsertSilence() {
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax"));
+  const int length = doc.project().song.length;
+  std::vector<int> starts;
+  for (const wax::Lane& l : doc.project().lanes) for (const wax::Placement& p : l.placements) starts.push_back(p.start);
+  doc.apply(std::make_unique<wax::InsertSilence>(32, 64));
+  check(doc.project().song.length == length + 64, "the song grows");
+  std::size_t i = 0; bool moved = true;
+  for (const wax::Lane& l : doc.project().lanes) for (const wax::Placement& p : l.placements) { const int was = starts[i++]; moved &= p.start == (was >= 32 ? was + 64 : was); }
+  check(moved, "placements from the row on move later");
+  const wax::Project saved = wax::parseProject(wax::serializeProject(doc.project()));
+  check(saved.song.length == length + 64, "the new length is saved");
+  doc.undo();
+  i = 0; bool back = doc.project().song.length == length;
+  for (const wax::Lane& l : doc.project().lanes) for (const wax::Placement& p : l.placements) back &= p.start == starts[i++];
+  check(back, "undo puts everything back");
+  std::printf("ok: insert silence\n");
+}
+
 void testMoveNode() {
   const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
   wax::Document doc(original);
@@ -902,6 +921,7 @@ int main() {
   testAddInstrument();
   testLaneEdits();
   testPatternRenameClone();
+  testInsertSilence();
   testAddNode();
   testUnits();
   testRewire();

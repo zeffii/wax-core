@@ -41,6 +41,10 @@ Json laneJson(const Lane& lane) {
     placements.push_back(std::move(p));
   }
   out["placements"] = std::move(placements);
+  for (const char* key : {"mutes", "offs"}) {   // written when there are some, or the file had the list
+    const std::vector<int>& ticks = key[0] == 'm' ? lane.mutes : lane.offs;
+    if (!ticks.empty() || out.contains(key)) out[key] = ticks;
+  }
   return out;
 }
 
@@ -92,6 +96,7 @@ std::string serializeProject(const Project& project) {
       if (node.params.contains("swing") && number("swing") != jsRound(song.value("swing", 0.5) * 100)) song["swing"] = number("swing") / 100.0;
       if (node.params.contains("tpb") && number("tpb") != song.value("ticksPerBeat", 4)) song["ticksPerBeat"] = number("tpb");
     }
+    if (project.song.length != song.value("length", project.song.length)) song["length"] = project.song.length;
     if (project.song.beatsPerBar != song.value("beatsPerBar", 4)) song["beatsPerBar"] = project.song.beatsPerBar;
     // the loop as edited (set, switched off, or taken away)
     if (project.song.raw.is_object() && project.song.raw.contains("loop")) song["loop"] = project.song.raw["loop"];

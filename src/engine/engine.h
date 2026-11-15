@@ -51,6 +51,7 @@ public:
   // Compiles an instrument's graph as the project now holds it and sends it to the audio thread (see GraphRuntime::sendGraph). Empty string
   // when sent; otherwise why not (a loop in the wiring, a full queue), and the sound goes on as it was.
   // The song loop in ticks (end <= start: none). Takes effect at the next tick.
+  void setLength(int ticks) { sequencer_.setLength(ticks); }
   void setLoop(int start, int end) { sequencer_.setLoop(start, end); }
   std::string sendGraph(const Project& project, const std::string& instrument);
   bool sendData(const std::string& instrument, const std::string& nodeId, Json data);   // false when the queue is full: try again later
