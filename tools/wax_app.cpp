@@ -317,7 +317,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   }
 
   // The lanes (the panel below them takes the bottom of the window).
-  const float panelHeight = 6.0f * ImGui::GetTextLineHeightWithSpacing() + app::mixerHeight() + 8;
+  const float panelHeight = 3.6f * ImGui::GetTextLineHeightWithSpacing() + app::mixerHeight() + 12;
   const float sequenceSpan = std::min(app::sequenceWidth(doc.project()), ImGui::GetContentRegionAvail().x * 0.45f);
   ImGui::BeginChild("sequenceArea", ImVec2(sequenceSpan, -panelHeight), false);
   {
@@ -326,7 +326,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   }
   ImGui::EndChild();
   ImGui::SameLine();
-  ImGui::BeginChild("lanesArea", ImVec2(0, -panelHeight), false);
+  ImGui::BeginChild("lanesArea", ImVec2(-app::paramDockSpan(session->panel), -panelHeight), false);
   std::string laneInstrument;
   if (ImGui::BeginTabBar("lanes")) {
     for (const Lane& lane : doc.project().lanes) {
@@ -360,12 +360,13 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     ImGui::EndTabBar();
   }
   ImGui::EndChild();
+  ImGui::SameLine();
+  if (!laneInstrument.empty() && app::drawParamPanel(session->panel, doc, player.engine(), laneInstrument, -panelHeight)) syncParams(doc, player.engine());
   ImGui::Separator();
   if (!laneInstrument.empty() && session->showGraph) {
     if (session->panel.instrument != laneInstrument) { session->panel.instrument = laneInstrument; session->panel.node.clear(); }
     app::drawGraphView(session->graphView, doc, laneInstrument, session->panel.node, 3.6f * ImGui::GetTextLineHeightWithSpacing());
   }
-  if (!laneInstrument.empty() && app::drawParamPanel(session->panel, doc, player.engine(), laneInstrument)) syncParams(doc, player.engine());
   if (!session->panel.drawNode.empty()) { app::showEnvelopes(session->envelopes, laneInstrument, session->panel.drawNode); session->panel.drawNode.clear(); }
   ImGui::Separator();
   if (app::drawEnvelopeWindow(session->envelopes, doc, player.engine())) syncData(doc, player.engine());

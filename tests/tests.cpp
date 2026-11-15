@@ -17,6 +17,7 @@
 #include "edit/sync.h"
 #include "nodes/bezier.h"
 #include "nodes/dx7core.h"
+#include "app/units.h"
 #include "engine/engine.h"
 #include "engine/takes.h"
 #include "io/wav.h"
@@ -616,6 +617,19 @@ void testRewire() {
   std::printf("ok: rewiring\n");
 }
 
+void testUnits() {
+  using wax::app::displayValue;
+  using wax::app::parseValue;
+  const wax::ParamSpec cutoff("cutoff", 20, 20000, 1200), tune("tune", -48, 48, 0), mix("mix", 0, 1, 0.5);
+  check(displayValue("filter", cutoff, 1200) == "1.2 kHz", "frequencies over 1000 show in kHz");
+  check(displayValue("lone", tune, 3) == "+3 st", "tuning shows a sign and st");
+  check(displayValue("delay", mix, 0.25) == "25%", "a mix shows as a percentage");
+  double v = 0;
+  check(parseValue("filter", cutoff, "2.5k", v) && v == 2500, "2.5k types as 2500 Hz");
+  check(parseValue("delay", mix, "40%", v) && v == 0.4, "40% types as 0.4");
+  std::printf("ok: units\n");
+}
+
 void testMoveNode() {
   const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
   wax::Document doc(original);
@@ -678,6 +692,7 @@ void testSetParam() {
 }
 
 int main() {
+  testUnits();
   testRewire();
   testMoveNode();
   testBankEdit();
