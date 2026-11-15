@@ -1,4 +1,5 @@
 #include "edit/sync.h"
+#include "seq/loop.h"
 
 #include <stdexcept>
 
@@ -61,6 +62,12 @@ std::vector<std::string> syncGraphs(Document& document, Engine& engine) {
     if (!why.empty()) problems.push_back(instrumentId + ": " + why);
   }
   return problems;
+}
+
+void syncLoop(Document& document, Engine& engine) {
+  if (!document.takeLoopChanged()) return;
+  const LoopRange loop = loopOf(document.project().song);
+  engine.setLoop(loop.on ? loop.start : 0, loop.on ? loop.end : 0);
 }
 
 }  // namespace wax

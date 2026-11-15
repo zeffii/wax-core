@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cstdint>
+#include <atomic>
 #include <memory>
 #include <string>
 #include <vector>
@@ -47,6 +48,8 @@ public:
   // From a tick. With `once`, the song is played one time: when its last row has had its full length the sequencer
   // stops (every note is released) instead of starting again from the top.
   void play(int from = 0, bool once = false);
+  // The song loop (audio thread reads it each tick): ticks start to end, end not included; end <= start: no loop, the whole song plays round.
+  void setLoop(int start, int end) { loopStart_.store(start, std::memory_order_relaxed); loopEnd_.store(end, std::memory_order_relaxed); }
   void stop();
 
   // Fills left and right with n samples (n is at most maxBlock).
@@ -97,6 +100,7 @@ private:
   double tickLen_ = 0;     // samples in the tick now sounding (swing makes them differ)
   bool playing_ = false;
   bool once_ = false;
+  std::atomic<int> loopStart_{0}, loopEnd_{0};
   bool wrapped_ = false;   // once: the last row has fired
   bool gainSet_ = false;
   double gain_ = 1;        // the master volume the last span ended on

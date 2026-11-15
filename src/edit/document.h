@@ -22,6 +22,7 @@ public:
   virtual std::string lane() const { return {}; }      // the lane whose sound this changes ("" when none)
   virtual std::string paramAddress() const { return {}; }   // "instrument.node.param" of the parameter this sets ("" when none)
   virtual std::string graphInstrument() const { return {}; }   // the instrument whose wiring this changes ("" when none)
+  virtual bool songLoop() const { return false; }              // true when this changes the song's loop
   virtual std::string dataNode() const { return {}; }      // "instrument\x1fnode" whose data (drawings) this changes ("" when none)
   // Typing in one cell is many edits; the next one may fold into this one so a single undo takes back the whole entry.
   // Return true when `next` has been absorbed (and keeps what this edit needs to revert it).
@@ -111,6 +112,21 @@ private:
   std::string instrument_, from_, to_;
   std::size_t at_ = 0;
   bool removed_ = false;
+};
+
+// The song's loop set to a value (null: none). The caller works it out with loopWithPoint / loopToggled.
+class SetLoop final : public Edit {
+public:
+  SetLoop(Json loop, std::string what) : loop_(std::move(loop)), what_(std::move(what)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return what_; }
+  bool songLoop() const override { return true; }
+
+private:
+  Json loop_, before_;
+  std::string what_;
+  bool captured_ = false;
 };
 
 // Several edits that are one step to undo (a paste, a cut). They must all change the same lane.
@@ -306,6 +322,8 @@ public:
   void markDataChanged(const std::string& node) { changedData_.insert(node); }
   // The instruments whose wiring changed (undo and redo count).
   std::set<std::string> takeChangedGraphs();
+  // True once after the song's loop changed (undo and redo count).
+  bool takeLoopChanged() { const bool was = loopChanged_; loopChanged_ = false; return was; }
   void markLaneChanged(const std::string& lane) { changed_.insert(lane); }   // to try again later
 
 private:
@@ -313,6 +331,7 @@ private:
   std::vector<std::unique_ptr<Edit>> undo_, redo_;
   int revision_ = 0, savedRevision_ = 0;
   std::set<std::string> changed_, changedParams_, changedData_, changedGraphs_;
+  bool loopChanged_ = false;
 
   void touched(const Edit& edit);
 };

@@ -5,6 +5,7 @@
 #include "core/node_registry.h"
 #include "project/samples.h"
 #include "seq/lane.h"
+#include "seq/loop.h"
 
 namespace wax {
 namespace {
@@ -95,6 +96,10 @@ Engine::Engine(const Project& project, double sampleRate, int threads)
   song.beatsPerBar = project.song.beatsPerBar;
   song.master = findMasterSlots(registry_);
   sequencer_.setSong(song);
+  {
+    const LoopRange loop = loopOf(project.song);
+    sequencer_.setLoop(loop.on ? loop.start : 0, loop.on ? loop.end : 0);
+  }
   for (const PreparedLane& lane : prepareSong(project, registry_)) {
     sequencer_.setLane(lane);
     columns_[lane.id] = lane.columns;

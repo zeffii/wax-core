@@ -174,6 +174,15 @@ void Disconnect::revert(Project& project) {
   g.connections.insert(g.connections.begin() + static_cast<std::ptrdiff_t>(std::min(at_, g.connections.size())), Connection{from_, to_});
 }
 
+void SetLoop::apply(Project& project) {
+  if (!captured_) { before_ = project.song.raw.contains("loop") ? project.song.raw["loop"] : Json(); captured_ = true; }
+  if (loop_.is_null()) project.song.raw.erase("loop"); else project.song.raw["loop"] = loop_;
+}
+
+void SetLoop::revert(Project& project) {
+  if (before_.is_null()) project.song.raw.erase("loop"); else project.song.raw["loop"] = before_;
+}
+
 void AddNode::apply(Project& project) {
   GraphNode node;
   node.id = id_;
@@ -322,6 +331,7 @@ void Document::touched(const Edit& edit) {
   if (!edit.lane().empty()) changed_.insert(edit.lane());
   if (!edit.paramAddress().empty()) changedParams_.insert(edit.paramAddress());
   if (!edit.dataNode().empty()) changedData_.insert(edit.dataNode());
+  if (edit.songLoop()) loopChanged_ = true;
   if (!edit.graphInstrument().empty()) changedGraphs_.insert(edit.graphInstrument());
 }
 

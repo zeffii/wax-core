@@ -24,4 +24,7 @@ void syncData(Document& document, Engine& engine);
 // compiled (a loop, say); the caller then undoes the edit that caused it.
 std::vector<std::string> syncGraphs(Document& document, Engine& engine);
 
+// Sends the song loop to the engine when it changed since the last call.
+void syncLoop(Document& document, Engine& engine);
+
 }  // namespace wax

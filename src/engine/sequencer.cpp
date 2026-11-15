@@ -393,7 +393,12 @@ void Sequencer::fireTick() {
     nodeseq_.onTick(tick_, now.tpb, barTicks, sampleRate_ * 60 / (now.bpm * now.tpb), now.bpm);
   }
   if (std::abs(songPos_ - tick_) > 1.5) songPos_ = tick_;   // the end of the song: back on the grid
-  if (++tick_ >= song_.length) tick_ = 0;
+  const int loopEnd = loopEnd_.load(std::memory_order_relaxed), loopStart = loopStart_.load(std::memory_order_relaxed);
+  if (!once_ && loopEnd > loopStart && loopEnd <= song_.length) {
+    if (++tick_ >= loopEnd) tick_ = loopStart;   // the song loop: back to its start (a song played once ignores it)
+  } else if (++tick_ >= song_.length) {
+    tick_ = 0;
+  }
   if (once_ && tick_ == 0) wrapped_ = true;
 }
 

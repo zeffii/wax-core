@@ -95,7 +95,6 @@ struct Session {
   app::DxWindow dx;
   app::GraphViewState graphView;
   bool showMixer = true;                 // the mixer under the Song and Pattern screens (the status bar's toggle)
-  bool lcdDragging = false;              // a drag in the header's song settings is in progress: its steps are one undo
   Screen screen = Screen::Pattern;       // the screen shown (the rail at the left)
   std::string instrument;                // the instrument shown on the Instrument screen
   std::string wantLane;                  // a lane the arrangement asked for; its tab opens next frame
@@ -257,7 +256,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     }
     ImGui::SameLine();
   }
-  // The File menu and the song settings (the web app's header LCD): bpm, swing, ticks per beat, beats per bar; len and time are read out.
+  // The File menu and the song settings (the web app's header LCD): bpm, swing, tpb and bar have - and + buttons; len and time are read out.
   {
     const float hs = ImGui::GetStyle().FontScaleDpi;
     if (app::textButton("File")) ImGui::OpenPopup("filemenu");
@@ -268,34 +267,56 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       ImGui::EndPopup();
     }
     ImGui::SameLine(0, 22 * hs);
+    // bpm, swing, tpb and bar are set seldom, so each is a value with a - and a + button (one fixed step each, one undo per click).
+    const ImU32 dim = app::kDimText;
+    auto stepper = [&](const char* id, const char* label, const char* text, int direction) {
+      ImGui::PushID(id);
+      ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(dim), "%s", label);
+      ImGui::SameLine();
+      const ImGuiStyle& st = ImGui::GetStyle();
+      const float h = ImGui::GetFrameHeight();
+      ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3 * hs);
+      // The value sits in an inset box; then a - (tinted red) and a + button, small and framed.
+      ImGui::PushStyleColor(ImGuiCol_Button, st.Colors[ImGuiCol_FrameBg]);
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, st.Colors[ImGuiCol_FrameBg]);
+      ImGui::PushStyleColor(ImGuiCol_ButtonActive, st.Colors[ImGuiCol_FrameBg]);
+      ImGui::Button(text, ImVec2(58 * hs, h));
+      ImGui::PopStyleColor(3);
+      ImGui::SameLine(0, 4 * hs);
+      int clicked = 0;
+      const ImVec4 base = st.Colors[ImGuiCol_Button];
+      const ImVec4 red(base.x * 0.6f + 0.35f, base.y * 0.6f + 0.12f, base.z * 0.6f + 0.12f, 1.0f);
+      ImGui::PushStyleColor(ImGuiCol_Button, red);
+      if (ImGui::Button("-", ImVec2(h, h))) clicked = -1;
+      ImGui::PopStyleColor();
+      ImGui::SameLine(0, 4 * hs);
+      if (ImGui::Button("+", ImVec2(h, h))) clicked = 1;
+      ImGui::PopStyleVar();
+      ImGui::PopID();
+      ImGui::SameLine(0, 16 * hs);
+      return clicked * direction;
+    };
     const NodeType* tempo = builtinNodes().find("tempo");
-    struct Field { const char* id; const char* label; const char* param; };
-    const Field fields[] = {{"lcd_bpm", "bpm", "bpm"}, {"lcd_swing", "swing", "swing"}, {"lcd_tpb", "ticks", "tpb"}};
-    bool lcdActive = false;
-    for (const Field& f : fields) {
+    auto tempoValue = [&](const char* param) {
       const ParamSpec* spec = nullptr;
-      for (const ParamSpec& p : tempo->params) if (p.name == f.param) spec = &p;
-      const std::string address = std::string("master.m.") + f.param;
-      double value = player.engine().registry().slotOf(address) >= 0 ? player.engine().registry().get(address) : spec->def;
-      app::SliderSpec k;
-      k.min = f.param == std::string("bpm") ? 20 : f.param == std::string("swing") ? 50 : 1;
-      k.max = f.param == std::string("bpm") ? 400 : f.param == std::string("swing") ? 75 : 24;
-      k.def = spec->def; k.isInt = f.param != std::string("bpm"); k.width = 90;
-      const app::SliderResult r = app::slider(f.id, f.label, value, k);
-      lcdActive |= r.active;
-      if (r.changed) {
-        doc.apply(std::make_unique<SetParam>("master", "m", f.param, value), session->lcdDragging);
-        syncParams(doc, player.engine());
-      }
-      ImGui::SameLine(0, 14 * hs);
-    }
-    double bpb = song.beatsPerBar;
-    app::SliderSpec bk; bk.min = 1; bk.max = 16; bk.def = 4; bk.isInt = true; bk.width = 90;
-    const app::SliderResult br = app::slider("lcd_bpb", "beats/bar", bpb, bk);
-    lcdActive |= br.active;
-    if (br.changed) doc.apply(std::make_unique<SetBeatsPerBar>(static_cast<int>(bpb)), session->lcdDragging);
-    session->lcdDragging = lcdActive;
-    ImGui::SameLine(0, 18 * hs);
+      for (const ParamSpec& p : tempo->params) if (p.name == param) spec = &p;
+      const std::string address = std::string("master.m.") + param;
+      return player.engine().registry().slotOf(address) >= 0 ? player.engine().registry().get(address) : spec->def;
+    };
+    auto setTempo = [&](const char* param, double value) {
+      doc.apply(std::make_unique<SetParam>("master", "m", param, value), false);
+      syncParams(doc, player.engine());
+    };
+    char text[32];
+    const double bpm = tempoValue("bpm"), swing = tempoValue("swing"), tpb = tempoValue("tpb");
+    std::snprintf(text, sizeof text, "%5.1f", bpm);
+    if (const int d = stepper("lcd_bpm", "bpm", text, 1)) setTempo("bpm", std::clamp(bpm + d, 20.0, 400.0));
+    std::snprintf(text, sizeof text, "%2d", static_cast<int>(swing));
+    if (const int d = stepper("lcd_swing", "swing", text, 1)) setTempo("swing", std::clamp(swing + d, 50.0, 75.0));
+    std::snprintf(text, sizeof text, "%2d", static_cast<int>(tpb));
+    if (const int d = stepper("lcd_tpb", "tpb", text, 1)) setTempo("tpb", std::clamp(tpb + d, 1.0, 24.0));
+    std::snprintf(text, sizeof text, "%2d", song.beatsPerBar);
+    if (const int d = stepper("lcd_bar", "bar", text, 1)) doc.apply(std::make_unique<SetBeatsPerBar>(std::clamp(song.beatsPerBar + d, 1, 16)), false);
     const int seconds = static_cast<int>(song.length * 60.0 / std::max(1, song.ticksPerBeat) / std::max(20.0, song.bpm));
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "len %d   time %d:%02d", song.length, seconds / 60, seconds % 60);
   }

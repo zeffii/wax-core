@@ -101,6 +101,7 @@ add_library(waxcore
   src/nodes/specpan.cpp
   src/nodes/blur.cpp
   src/nodes/bezier.cpp
+  src/seq/loop.cpp
   src/app/units.cpp
   src/nodes/env2.cpp
   src/nodes/haas.cpp
