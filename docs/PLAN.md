@@ -114,3 +114,5 @@ Edits are `SetDrawing` (a drag is one undo) and reach a playing song through `No
 Single letters are not used on the canvas (they are piano keys): types and the knot are buttons; Delete and the arrows work while the
 canvas has been clicked. Still to do: drawings of the other nodes (see drawings.cpp), a larger/undocked layout, the web's per-node views.
 Test helpers: `wax-app song.wax --null --envelope inst.node --clicks "x,y;x,y" --press "..." --screenshot out.bmp`.
+
+- DX loader window (`app/dx_window`): flat tabs voice / operator / scaling / lfo and pitch, opened from "edit voice" on a dvii node (`--dx inst.node` headless). Edits repack the voice into data.bank (SetBank, live). Still to do: bank tab (load/save .syx, names, search, swap, compare), voice names.

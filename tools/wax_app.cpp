@@ -20,6 +20,7 @@
 
 #include "app/sequence_view.h"
 #include "app/envelope_window.h"
+#include "app/dx_window.h"
 #include "app/mixer_view.h"
 #include "app/param_panel.h"
 #include "app/pattern_view.h"
@@ -58,7 +59,7 @@ void SDLCALL dialogDone(void* userdata, const char* const* files, int) {
 }
 
 struct Options {
-  std::string path, screenshot, press, clicks, envelope;   // clicks: "x,y;x,y" mouse clicks, one every 6 frames; envelope: "instrument.node" opens its envelope window   // press: keys to press one after another (for checking the window without a keyboard)
+  std::string path, screenshot, press, clicks, envelope, dxnode;   // clicks: "x,y;x,y" mouse clicks, one every 6 frames; envelope: "instrument.node" opens its envelope window   // press: keys to press one after another (for checking the window without a keyboard)
   double rate = 48000;
   int threads = 1, midiPort = 0, frames = 3, playFrom = -1, buffer = 0;
   bool useNull = false;
@@ -85,6 +86,7 @@ struct Session {
   app::ParamPanelState panel;
   app::MixerState mixer;
   app::EnvelopeWindow envelopes;
+  app::DxWindow dx;
   std::string wantLane;                  // a lane the arrangement asked for; its tab opens next frame
   int wantTick = -1;                     // and the cursor goes here
   std::string path;                      // the file this song was opened from, where Ctrl+S saves it
@@ -360,6 +362,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   if (!session->panel.drawNode.empty()) { app::showEnvelopes(session->envelopes, laneInstrument, session->panel.drawNode); session->panel.drawNode.clear(); }
   ImGui::Separator();
   if (app::drawEnvelopeWindow(session->envelopes, doc, player.engine())) syncData(doc, player.engine());
+  if (!session->panel.dxNode.empty()) { app::showDx(session->dx, laneInstrument, session->panel.dxNode); session->panel.dxNode.clear(); }
+  if (app::drawDxWindow(session->dx, doc, player.engine())) { syncData(doc, player.engine()); syncParams(doc, player.engine()); }
   if (app::drawMixer(session->mixer, doc, player.engine(), selectedLane)) {
     syncParams(doc, player.engine());
     const std::vector<std::string> problems = syncLanes(doc, player.engine());
@@ -429,6 +433,7 @@ bool parse(int argc, char** argv, Options& o) {
     else if (a == "--press" && more) o.press = argv[++i];
     else if (a == "--clicks" && more) o.clicks = argv[++i];
     else if (a == "--envelope" && more) o.envelope = argv[++i];
+    else if (a == "--dx" && more) o.dxnode = argv[++i];
     else if (a == "--frames" && more) o.frames = std::max(1, std::atoi(argv[++i]));
     else if (a == "--play-from" && more) o.playFrom = std::atoi(argv[++i]);
     else if (a == "--null") o.useNull = true;
@@ -503,6 +508,10 @@ int main(int argc, char** argv) {
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     if (!options.clicks.empty() && frame >= 4) feedClicks(options.clicks, frame - 4);
+    if (!options.dxnode.empty() && frame == 3 && session) {
+      const std::size_t dot = options.dxnode.find('.');
+      app::showDx(session->dx, options.dxnode.substr(0, dot), options.dxnode.substr(dot + 1));
+    }
     if (!options.envelope.empty() && frame == 3 && session) {
       const std::size_t dot = options.envelope.find('.');
       app::showEnvelopes(session->envelopes, options.envelope.substr(0, dot), options.envelope.substr(dot + 1));

@@ -53,6 +53,10 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
     ImGui::SameLine(0, 24);
     if (textButton("draw envelopes")) state.drawNode = picked->id;
   }
+  if (picked->type == "dvii") {
+    ImGui::SameLine(0, 24);
+    if (textButton("edit voice")) state.dxNode = picked->id;
+  }
   ImGui::Separator();
 
   const NodeType* type = types.find(picked->type);
