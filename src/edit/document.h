@@ -113,6 +113,21 @@ private:
   bool removed_ = false;
 };
 
+// A new node of a type, placed at x, y with its parameters at their defaults. Undo takes it out again.
+class AddNode final : public Edit {
+public:
+  AddNode(std::string instrument, std::string type, std::string id, double x, double y)
+      : instrument_(std::move(instrument)), type_(std::move(type)), id_(std::move(id)), x_(x), y_(y) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Add " + id_; }
+  std::string graphInstrument() const override { return instrument_; }
+
+private:
+  std::string instrument_, type_, id_;
+  double x_, y_;
+};
+
 // A node taken out with its wires; undo puts them back where they were.
 class DeleteNode final : public Edit {
 public:

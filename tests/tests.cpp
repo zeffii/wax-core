@@ -630,6 +630,37 @@ void testUnits() {
   std::printf("ok: units\n");
 }
 
+void testAddNode() {
+  const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
+  wax::Document doc(original), reference(original);
+  const auto build = [](wax::Document& d) {
+    d.apply(std::make_unique<wax::AddNode>("lone", "distortion", "distortion", 100, 100));
+    d.apply(std::make_unique<wax::Disconnect>("lone", "poly.out", "prismacanyon1.in"));
+    d.apply(std::make_unique<wax::Connect>("lone", "poly.out", "distortion.in"));
+    d.apply(std::make_unique<wax::Connect>("lone", "distortion.out", "prismacanyon1.in"));
+  };
+  build(doc);
+  build(reference);
+  wax::Engine live(original, 44100), fresh(reference.project(), 44100), untouched(original, 44100);
+  const auto play = [&](wax::Engine& engine) {
+    std::vector<float> out, l(wax::kEngineBlock), r(wax::kEngineBlock);
+    engine.sequencer().play(500);
+    for (int b = 0; b < 500; b++) {
+      engine.applySentLanes();
+      engine.sequencer().process(l.data(), r.data(), wax::kEngineBlock);
+      out.insert(out.end(), l.begin(), l.end());
+    }
+    return out;
+  };
+  check(wax::syncGraphs(doc, live).empty(), "a graph with a new node compiles live");
+  const auto a = play(live), b = play(fresh), c = play(untouched);
+  check(a == b, "a node added live sounds like the song with that node from the start");
+  check(a != c, "and is heard");
+  doc.undo(); doc.undo(); doc.undo(); doc.undo();
+  check(doc.project().instruments[1].graph.nodes.size() == original.instruments[1].graph.nodes.size(), "undo takes the node out");
+  std::printf("ok: add node\n");
+}
+
 void testMoveNode() {
   const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
   wax::Document doc(original);
@@ -692,6 +723,7 @@ void testSetParam() {
 }
 
 int main() {
+  testAddNode();
   testUnits();
   testRewire();
   testMoveNode();

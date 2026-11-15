@@ -174,6 +174,20 @@ void Disconnect::revert(Project& project) {
   g.connections.insert(g.connections.begin() + static_cast<std::ptrdiff_t>(std::min(at_, g.connections.size())), Connection{from_, to_});
 }
 
+void AddNode::apply(Project& project) {
+  GraphNode node;
+  node.id = id_;
+  node.type = type_;
+  node.params = Json::object();
+  node.x = x_; node.y = y_; node.placed = true;
+  graphOf(project, instrument_).nodes.push_back(std::move(node));
+}
+
+void AddNode::revert(Project& project) {
+  Graph& g = graphOf(project, instrument_);
+  for (std::size_t i = g.nodes.size(); i-- > 0;) if (g.nodes[i].id == id_) { g.nodes.erase(g.nodes.begin() + static_cast<std::ptrdiff_t>(i)); return; }
+}
+
 void DeleteNode::apply(Project& project) {
   Graph& g = graphOf(project, instrument_);
   wires_.clear();

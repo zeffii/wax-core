@@ -5,6 +5,8 @@
 
 #include <string>
 
+#include "imgui.h"
+
 #include "edit/document.h"
 
 namespace wax::app {
@@ -13,6 +15,8 @@ struct GraphViewState {
   std::string held;          // the tile being dragged
   float grabX = 0, grabY = 0;   // where on the tile it was taken
   std::string wiring;        // the node a new wire is being pulled from (its right-hand dot)
+  ImVec2 addAt{0, 0};        // where the add-node menu was opened (web pixels)
+  char filter[48] = {0};     // what is typed in the add-node menu
   std::string deleteNode;    // set by the right-click menu; the caller never needs to clear it
 };
 
