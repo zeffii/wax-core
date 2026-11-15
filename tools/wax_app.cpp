@@ -256,7 +256,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     }
     ImGui::SameLine();
   }
-  // The File menu and the song settings (the web app's header LCD): bpm, swing, tpb and bar have - and + buttons; len and time are read out.
+  // The File menu and the song settings (the web app's header LCD): bpm, swing, tpb and bar are spin boxes; len and time are read out.
   {
     const float hs = ImGui::GetStyle().FontScaleDpi;
     if (app::textButton("File")) ImGui::OpenPopup("filemenu");
@@ -267,32 +267,12 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       ImGui::EndPopup();
     }
     ImGui::SameLine(0, 22 * hs);
-    // bpm, swing, tpb and bar are set seldom, so each is a value with a - and a + button (one fixed step each, one undo per click).
+    // bpm, swing, tpb and bar are set seldom, so each is a spin box (one fixed step per arrow click, one undo per click).
     const ImU32 dim = app::kDimText;
     auto stepper = [&](const char* id, const char* label, const char* text, int direction) {
-      ImGui::PushID(id);
       ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(dim), "%s", label);
       ImGui::SameLine();
-      const ImGuiStyle& st = ImGui::GetStyle();
-      const float h = ImGui::GetFrameHeight();
-      ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3 * hs);
-      // The value sits in an inset box; then a - (tinted red) and a + button, small and framed.
-      ImGui::PushStyleColor(ImGuiCol_Button, st.Colors[ImGuiCol_FrameBg]);
-      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, st.Colors[ImGuiCol_FrameBg]);
-      ImGui::PushStyleColor(ImGuiCol_ButtonActive, st.Colors[ImGuiCol_FrameBg]);
-      ImGui::Button(text, ImVec2(58 * hs, h));
-      ImGui::PopStyleColor(3);
-      ImGui::SameLine(0, 4 * hs);
-      int clicked = 0;
-      const ImVec4 base = st.Colors[ImGuiCol_Button];
-      const ImVec4 red(base.x * 0.6f + 0.35f, base.y * 0.6f + 0.12f, base.z * 0.6f + 0.12f, 1.0f);
-      ImGui::PushStyleColor(ImGuiCol_Button, red);
-      if (ImGui::Button("-", ImVec2(h, h))) clicked = -1;
-      ImGui::PopStyleColor();
-      ImGui::SameLine(0, 4 * hs);
-      if (ImGui::Button("+", ImVec2(h, h))) clicked = 1;
-      ImGui::PopStyleVar();
-      ImGui::PopID();
+      const int clicked = app::spinBox(id, text, 58 * hs);
       ImGui::SameLine(0, 16 * hs);
       return clicked * direction;
     };

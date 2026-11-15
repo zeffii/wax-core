@@ -119,4 +119,38 @@ bool textButton(const char* label, bool on) {
   return ImGui::IsItemClicked();
 }
 
+int spinBox(const char* id, const char* text, float width) {
+  const float scale = ImGui::GetStyle().FontScaleDpi;
+  const float h = ImGui::GetFrameHeight(), arrowW = 14 * scale;
+  ImGui::PushID(id);
+  const ImVec2 min = ImGui::GetCursorScreenPos(), max(min.x + width, min.y + h);
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  const ImVec2 split(max.x - arrowW, (min.y + max.y) / 2);
+  int step = 0;
+  ImGui::InvisibleButton("box", ImVec2(width - arrowW, h));
+  if (ImGui::IsItemHovered() && ImGui::GetIO().MouseWheel != 0) step = ImGui::GetIO().MouseWheel > 0 ? 1 : -1;
+  ImGui::SameLine(0, 0);
+  ImGui::InvisibleButton("up", ImVec2(arrowW, h / 2));
+  const bool upHot = ImGui::IsItemHovered(), upDown = ImGui::IsItemActive();
+  if (ImGui::IsItemClicked()) step = 1;
+  ImGui::SetCursorScreenPos(ImVec2(split.x, split.y));
+  ImGui::InvisibleButton("down", ImVec2(arrowW, h / 2));
+  const bool downHot = ImGui::IsItemHovered(), downDown = ImGui::IsItemActive();
+  if (ImGui::IsItemClicked()) step = -1;
+  const float r = 3 * scale;
+  dl->AddRectFilled(min, max, kField, r);
+  dl->AddRectFilled(ImVec2(split.x, min.y), ImVec2(max.x, split.y), upDown ? kSoft : upHot ? lineAlpha(120) : lineAlpha(60), r, ImDrawFlags_RoundCornersTopRight);
+  dl->AddRectFilled(split, max, downDown ? kSoft : downHot ? lineAlpha(120) : lineAlpha(60), r, ImDrawFlags_RoundCornersBottomRight);
+  const float cx = split.x + arrowW / 2, a = 2.6f * scale;
+  const float uy = (min.y + split.y) / 2, dy = (split.y + max.y) / 2;
+  dl->AddTriangleFilled(ImVec2(cx - a, uy + a * 0.6f), ImVec2(cx + a, uy + a * 0.6f), ImVec2(cx, uy - a * 0.8f), kText);
+  dl->AddTriangleFilled(ImVec2(cx - a, dy - a * 0.6f), ImVec2(cx + a, dy - a * 0.6f), ImVec2(cx, dy + a * 0.8f), kText);
+  const ImVec2 size = ImGui::CalcTextSize(text);
+  dl->AddText(ImVec2(max.x - arrowW - 6 * scale - size.x, min.y + (h - size.y) / 2), kText, text);   // the value, right-aligned
+  ImGui::PopID();
+  ImGui::SetCursorScreenPos(ImVec2(max.x, min.y));
+  ImGui::Dummy(ImVec2(0, h));
+  return step;
+}
+
 }  // namespace wax::app

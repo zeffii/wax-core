@@ -34,4 +34,8 @@ void groupDivider(float height);
 // A word that acts as a button: dim, lit when hovered or `on`, no box. True when clicked.
 bool textButton(const char* label, bool on = false);
 
+// A spin box: the value in an inset box with a pair of small arrows stacked at its right edge, as in a classic number field. The caller
+// formats the value. Returns +1 or -1 when an arrow is clicked (the mouse wheel over the box counts too), else 0.
+int spinBox(const char* id, const char* text, float width);
+
 }  // namespace wax::app
