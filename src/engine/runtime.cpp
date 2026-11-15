@@ -680,6 +680,12 @@ void GraphRuntime::rebuild(const std::string& id) {
     const std::size_t first = key.find('\0'), second = key.find('\0', first + 1);
     if (key.substr(0, first) == id) sendSample(id, key.substr(first + 1, second - first - 1), message);
   }
+  if (Instrument* inst = find(id)) {   // and so are the drawings it was sent
+    for (const auto& [key, data] : datas_) {
+      const std::size_t first = key.find('\0');
+      if (key.substr(0, first) == id) giveData(*inst, key.substr(first + 1), *data);
+    }
+  }
 }
 
 std::vector<TakeEvent> GraphRuntime::drainTakes() {
@@ -821,6 +827,37 @@ void GraphRuntime::process(float* left, float* right, int n) {
 
 // What one instrument does in a block, up to its finished sound in inst.left and inst.right. True when that sound goes into the mix.
 // It touches only the instrument itself and reads what the instruments it hears made before it.
+void GraphRuntime::giveData(Instrument& inst, const std::string& nodeId, const Json& data) {
+  if (inst.sleep) inst.sleep->woken = true;
+  const auto copies = inst.byId.find(nodeId);
+  if (copies == inst.byId.end()) return;
+  for (RunNode* copy : copies->second) {
+    if (!copy) continue;
+    if (copy->node) copy->node->data(data);
+    if (copy->rightNode) copy->rightNode->data(data);
+  }
+}
+
+bool GraphRuntime::sendData(const std::string& instrument, const std::string& nodeId, std::shared_ptr<const Json> data) {
+  return dataSent_.push(DataMessage{instrument, nodeId, std::move(data)});
+}
+
+void GraphRuntime::applyData() {
+  DataMessage message;
+  while (dataSent_.pop(message)) {
+    Instrument* inst = find(message.instrument);
+    if (inst) giveData(*inst, message.node, *message.data);
+    std::shared_ptr<const Json>& kept = datas_[message.instrument + '\0' + message.node];
+    if (kept) dataRetired_.push(std::move(kept));
+    kept = std::move(message.data);
+  }
+}
+
+void GraphRuntime::collectRetiredData() {
+  std::shared_ptr<const Json> old;
+  while (dataRetired_.pop(old)) old.reset();
+}
+
 float GraphRuntime::takeLevel(const std::string& instrument) {
   const auto meter = levels_.find(instrument);
   return meter == levels_.end() ? 0.0f : meter->second.exchange(0, std::memory_order_relaxed);

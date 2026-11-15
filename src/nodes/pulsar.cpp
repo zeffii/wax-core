@@ -24,6 +24,8 @@ public:
     train_.setWindow(context.data);
   }
 
+  void data(const Json& data) override { sweepTable_ = bezier::envelopeTable(bezier::drawingOf(&data, "sweep", bezier::Shape::Fall)); }
+
   bool busy() const override { return !amp_.idle(); }
 
   void note(const NoteEvent& event) override {

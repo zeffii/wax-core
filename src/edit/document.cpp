@@ -110,6 +110,33 @@ Lane& findLane(Project& project, const std::string& laneId) {
 
 }  // namespace
 
+SetDrawing::SetDrawing(std::string instrument, std::string node, std::string name, Json points)
+    : instrument_(std::move(instrument)), node_(std::move(node)), name_(std::move(name)), points_(std::move(points)) {}
+
+void SetDrawing::apply(Project& project) {
+  GraphNode& node = findGraphNode(project, instrument_, node_);
+  if (!captured_) {
+    hadData_ = node.data.is_object();
+    beforeData_ = node.data;
+    captured_ = true;
+  }
+  if (!node.data.is_object()) node.data = Json::object();
+  if (!node.data.contains("env") || !node.data["env"].is_object()) node.data["env"] = Json::object();
+  node.data["env"][name_] = points_;
+}
+
+void SetDrawing::revert(Project& project) {
+  GraphNode& node = findGraphNode(project, instrument_, node_);
+  node.data = beforeData_;   // the whole data as it was before the first change
+}
+
+bool SetDrawing::absorb(const Edit& next) {
+  const auto* other = dynamic_cast<const SetDrawing*>(&next);
+  if (!other || other->dataNode() != dataNode() || other->name_ != name_) return false;
+  points_ = other->points_;
+  return true;
+}
+
 void SetSilenced::apply(Project& project) {
   Lane& lane = findLane(project, lane_);
   before_ = lane.silenced;
@@ -182,6 +209,7 @@ void Document::touched(const Edit& edit) {
   revision_++;
   if (!edit.lane().empty()) changed_.insert(edit.lane());
   if (!edit.paramAddress().empty()) changedParams_.insert(edit.paramAddress());
+  if (!edit.dataNode().empty()) changedData_.insert(edit.dataNode());
 }
 
 void Document::apply(std::unique_ptr<Edit> edit, bool foldIntoPrevious) {
@@ -206,6 +234,12 @@ void Document::redo() {
   touched(*redo_.back());
   undo_.push_back(std::move(redo_.back()));
   redo_.pop_back();
+}
+
+std::set<std::string> Document::takeChangedData() {
+  std::set<std::string> out;
+  out.swap(changedData_);
+  return out;
 }
 
 std::set<std::string> Document::takeChangedParams() {

@@ -7,6 +7,8 @@
 #pragma once
 
 #include <atomic>
+
+#include "core/spsc.h"
 #include <cstdint>
 #include <mutex>
 #include <map>
@@ -50,6 +52,12 @@ public:
 
   // Allocates buffers and node state for an instrument (again, when it is already loaded). Never called per block.
   void load(const CompiledGraph& compiled);
+
+  // A node's data (its drawn envelopes and the like) changed while the song plays. The window thread queues it; the audio thread
+  // hands it to the node's copies at the start of its next block (applyData). False when the queue is full: try again later.
+  bool sendData(const std::string& instrument, const std::string& nodeId, std::shared_ptr<const Json> data);
+  void applyData();         // audio thread, at the start of a block
+  void collectRetiredData();   // window thread, now and then: what was replaced is freed here, not while sound is being made
 
   // The loudest sample an instrument made since the last call (the window thread asks; the mixer's meters). 0 for an unknown one.
   float takeLevel(const std::string& instrument);
@@ -129,6 +137,11 @@ private:
 
   std::vector<std::string> loadOrder_;                                        // instrument ids, in the order they were first loaded
   std::unordered_map<std::string, std::unique_ptr<Instrument>> instruments_;
+  struct DataMessage { std::string instrument, node; std::shared_ptr<const Json> data; };
+  SpscQueue<DataMessage, 64> dataSent_;
+  SpscQueue<std::shared_ptr<const Json>, 64> dataRetired_;
+  std::map<std::string, std::shared_ptr<const Json>> datas_;   // the latest data sent for each node (audio thread), put back when an instrument is rebuilt
+  void giveData(Instrument& inst, const std::string& nodeId, const Json& data);
   std::unordered_map<std::string, std::atomic<float>> levels_;   // per instrument, for the meters: added in load(), never removed
   std::unordered_map<std::string, std::unique_ptr<CompiledGraph>> graphs_;    // kept to rebuild an instrument that went bad
 

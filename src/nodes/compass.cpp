@@ -52,6 +52,11 @@ public:
 
   bool busy() const override { return !amp_.idle(); }
 
+  void data(const Json& data) override {
+    amp_.setDrawing(&data, "amp");
+    filterEnv_.setDrawing(&data, "filter");
+  }
+
   void note(const NoteEvent& event) override {
     if (event.type == NoteType::On) {
       const bool fromSilence = amp_.idle();

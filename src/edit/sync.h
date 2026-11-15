@@ -17,4 +17,7 @@ std::vector<std::string> syncLanes(Document& document, Engine& engine);
 // Sends every parameter changed since the last call to the engine (the value the song now holds for it).
 void syncParams(Document& document, Engine& engine);
 
+// Sends every node whose data (drawn envelopes) changed since the last call to the engine.
+void syncData(Document& document, Engine& engine);
+
 }  // namespace wax

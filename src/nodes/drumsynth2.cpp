@@ -33,6 +33,13 @@ struct ClickSample { std::vector<float> data; double ratio = 1; };
 class DrumSynth2 final : public Node {
 public:
   explicit DrumSynth2(const NodeContext& context) : sampleRate_(context.sampleRate) {
+    loadDrawings(context.data);
+  }
+
+  void data(const Json& data) override { loadDrawings(&data); }
+
+private:
+  void loadDrawings(const Json* data) {
     static const double pitchR[] = {0.015, -0.7}, pitchL[] = {-0.6, 0};
     static const double ampR[] = {0.06, 0}, ampL[] = {-0.55, 0};
     static const double noiseR[] = {0.02, -0.55}, noiseL[] = {-0.4, 0};
@@ -41,9 +48,10 @@ public:
       {bezier::makeAnchor(0, 1, nullptr, ampR), bezier::makeAnchor(1, 0, ampL, nullptr)},
       {bezier::makeAnchor(0, 1, nullptr, noiseR), bezier::makeAnchor(1, 0, noiseL, nullptr)}};
     static const char* const keys[3] = {"pitch", "amp", "noise"};
-    for (int k = 0; k < 3; k++) tables_[k] = bezier::envelopeTable(bezier::drawingOf(context.data, keys[k], defaults[k]));
+    for (int k = 0; k < 3; k++) tables_[k] = bezier::envelopeTable(bezier::drawingOf(data, keys[k], defaults[k]));
   }
 
+public:
   // The click's sample, mixed down to one channel.
   void sample(const std::shared_ptr<const SampleMessage>& message) override {
     ClickSample s;

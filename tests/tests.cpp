@@ -500,6 +500,50 @@ void testSpline() {
   std::printf("ok: spline editing\n");
 }
 
+void testDrawingEdit() {
+  using namespace wax::bezier;
+  const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/khufu.wax");
+  Spline drawn = shapeOf(Shape::Hump);
+  setKnot(drawn, 1);
+  addAnchor(drawn, 0.2, 0.3);
+  const wax::Json points = toJson(drawn);
+
+  wax::Document doc(original), reference(original);
+  reference.apply(std::make_unique<wax::SetDrawing>("lone", "synth", "amp", points));
+  constexpr int kBlocks = 700, kBefore = 100;
+  const auto play = [&](wax::Engine& engine, wax::Document* during) {
+    std::vector<float> out, l(wax::kEngineBlock), r(wax::kEngineBlock);
+    engine.sequencer().play(500);
+    for (int b = 0; b < kBlocks; b++) {
+      if (during && b == kBefore) {
+        during->apply(std::make_unique<wax::SetDrawing>("lone", "synth", "amp", points));
+        wax::syncData(*during, engine);
+      }
+      engine.applySentLanes();
+      engine.sequencer().process(l.data(), r.data(), wax::kEngineBlock);
+      out.insert(out.end(), l.begin(), l.end());
+      out.insert(out.end(), r.begin(), r.end());
+    }
+    return out;
+  };
+  wax::Engine live(original, 44100), fresh(reference.project(), 44100), untouched(original, 44100);
+  const std::vector<float> a = play(live, &doc), b = play(fresh, nullptr), c = play(untouched, nullptr);
+  check(a == b, "a drawing edited while the song plays sounds exactly like the edited song from the start");
+  check(a != c, "and the edit is heard");
+
+  // the edit is one undo step when dragged, and it is saved
+  wax::Document drag(original);
+  drag.apply(std::make_unique<wax::SetDrawing>("lone", "synth", "amp", points));
+  drag.apply(std::make_unique<wax::SetDrawing>("lone", "synth", "amp", wax::Json::array()), true);
+  drag.apply(std::make_unique<wax::SetDrawing>("lone", "synth", "amp", points), true);
+  check(drag.takeChangedData().count(std::string("lone\x1fsynth")) == 1, "the node is reported changed");
+  const wax::Project reread = wax::parseProject(wax::serializeProject(drag.project()));
+  check(reread.instruments[1].graph.nodes[0].data["env"]["amp"].size() == points.size(), "the drawing is in the saved file");
+  drag.undo();
+  check(drag.project().instruments[1].graph.nodes[0].data == original.instruments[1].graph.nodes[0].data && !drag.canUndo(), "one undo takes the whole drag back");
+  std::printf("ok: drawing edits\n");
+}
+
 void testLevels() {
   const wax::Project song = wax::loadProject(std::string(WAX_TEST_SONGS) + "/jawharp.wax");
   wax::Engine engine(song, 44100);
@@ -548,6 +592,7 @@ void testSetParam() {
 }
 
 int main() {
+  testDrawingEdit();
   testSpline();
   testLevels();
   testSetParam();

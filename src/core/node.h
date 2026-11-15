@@ -140,6 +140,10 @@ public:
   // A sample for the node to play (sent when an instrument is loaded, and again if the instrument is rebuilt).
   virtual void sample(const std::shared_ptr<const SampleMessage>&) {}
 
+  // The node's data (a drawn envelope and the like, as the file holds it) has changed while the song plays. Only the nodes whose
+  // drawings can be edited in the window listen.
+  virtual void data(const Json&) {}
+
   // True while the node is still sounding although its output is silent for now (a pulse train between pulses),
   // so its voice is not switched off.
   virtual bool busy() const { return false; }

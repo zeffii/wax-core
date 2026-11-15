@@ -21,6 +21,7 @@ public:
   virtual std::string label() const = 0;               // "Set cell", shown next to Undo in the window
   virtual std::string lane() const { return {}; }      // the lane whose sound this changes ("" when none)
   virtual std::string paramAddress() const { return {}; }   // "instrument.node.param" of the parameter this sets ("" when none)
+  virtual std::string dataNode() const { return {}; }      // "instrument\x1fnode" whose data (drawings) this changes ("" when none)
   // Typing in one cell is many edits; the next one may fold into this one so a single undo takes back the whole entry.
   // Return true when `next` has been absorbed (and keeps what this edit needs to revert it).
   virtual bool absorb(const Edit& next) { (void)next; return false; }
@@ -62,6 +63,24 @@ private:
   double value_;
   bool captured_ = false, had_ = false;
   Json before_;
+};
+
+// A drawn envelope of a node, replaced as a whole (`points` is the array of anchors as the file holds it). While an anchor is dragged
+// each step folds into the one before, so a drag is a single undo.
+class SetDrawing final : public Edit {
+public:
+  SetDrawing(std::string instrument, std::string node, std::string name, Json points);
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Edit " + name_; }
+  std::string dataNode() const override { return instrument_ + "\x1f" + node_; }
+  bool absorb(const Edit& next) override;
+
+private:
+  std::string instrument_, node_, name_;
+  Json points_;
+  bool captured_ = false, hadData_ = false, hadEnv_ = false, hadDrawing_ = false;
+  Json before_, beforeData_;
 };
 
 // Silences a lane as a whole (the M button of the mixer), or lets it play again.
@@ -154,13 +173,16 @@ public:
   std::set<std::string> takeChangedLanes();
   // The parameters changed since the last call, as "instrument.node.param" (undo and redo count).
   std::set<std::string> takeChangedParams();
+  // The nodes whose data changed, as "instrument\x1fnode" (undo and redo count). markDataChanged puts one back when it could not be sent.
+  std::set<std::string> takeChangedData();
+  void markDataChanged(const std::string& node) { changedData_.insert(node); }
   void markLaneChanged(const std::string& lane) { changed_.insert(lane); }   // to try again later
 
 private:
   Project project_;
   std::vector<std::unique_ptr<Edit>> undo_, redo_;
   int revision_ = 0, savedRevision_ = 0;
-  std::set<std::string> changed_, changedParams_;
+  std::set<std::string> changed_, changedParams_, changedData_;
 
   void touched(const Edit& edit);
 };

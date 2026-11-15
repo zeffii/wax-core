@@ -23,6 +23,12 @@ public:
       : sampleRate_(context.sampleRate), clock_(context.clock),
         points_(bezier::drawingOf(context.data, "main")), table_(bezier::envelopeTable(points_)), knot_(bezier::sustainKnot(points_)) {}
 
+  void data(const Json& data) override {
+    points_ = bezier::drawingOf(&data, "main");
+    table_ = bezier::envelopeTable(points_);
+    knot_ = bezier::sustainKnot(points_);
+  }
+
   void note(const NoteEvent& event) override {
     if (event.type == NoteType::On) { fresh_ = true; pendingOff_ = false; velocity_ = event.vel; }
     else if (event.type == NoteType::Off || event.type == NoteType::AllOff) pendingOff_ = true;

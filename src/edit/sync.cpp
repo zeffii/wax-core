@@ -37,4 +37,20 @@ void syncParams(Document& document, Engine& engine) {
   }
 }
 
+void syncData(Document& document, Engine& engine) {
+  engine.collectRetired();
+  const Project& project = document.project();
+  for (const std::string& address : document.takeChangedData()) {
+    const std::size_t cut = address.find('\x1f');
+    const std::string instrumentId = address.substr(0, cut), nodeId = address.substr(cut + 1);
+    for (const Instrument& instrument : project.instruments) {
+      if (instrument.id != instrumentId) continue;
+      for (const GraphNode& node : instrument.graph.nodes) {
+        if (node.id != nodeId) continue;
+        if (!engine.sendData(instrumentId, nodeId, node.data)) document.markDataChanged(address);   // the queue is full: later
+      }
+    }
+  }
+}
+
 }  // namespace wax

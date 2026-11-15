@@ -40,6 +40,8 @@ public:
 
   bool busy() const override { return !amp_.idle(); }
 
+  void data(const Json& data) override { amp_.setDrawing(&data, "amp"); }
+
   void note(const NoteEvent& event) override {
     if (event.type == NoteType::On) {
       if (amp_.idle()) { tone_.reset(); cutState_ = 0; }

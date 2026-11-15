@@ -47,6 +47,9 @@ public:
   void applySentLanes();                                              // audio thread, at the start of a block
   void collectRetired();                                              // window thread, now and then
 
+  // A node's data (its drawn envelopes) changed while the song plays: sent like a lane, taken at the start of the next block.
+  bool sendData(const std::string& instrument, const std::string& nodeId, Json data);   // false when the queue is full: try again later
+
 private:
   ParamRegistry registry_;
   SpscQueue<std::shared_ptr<void>, 64> sent_, retired_;

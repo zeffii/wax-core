@@ -134,6 +134,7 @@ bool Engine::sendLane(const Project& project, const std::string& laneId) {
 }
 
 void Engine::applySentLanes() {
+  runtime_.applyData();
   std::shared_ptr<void> built;
   while (sent_.pop(built)) {
     std::shared_ptr<void> old = sequencer_.installLane(std::move(built));
@@ -141,7 +142,12 @@ void Engine::applySentLanes() {
   }
 }
 
+bool Engine::sendData(const std::string& instrument, const std::string& nodeId, Json data) {
+  return runtime_.sendData(instrument, nodeId, std::make_shared<const Json>(std::move(data)));
+}
+
 void Engine::collectRetired() {
+  runtime_.collectRetiredData();
   std::shared_ptr<void> old;
   while (retired_.pop(old)) old.reset();
 }

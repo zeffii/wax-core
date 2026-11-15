@@ -29,17 +29,13 @@ struct Hit { double age = -1, vel = 0; };
 class Hat2 final : public Node {
 public:
   explicit Hat2(const NodeContext& context) : sampleRate_(context.sampleRate) {
-    static const double closedR[] = {0.02, -0.3}, closedL[] = {-0.45, 0};
-    static const double openR[] = {0.04, -0.15}, openL[] = {-0.5, 0};
-    const bezier::Spline defaults[2] = {
-      {bezier::makeAnchor(0, 1, nullptr, closedR), bezier::makeAnchor(1, 0, closedL, nullptr)},
-      {bezier::makeAnchor(0, 1, nullptr, openR), bezier::makeAnchor(1, 0, openL, nullptr)}};
-    static const char* const keys[2] = {"closed", "open"};
-    for (int k = 0; k < 2; k++) tables_[k] = bezier::envelopeTable(bezier::drawingOf(context.data, keys[k], defaults[k]));
+    loadDrawings(context.data);
     const std::size_t length = static_cast<std::size_t>(std::ceil(sampleRate_ * 0.02));
     line_[0].assign(length, 0.0f);
     line_[1].assign(length, 0.0f);
   }
+
+  void data(const Json& data) override { loadDrawings(&data); }
 
   void note(const NoteEvent& event) override {
     if (event.type == NoteType::On) {
@@ -167,6 +163,16 @@ private:
   }
 
   double sampleRate_;
+  void loadDrawings(const Json* data) {
+    static const double closedR[] = {0.02, -0.3}, closedL[] = {-0.45, 0};
+    static const double openR[] = {0.04, -0.15}, openL[] = {-0.5, 0};
+    const bezier::Spline defaults[2] = {
+      {bezier::makeAnchor(0, 1, nullptr, closedR), bezier::makeAnchor(1, 0, closedL, nullptr)},
+      {bezier::makeAnchor(0, 1, nullptr, openR), bezier::makeAnchor(1, 0, openL, nullptr)}};
+    static const char* const keys[2] = {"closed", "open"};
+    for (int k = 0; k < 2; k++) tables_[k] = bezier::envelopeTable(bezier::drawingOf(data, keys[k], defaults[k]));
+  }
+
   bezier::Table tables_[2];
   double phase_[6] = {0, 0, 0, 0, 0, 0};
   std::uint32_t rng_ = 0x2545f491u, noiseState_ = 0x1234567u;
