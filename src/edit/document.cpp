@@ -173,6 +173,32 @@ constexpr int kMaxSong = 65536;
 int movedBy(int t, int at, int n) { return t >= at ? t + n : t; }
 }  // namespace
 
+void SetSongLength::apply(Project& project) {
+  const int length = ticks_ / 16 * 16;
+  if (length < 16 || length > kMaxSong) throw std::out_of_range("a song is 16 to 65536 ticks long");
+  oldLength_ = project.song.length;
+  oldLanes_ = project.lanes;
+  loopBefore_ = project.song.raw.contains("loop") ? project.song.raw["loop"] : Json();
+  for (Lane& lane : project.lanes) {
+    lane.mutes.erase(std::remove_if(lane.mutes.begin(), lane.mutes.end(), [&](int t) { return t >= length; }), lane.mutes.end());
+    lane.offs.erase(std::remove_if(lane.offs.begin(), lane.offs.end(), [&](int t) { return t >= length; }), lane.offs.end());
+    lane.placements.erase(std::remove_if(lane.placements.begin(), lane.placements.end(), [&](const Placement& p) { return p.start >= length; }), lane.placements.end());
+    for (Placement& p : lane.placements) if (p.start + p.length > length) p.length = length - p.start;
+  }
+  project.song.length = length;
+  if (project.song.raw.contains("loop") && project.song.raw["loop"].is_object()) {   // the loop stays inside the song
+    Json& loop = project.song.raw["loop"];
+    const int start = loop.value("start", 0), end = std::min(loop.value("end", 0), length);
+    if (start >= end) project.song.raw.erase("loop"); else loop["end"] = end;
+  }
+}
+
+void SetSongLength::revert(Project& project) {
+  project.lanes = oldLanes_;
+  project.song.length = oldLength_;
+  if (loopBefore_.is_null()) project.song.raw.erase("loop"); else project.song.raw["loop"] = loopBefore_;
+}
+
 void InsertSilence::apply(Project& project) {
   if (ticks_ < 1) throw std::out_of_range("insert at least one tick");
   if (project.song.length + ticks_ > kMaxSong) throw std::out_of_range("the song would pass 65536 ticks");

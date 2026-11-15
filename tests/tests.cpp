@@ -864,6 +864,25 @@ void testPatternColour() {
   std::printf("ok: pattern colour\n");
 }
 
+void testSongLength() {
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax"));
+  const int length = doc.project().song.length;
+  std::size_t placements = 0;
+  for (const wax::Lane& l : doc.project().lanes) placements += l.placements.size();
+  doc.apply(std::make_unique<wax::SetSongLength>(64));
+  check(doc.project().song.length == 64, "the song is shortened");
+  bool inside = true;
+  for (const wax::Lane& l : doc.project().lanes) for (const wax::Placement& p : l.placements) inside &= p.start < 64 && p.start + p.length <= 64;
+  check(inside, "placements stay inside the new length");
+  doc.undo();
+  std::size_t back = 0;
+  for (const wax::Lane& l : doc.project().lanes) back += l.placements.size();
+  check(doc.project().song.length == length && back == placements, "undo brings the placements back");
+  doc.apply(std::make_unique<wax::SetSongName>("my song"));
+  check(wax::parseProject(wax::serializeProject(doc.project())).song.name == "my song", "the name is saved");
+  std::printf("ok: song length and name\n");
+}
+
 void testMoveNode() {
   const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
   wax::Document doc(original);
@@ -935,6 +954,7 @@ int main() {
   testPatternRenameClone();
   testInsertSilence();
   testPatternColour();
+  testSongLength();
   testAddNode();
   testUnits();
   testRewire();

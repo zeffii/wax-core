@@ -97,6 +97,7 @@ std::string serializeProject(const Project& project) {
       if (node.params.contains("swing") && number("swing") != jsRound(song.value("swing", 0.5) * 100)) song["swing"] = number("swing") / 100.0;
       if (node.params.contains("tpb") && number("tpb") != song.value("ticksPerBeat", 4)) song["ticksPerBeat"] = number("tpb");
     }
+    if (project.song.name != song.value("name", project.song.name)) song["name"] = project.song.name;
     if (project.song.length != song.value("length", project.song.length)) song["length"] = project.song.length;
     if (project.song.beatsPerBar != song.value("beatsPerBar", 4)) song["beatsPerBar"] = project.song.beatsPerBar;
     // the loop as edited (set, switched off, or taken away)

@@ -107,6 +107,9 @@ struct Session {
   int silenceTicks = 128;                // the length of silence Insert puts in
   bool wantTree = false;                 // open the machine tree (Shift+I, or the Instrument screen's add button)
   bool showKeys = true;                  // the shortcut sheet beside the Pattern grid
+  int pausedAt = -1;                     // the tick the song was paused at (-1: not paused)
+  char projectName[64] = {0};            // the header's project name box
+  bool nameFocused = false;
   bool showBrowser = true;               // the browser down the left of every screen (Alt+B)
   float browserWidth = 260;              // in web pixels
   float browserOptions = 0;              // height of the options under the lists in web pixels (0: half the panel)
@@ -220,9 +223,14 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
 
   // The transport.
   const bool playing = player.playing();
-  if (app::iconButton("play", playing ? "Stop (F8)" : "Play (F5)", playing, 20)) {
-    if (playing) player.ring().push({LiveCommand::Stop, 0, 1});
-    else player.ring().push({LiveCommand::Play, 0, 1});
+  if (app::iconButton("play", playing ? "Stop (F8)" : session->pausedAt >= 0 ? "Carry on from the pause (F5)" : "Play (F5)", playing, 20)) {
+    if (playing) { player.ring().push({LiveCommand::Stop, 0, 1}); session->pausedAt = -1; }
+    else { player.ring().push({LiveCommand::Play, std::max(0, session->pausedAt), 1}); session->pausedAt = -1; }
+  }
+  ImGui::SameLine();
+  if (app::iconButton("pause", "Pause (Pause key): stop here; Play (or Pause again) carries on from the same place", session->pausedAt >= 0, 20)) {
+    if (playing) { session->pausedAt = player.tick(); player.ring().push({LiveCommand::Stop, 0, 1}); }
+    else if (session->pausedAt >= 0) { player.ring().push({LiveCommand::Play, session->pausedAt, 1}); session->pausedAt = -1; }
   }
   ImGui::SameLine();
   if (app::iconButton("follow", "Follow the song (F9): the grids scroll with the playing row", follow, 20)) follow = !follow;
@@ -238,8 +246,15 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   ImGui::SameLine(0, 24 * ImGui::GetStyle().FontScaleDpi);
   const int tick = player.tick();
   const int perBeat = std::max(1, song.ticksPerBeat), perBar = perBeat * std::max(1, song.beatsPerBar);
-  ImGui::Text("%s   bar %d  beat %d  tick %d / %d   %.0f bpm", song.name.c_str(), tick / perBar + 1, tick % perBar / perBeat + 1,
-              tick, song.length, song.bpm);
+  {   // the project name: it is the file name when you save
+    if (!session->nameFocused) std::snprintf(session->projectName, sizeof session->projectName, "%s", song.name.c_str());
+    ImGui::SetNextItemWidth(150 * ImGui::GetStyle().FontScaleDpi);
+    ImGui::InputTextWithHint("##projectname", "untitled", session->projectName, sizeof session->projectName);
+    session->nameFocused = ImGui::IsItemActive();
+    if (ImGui::IsItemDeactivatedAfterEdit() && session->projectName != song.name) doc.apply(std::make_unique<SetSongName>(session->projectName));
+    ImGui::SameLine(0, 16 * ImGui::GetStyle().FontScaleDpi);
+  }
+  ImGui::Text("bar %d  beat %d  tick %d / %d   %.0f bpm", tick / perBar + 1, tick % perBar / perBeat + 1, tick, song.length, song.bpm);
   ImGui::SameLine(ImGui::GetWindowWidth() - 260 * ImGui::GetStyle().FontScaleDpi);
   meterL = std::max(player.levelLeft(), meterL * 0.9f);   // falls back a little each frame
   meterR = std::max(player.levelRight(), meterR * 0.9f);
@@ -329,8 +344,16 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     std::snprintf(text, sizeof text, "%2d", song.beatsPerBar);
     if (const int d = stepper("lcd_bar", "bar", text, 1)) doc.apply(std::make_unique<SetBeatsPerBar>(std::clamp(song.beatsPerBar + d, 1, 16)), false);
     const int seconds = static_cast<int>(song.length * 60.0 / std::max(1, song.ticksPerBeat) / std::max(20.0, song.bpm));
+    std::snprintf(text, sizeof text, "%d", song.length);
+    if (const int d = stepper("lcd_len", "len", text, 16)) {   // a row (16 ticks) a click
+      if (song.length + d >= 16 && song.length + d <= 65536) {
+        doc.apply(std::make_unique<SetSongLength>(song.length + d), false);
+        syncLanes(doc, player.engine());
+        syncLoop(doc, player.engine());
+      }
+    }
     ImGui::AlignTextToFramePadding();
-    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "len %d   time %d:%02d", song.length, seconds / 60, seconds % 60);
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "time %d:%02d", seconds / 60, seconds % 60);
   }
   ImGui::Separator();
 
@@ -342,8 +365,12 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   if (!io.WantTextInput && !menuOpen) {
     if (ImGui::IsKeyPressed(ImGuiKey_LeftBracket, false)) octave = std::max(0, octave - 1);
     if (ImGui::IsKeyPressed(ImGuiKey_RightBracket, false)) octave = std::min(8, octave + 1);
-    if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) player.ring().push({LiveCommand::Play, 0, 1});
-    if (ImGui::IsKeyPressed(ImGuiKey_F8, false)) player.ring().push({LiveCommand::Stop, 0, 1});
+    if (ImGui::IsKeyPressed(ImGuiKey_Pause, false)) {   // pause, or carry on from the pause
+      if (player.playing()) { session->pausedAt = player.tick(); player.ring().push({LiveCommand::Stop, 0, 1}); }
+      else if (session->pausedAt >= 0) { player.ring().push({LiveCommand::Play, session->pausedAt, 1}); session->pausedAt = -1; }
+    }
+    if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) { player.ring().push({LiveCommand::Play, std::max(0, session->pausedAt), 1}); session->pausedAt = -1; }
+    if (ImGui::IsKeyPressed(ImGuiKey_F8, false)) { player.ring().push({LiveCommand::Stop, 0, 1}); session->pausedAt = -1; }
     if (ImGui::IsKeyPressed(ImGuiKey_F9, false)) follow = !follow;
     if (ImGui::IsKeyPressed(ImGuiKey_Space, false) && !(session->edit && session->screen == Screen::Song)) {   // (on the Song screen, editing, Space places a pattern)
       if (playing) player.ring().push({LiveCommand::Stop, 0, 1});

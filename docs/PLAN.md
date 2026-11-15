@@ -167,3 +167,4 @@ instrument, lane duplicate/clone.
 - Song screen: insert silence (whole song, patterns crossing the row stay whole; the web's 'cut' option not ported).
 
 - Browser: a panel down the left of every screen (Alt+B or the status bar toggle), tabs Patterns / Machines / Samples (samples not ported), width draggable (all the way left closes it), and under the lists the options of the screen shown (the Song screen's lane tools and insert silence), split by a drag bar. Still missing: the options of the Instrument (voices, presets), Pattern and Sample screens.
+- Header: pause (Pause key), editable len (a row per click, undoable, trims placements), project name box (saved). Rec (MIDI record into patterns) not ported.

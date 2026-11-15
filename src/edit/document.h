@@ -365,6 +365,36 @@ private:
   Json color_, old_;
 };
 
+// The song's length in ticks (a whole number of 16-tick rows). Shortening drops the placements that start past the end, trims one
+// that runs over it, and drops the mutes and note-offs past it; the patterns stay in the lanes. Undo brings it all back.
+class SetSongLength final : public Edit {
+public:
+  explicit SetSongLength(int ticks) : ticks_(ticks) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Song length"; }
+  bool allLanes() const override { return true; }
+  bool songLoop() const override { return true; }
+
+private:
+  int ticks_;
+  int oldLength_ = 0;
+  std::vector<Lane> oldLanes_;   // the lanes as they were (placements, mutes, offs)
+  Json loopBefore_;
+};
+
+// The project's name.
+class SetSongName final : public Edit {
+public:
+  explicit SetSongName(std::string name) : name_(std::move(name)) {}
+  void apply(Project& project) override { old_ = project.song.name; project.song.name = name_; }
+  void revert(Project& project) override { project.song.name = old_; }
+  std::string label() const override { return "Project name"; }
+
+private:
+  std::string name_, old_;
+};
+
 // A pattern under another name.
 class RenamePattern final : public Edit {
 public:
