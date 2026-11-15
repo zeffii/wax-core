@@ -259,7 +259,11 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   // The File menu and the song settings (the web app's header LCD): bpm, swing, tpb and bar are spin boxes; len and time are read out.
   {
     const float hs = ImGui::GetStyle().FontScaleDpi;
+    ImGui::AlignTextToFramePadding();   // the words in this row sit on the same baseline as the text inside the boxes
+    const float lineY = ImGui::GetCursorPosY();
+    ImGui::SetCursorPosY(lineY + ImGui::GetStyle().FramePadding.y);   // (a text button does not apply the baseline offset itself)
     if (app::textButton("File")) ImGui::OpenPopup("filemenu");
+    ImGui::SameLine(0, 0); ImGui::SetCursorPosY(lineY);
     if (ImGui::BeginPopup("filemenu")) {
       if (app::textButton("Open...  Ctrl+O")) { gRequest = DialogRequest::Open; ImGui::CloseCurrentPopup(); }
       if (app::textButton("Save  Ctrl+S")) { requestSave = true; ImGui::CloseCurrentPopup(); }
@@ -270,6 +274,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     // bpm, swing, tpb and bar are set seldom, so each is a spin box (one fixed step per arrow click, one undo per click).
     const ImU32 dim = app::kDimText;
     auto stepper = [&](const char* id, const char* label, const char* text, int direction) {
+      ImGui::AlignTextToFramePadding();
       ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(dim), "%s", label);
       ImGui::SameLine();
       const int clicked = app::spinBox(id, text, 58 * hs);
@@ -298,6 +303,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     std::snprintf(text, sizeof text, "%2d", song.beatsPerBar);
     if (const int d = stepper("lcd_bar", "bar", text, 1)) doc.apply(std::make_unique<SetBeatsPerBar>(std::clamp(song.beatsPerBar + d, 1, 16)), false);
     const int seconds = static_cast<int>(song.length * 60.0 / std::max(1, song.ticksPerBeat) / std::max(20.0, song.bpm));
+    ImGui::AlignTextToFramePadding();
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "len %d   time %d:%02d", song.length, seconds / 60, seconds % 60);
   }
   ImGui::Separator();
