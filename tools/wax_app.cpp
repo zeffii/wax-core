@@ -330,7 +330,6 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (ImGui::IsItemDeactivatedAfterEdit() && session->projectName != song.name) doc.apply(std::make_unique<SetSongName>(session->projectName));
     ImGui::SameLine(0, 16 * ImGui::GetStyle().FontScaleDpi);
   }
-  ImGui::Text("bar %d  beat %d  tick %d / %d   %.0f bpm", tick / perBar + 1, tick % perBar / perBeat + 1, tick, song.length, song.bpm);
   ImGui::SameLine(ImGui::GetWindowWidth() - 260 * ImGui::GetStyle().FontScaleDpi);
   meterL = std::max(player.levelLeft(), meterL * 0.9f);   // falls back a little each frame
   meterR = std::max(player.levelRight(), meterR * 0.9f);
@@ -936,6 +935,9 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     ImDrawList* bar = ImGui::GetWindowDrawList();
     const ImVec2 at = ImGui::GetCursorScreenPos();
     bar->AddLine(ImVec2(ImGui::GetWindowPos().x, at.y - 3 * scale), ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(), at.y - 3 * scale), app::lineAlpha(120));
+    ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 0.85f);   // a smaller face, so more fits along the bar
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kText), "%d.%d  %d/%d", tick / perBar + 1, tick % perBar / perBeat + 1, tick, song.length);   // bar.beat  tick/length
+    ImGui::SameLine(0, 14 * scale);
     if (session->edit) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kWarm), "EDIT");
     else ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Enter: edit");
     ImGui::SameLine(0, 14 * scale);
@@ -970,6 +972,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       }
       ImGui::EndCombo();
     }
+    ImGui::PopFont();
   }
   ImGui::End();
 }
