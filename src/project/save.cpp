@@ -74,7 +74,10 @@ std::string serializeProject(const Project& project) {
   // node parameters as edited
   for (const Instrument& instrument : project.instruments) {
     if (!out.contains("instruments") || !out["instruments"].contains(instrument.id)) continue;
-    Json& graph = out["instruments"][instrument.id]["graph"];
+    Json& definition = out["instruments"][instrument.id];
+    if (instrument.raw.is_object() && instrument.raw.contains("presets")) definition["presets"] = instrument.raw["presets"];   // presets as edited
+    else definition.erase("presets");
+    Json& graph = definition["graph"];
     if (graph.is_object()) {   // voices and sleep as edited
       if (instrument.graph.voices != 1 || graph.contains("voices")) graph["voices"] = instrument.graph.voices;
       if (instrument.graph.neverSleeps) graph["sleep"] = "never"; else graph.erase("sleep");

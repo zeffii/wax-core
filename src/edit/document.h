@@ -23,6 +23,8 @@ public:
   virtual std::string otherLane() const { return {}; }  // a second lane whose sound this changes (the old name of a renamed lane)
   virtual std::string lane() const { return {}; }      // the lane whose sound this changes ("" when none)
   virtual std::string paramAddress() const { return {}; }   // "instrument.node.param" of the parameter this sets ("" when none)
+  // Every parameter this sets (a recalled preset sets many); by default just paramAddress().
+  virtual std::vector<std::string> paramAddresses() const { return paramAddress().empty() ? std::vector<std::string>() : std::vector<std::string>{paramAddress()}; }
   virtual std::string graphInstrument() const { return {}; }   // the instrument whose wiring this changes ("" when none)
   virtual bool songLoop() const { return false; }              // true when this changes the song's loop
   virtual std::string dataNode() const { return {}; }      // "instrument\x1fnode" whose data (drawings) this changes ("" when none)
@@ -157,6 +159,39 @@ private:
   std::string instrument_;
   int at_ = -1;
   Instrument removed_;
+};
+
+// A preset recalled: every parameter it holds is set on the instrument's nodes (parameters whose node is gone are skipped).
+class RecallPreset final : public Edit {
+public:
+  RecallPreset(std::string instrument, int preset) : instrument_(std::move(instrument)), preset_(preset) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Recall preset"; }
+  std::vector<std::string> paramAddresses() const override { return addresses_; }
+
+private:
+  struct Before { std::string node, param; bool had; Json value; };
+  std::string instrument_;
+  int preset_;
+  std::vector<Before> before_;
+  std::vector<std::string> addresses_;
+};
+
+// The list of presets an instrument keeps (see edit/presets.h) replaced as a whole: saving, overwriting, renaming and removing one are
+// all this. The command column's table follows, so the lanes of the machine are rebuilt.
+class SetPresets final : public Edit {
+public:
+  SetPresets(std::string instrument, Json presets, std::string label) : instrument_(std::move(instrument)), presets_(std::move(presets)), label_(std::move(label)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return label_; }
+  bool allLanes() const override { return true; }
+
+private:
+  std::string instrument_;
+  Json presets_, old_;
+  std::string label_;
 };
 
 // An instrument one place earlier (direction -1) or later (+1) in the list. The master stays first.

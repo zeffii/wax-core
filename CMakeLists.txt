@@ -158,6 +158,7 @@ add_library(waxcore
   src/nodes/tap.cpp
   src/engine/takes.cpp
   src/edit/document.cpp
+  src/edit/presets.cpp
   src/project/save.cpp
   src/edit/spline_ops.cpp
   src/nodes/drawings.cpp

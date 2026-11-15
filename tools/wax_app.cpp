@@ -43,6 +43,7 @@
 #include "imgui.h"
 #include "edit/cell_editor.h"
 #include "edit/document.h"
+#include "edit/presets.h"
 #include "edit/sync.h"
 #include "seq/loop.h"
 #include "live/audio_out.h"
@@ -126,6 +127,8 @@ struct Session {
   float browserOptions = 0;              // height of the options under the lists in web pixels (0: half the panel)
   Screen browserScreen = Screen::Song;   // the screen the browser last matched its tab to
   int browserTab = 0;                    // 0 Patterns, 1 Machines, 2 Samples
+  int selectedPreset = -1;                // the Instrument screen's preset list
+  char presetName[48] = {};
   char machineName[64] = {};              // the Instrument screen's rename box
   bool renamingMachine = false;
   bool showMixer = true;                 // the mixer under the Song and Pattern screens (the status bar's toggle)
@@ -712,6 +715,61 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
               std::string next = kMaster;
               for (const Instrument& i : doc.project().instruments) if (i.id != name && i.id != kMaster) { next = i.id; break; }
               attempt(std::make_unique<RemoveInstrument>(name), next);
+            }
+          }
+          {   // presets: snapshots of every parameter, recalled by a click or by command 00 in a pattern
+            ImGui::Spacing();
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "presets");
+            current = nullptr;   // (an edit above may have moved the list of machines)
+            for (const Instrument& i : doc.project().instruments) if (i.id == session->instrument || i.id == name) current = &i;
+            if (current) {
+            const Json presets = current->raw.is_object() && current->raw.contains("presets") ? current->raw["presets"] : Json::array();
+            bool selectedExists = false;
+            for (const Json& p : presets) selectedExists |= p.value("id", -1) == session->selectedPreset;
+            if (!selectedExists) session->selectedPreset = -1;
+            for (const Json& p : presets) {
+              const int id = p.value("id", 0);
+              const std::string label = presetLabel(id) + "  " + p.value("name", std::string());
+              if (app::textButton(label.c_str(), id == session->selectedPreset)) {
+                session->selectedPreset = id;
+                std::snprintf(session->presetName, sizeof session->presetName, "%s", p.value("name", std::string()).c_str());
+                doc.apply(std::make_unique<RecallPreset>(name, id), false);
+                syncParams(doc, player.engine());
+                session->editStatus = "Recalled preset " + presetLabel(id) + ".";
+              }
+            }
+            ImGui::SetNextItemWidth(-1);
+            ImGui::InputTextWithHint("##presetname", "preset name", session->presetName, sizeof session->presetName);
+            const auto liveValue = [&](const std::string& address) -> std::optional<double> {
+              const ParamRegistry& registry = player.engine().registry();
+              return registry.slotOf(address) >= 0 ? std::optional<double>(registry.get(address)) : std::nullopt;
+            };
+            const auto setPresets = [&](Json list, const char* what) {
+              doc.apply(std::make_unique<SetPresets>(name, std::move(list), what));
+              const std::vector<std::string> problems = syncLanes(doc, player.engine());
+              session->editStatus = problems.empty() ? std::string() : problems.front();
+            };
+            try {
+              if (app::textButton("Save")) {
+                int id = 0;
+                setPresets(presetsWithAdded(*current, session->presetName, capturePreset(*current, liveValue), id), "Save preset");
+                session->selectedPreset = id;
+              }
+              ImGui::SameLine(0, 8 * scale);
+              if (app::textButton("Overwrite")) {
+                if (session->selectedPreset < 0) session->editStatus = "Click a preset to select it first.";
+                else setPresets(presetsWithValues(*current, session->selectedPreset, capturePreset(*current, liveValue)), "Overwrite preset");
+              }
+              if (app::textButton("Rename")) {
+                if (session->selectedPreset < 0) session->editStatus = "Click a preset to select it first.";
+                else setPresets(presetsWithName(*current, session->selectedPreset, session->presetName), "Rename preset");
+              }
+              ImGui::SameLine(0, 8 * scale);
+              if (app::textButton("Delete")) {
+                if (session->selectedPreset < 0) session->editStatus = "Click a preset to select it first.";
+                else { setPresets(presetsWithout(*current, session->selectedPreset), "Remove preset"); session->selectedPreset = -1; }
+              }
+            } catch (const std::exception& e) { session->editStatus = e.what(); }
             }
           }
         }

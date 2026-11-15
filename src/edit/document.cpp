@@ -478,6 +478,58 @@ void RemoveInstrument::revert(Project& project) {
   project.instruments.insert(project.instruments.begin() + at_, removed_);
 }
 
+namespace {
+Instrument& instrumentNamed(Project& project, const std::string& id) {
+  for (Instrument& i : project.instruments) if (i.id == id) return i;
+  throw std::out_of_range("no machine " + id);
+}
+}  // namespace
+
+void RecallPreset::apply(Project& project) {
+  Instrument& instrument = instrumentNamed(project, instrument_);
+  const Json* found = nullptr;
+  const Json presets = instrument.raw.value("presets", Json::array());
+  for (const Json& p : presets) if (p.value("id", -1) == preset_) found = &p;
+  if (!found) throw std::out_of_range("no preset " + std::to_string(preset_));
+  before_.clear(); addresses_.clear();
+  const Json held = found->value("values", Json::object());
+  for (const auto& [key, value] : held.items()) {
+    if (!value.is_number()) continue;
+    const std::size_t dot = key.find('.');
+    if (dot == std::string::npos) continue;
+    const std::string nodeId = key.substr(0, dot), param = key.substr(dot + 1);
+    for (GraphNode& node : instrument.graph.nodes) {
+      if (node.id != nodeId) continue;
+      if (!node.params.is_object()) node.params = Json::object();
+      const bool had = node.params.contains(param);
+      before_.push_back({nodeId, param, had, had ? node.params[param] : Json()});
+      node.params[param] = value;
+      addresses_.push_back(instrument_ + "." + key);
+    }
+  }
+}
+
+void RecallPreset::revert(Project& project) {
+  Instrument& instrument = instrumentNamed(project, instrument_);
+  for (const Before& b : before_)
+    for (GraphNode& node : instrument.graph.nodes) {
+      if (node.id != b.node) continue;
+      if (b.had) node.params[b.param] = b.value; else node.params.erase(b.param);
+    }
+}
+
+void SetPresets::apply(Project& project) {
+  Instrument& instrument = instrumentNamed(project, instrument_);
+  if (!instrument.raw.is_object()) instrument.raw = Json::object();
+  old_ = instrument.raw.contains("presets") ? instrument.raw["presets"] : Json();
+  if (presets_.is_array() && !presets_.empty()) instrument.raw["presets"] = presets_; else instrument.raw.erase("presets");
+}
+
+void SetPresets::revert(Project& project) {
+  Instrument& instrument = instrumentNamed(project, instrument_);
+  if (old_.is_null()) instrument.raw.erase("presets"); else instrument.raw["presets"] = old_;
+}
+
 void MoveInstrument::apply(Project& project) {
   from_ = to_ = -1;
   for (std::size_t i = 0; i < project.instruments.size(); i++) if (project.instruments[i].id == instrument_) from_ = static_cast<int>(i);
@@ -688,7 +740,7 @@ void Document::touched(const Edit& edit) {
   if (!edit.lane().empty()) changed_.insert(edit.lane());
   if (!edit.otherLane().empty()) changed_.insert(edit.otherLane());
   if (edit.allLanes()) for (const Lane& l : project_.lanes) changed_.insert(l.id);
-  if (!edit.paramAddress().empty()) changedParams_.insert(edit.paramAddress());
+  for (const std::string& address : edit.paramAddresses()) changedParams_.insert(address);
   if (!edit.dataNode().empty()) changedData_.insert(edit.dataNode());
   if (edit.songLoop()) loopChanged_ = true;
   if (!edit.graphInstrument().empty()) changedGraphs_.insert(edit.graphInstrument());

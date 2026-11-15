@@ -140,6 +140,7 @@ bool drawMixer(MixerState& state, Document& doc, Engine& engine, const std::stri
   Context cx{state, doc, engine};
   cx.scale = ImGui::GetStyle().FontScaleDpi;
   const float scale = cx.scale;
+  ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 0.85f);   // a smaller face, so the strips stay compact
   const float lineHeight = ImGui::GetTextLineHeight();
   if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) state.draggingAddress.clear();
 
@@ -238,6 +239,7 @@ bool drawMixer(MixerState& state, Document& doc, Engine& engine, const std::stri
     ImGui::PopID();
   }
   ImGui::EndChild();
+  ImGui::PopFont();
   return cx.changed;
 }
 

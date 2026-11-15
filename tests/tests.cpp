@@ -14,6 +14,7 @@
 #include "edit/cell_editor.h"
 #include "app/machines.h"
 #include "edit/document.h"
+#include "edit/presets.h"
 #include "seq/loop.h"
 #include "edit/spline_ops.h"
 #include "edit/sync.h"
@@ -963,6 +964,36 @@ void testInstrumentManage() {
   std::printf("ok: instrument manage\n");
 }
 
+void testPresets() {
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/cloves.wax"));
+  const wax::Instrument& first = doc.project().instruments[1];
+  const std::string id = first.id;
+  const auto none = [](const std::string&) { return std::optional<double>(); };
+  const wax::Json values = wax::capturePreset(first, none);
+  check(values.is_object() && !values.empty(), "a preset holds the parameters");
+  int a = -1, b = -1;
+  doc.apply(std::make_unique<wax::SetPresets>(id, wax::presetsWithAdded(first, "bright", values, a), "Save preset"));
+  doc.apply(std::make_unique<wax::SetPresets>(id, wax::presetsWithAdded(doc.project().instruments[1], "", values, b), "Save preset"));
+  check(a >= 0 && b == a + 1, "the lowest free number each time");
+  const wax::Project reread = wax::parseProject(wax::serializeProject(doc.project()));
+  check(reread.instruments[1].raw.value("presets", wax::Json::array()).size() >= 2, "presets are saved");
+  // a recalled preset sets the parameters, and undo puts them back
+  std::string firstKey = values.begin().key();
+  const std::size_t dot = firstKey.find('.');
+  doc.apply(std::make_unique<wax::SetParam>(id, firstKey.substr(0, dot), firstKey.substr(dot + 1), 0.123));
+  doc.apply(std::make_unique<wax::RecallPreset>(id, a), false);
+  bool restored = false;
+  for (const wax::GraphNode& n : doc.project().instruments[1].graph.nodes)
+    if (n.id == firstKey.substr(0, dot)) restored = n.params.value(firstKey.substr(dot + 1), -1.0) == values.begin().value().get<double>();
+  check(restored, "recall sets the values");
+  doc.undo();
+  doc.apply(std::make_unique<wax::SetPresets>(id, wax::presetsWithout(doc.project().instruments[1], a), "Remove preset"));
+  check(doc.project().instruments[1].raw["presets"].size() == 1, "a preset is removed, the other keeps its number");
+  doc.undo();
+  check(doc.project().instruments[1].raw["presets"].size() == 2, "remove undone");
+  std::printf("ok: presets\n");
+}
+
 void testMoveNode() {
   const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
   wax::Document doc(original);
@@ -1038,6 +1069,7 @@ int main() {
   testWireEdits();
   testInstrumentSetup();
   testInstrumentManage();
+  testPresets();
   testAddNode();
   testUnits();
   testRewire();
