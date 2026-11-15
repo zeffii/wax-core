@@ -137,3 +137,5 @@ The web app is built as screens behind a left rail, a header, and docks. The nat
 - **Docks and floats** to match later: scope rail, meters, perf meter, command bar (`|`), bounce dialog, console.
 
 What the user will most likely ask for next, in order: (1) the header's File menu and LCD fields, (2) the pattern screen's side shortcut sheet and selection/copy/paste, (3) the Song screen's pattern list at the side, (4) instrument list fields and node help, (5) the Sample screen, (6) look and feel tweaks towards the web (spacing, thin lines, flat text, no frames).
+
+- Icons (`app/icons`): the web's rail/header icons live in `art/icons/*.svg` (white, extracted from index.html), rasterised at run time with nanosvg (`third_party/nanosvg`) at the pixel size shown and cached per size, drawn tinted (dim / lit on hover or `on`), no frames: `iconButton(name, tip, on, size)`. The rail uses them. Still to do: use them in the header (play, pause, rec, follow, loop), the Instrument screen and docks.

@@ -23,6 +23,7 @@
 #include "app/dx_window.h"
 #include "app/graph_view.h"
 #include "app/widgets.h"
+#include "app/icons.h"
 #include "app/mixer_view.h"
 #include "app/param_panel.h"
 #include "app/pattern_view.h"
@@ -378,10 +379,14 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   }
   const bool mixerShown = session->screen == Screen::Song || session->screen == Screen::Pattern;
   const float below = mixerShown ? -(app::mixerHeight() + 10) : 0.0f;
-  ImGui::BeginChild("rail", ImVec2(92 * scale, below), false);
+  ImGui::BeginChild("rail", ImVec2(40 * scale, below), false);
   {
     const struct { const char* label; Screen screen; } entries[] = {{"Song", Screen::Song}, {"Pattern", Screen::Pattern}, {"Instrument", Screen::Instrument}, {"Info", Screen::Info}, {"Config", Screen::Config}};
-    for (const auto& entry : entries) if (app::textButton(entry.label, session->screen == entry.screen)) session->screen = entry.screen;
+    const struct { const char* icon; const char* tip; Screen screen; } icons[] = {
+        {"arrange", "Song: the arrangement (F1)", Screen::Song}, {"patterns", "Pattern (F2)", Screen::Pattern},
+        {"instruments", "Instrument (F3)", Screen::Instrument}, {"info", "Song info (F10)", Screen::Info}, {"config", "Config (F11)", Screen::Config}};
+    for (const auto& entry : icons) if (app::iconButton(entry.icon, entry.tip, session->screen == entry.screen, 24)) session->screen = entry.screen;
+    (void)entries;
   }
   ImGui::EndChild();
   ImGui::SameLine();
@@ -553,6 +558,7 @@ int main(int argc, char** argv) {
   }
   SDL_Window* window = SDL_CreateWindow("Wax", 1280, 800, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
   SDL_Renderer* renderer = window ? SDL_CreateRenderer(window, nullptr) : nullptr;
+  if (renderer) app::iconsInit(renderer);
   if (!renderer) {
     std::printf("SDL: %s\n", SDL_GetError());
     return 2;
@@ -684,6 +690,7 @@ int main(int argc, char** argv) {
   ImGui_ImplSDLRenderer3_Shutdown();
   ImGui_ImplSDL3_Shutdown();
   ImGui::DestroyContext();
+  app::iconsShutdown();
   SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);
   SDL_Quit();
