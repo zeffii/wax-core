@@ -19,6 +19,7 @@ struct Settings {
   // row, with the tint) or "band" (the tinted row alone)
   std::string playhead = "line";
   bool follow = true;   // the grids scroll with the playing row
+  bool insertCut = false;   // Insert silence cuts a pattern that runs across the cursor row (off: it stays whole)
   int arrangementRow = 0;   // the Song screen's row size in ticks (Ctrl+wheel); 0: a bar
 };
 

@@ -506,7 +506,9 @@ private:
 // move later, the loop follows, and the song grows (a pattern crossing the row stays whole). Undo takes it all back.
 class InsertSilence final : public Edit {
 public:
-  InsertSilence(int tick, int ticks) : tick_(tick), ticks_(ticks) {}
+  // With `cut`, a pattern running across the row is cut in two there (two new patterns, named "x.1" and "x.2") and its second half moves
+  // down; without, it stays whole and only the patterns starting at or after the row move.
+  InsertSilence(int tick, int ticks, bool cut = false) : tick_(tick), ticks_(ticks), cut_(cut) {}
   void apply(Project& project) override;
   void revert(Project& project) override;
   std::string label() const override { return "Insert silence"; }
@@ -515,8 +517,10 @@ public:
 
 private:
   int tick_, ticks_;
+  bool cut_ = false;
   int at_ = 0;
   Json loopBefore_;
+  std::vector<Lane> lanesBefore_;   // (when cutting: the lanes as they were)
 };
 
 // The colour of a pattern (null: automatic, 0-15: a preset, "#rrggbb": custom).

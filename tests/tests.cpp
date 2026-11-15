@@ -850,6 +850,22 @@ void testInsertSilence() {
   i = 0; bool back = doc.project().song.length == length;
   for (const wax::Lane& l : doc.project().lanes) for (const wax::Placement& p : l.placements) back &= p.start == starts[i++];
   check(back, "undo puts everything back");
+  {   // cut: a pattern across the row becomes two, undo brings the one back
+    wax::Document cutting(wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax"));
+    const wax::Project before = cutting.project();
+    int crossing = -1, laneAt = -1, cutTick = 0;
+    for (std::size_t i = 0; i < before.lanes.size() && crossing < 0; i++)
+      for (std::size_t k = 0; k < before.lanes[i].placements.size(); k++) {
+        const wax::Placement& p = before.lanes[i].placements[k];
+        if (p.length >= 32) { crossing = static_cast<int>(k); laneAt = static_cast<int>(i); cutTick = p.start + 16; break; }
+      }
+    if (crossing >= 0) {
+      cutting.apply(std::make_unique<wax::InsertSilence>(cutTick, 16, true));
+      check(cutting.project().lanes[static_cast<std::size_t>(laneAt)].placements.size() == before.lanes[static_cast<std::size_t>(laneAt)].placements.size() + 1, "a pattern across the row is cut in two");
+      cutting.undo();
+      check(cutting.project().lanes[static_cast<std::size_t>(laneAt)].placements.size() == before.lanes[static_cast<std::size_t>(laneAt)].placements.size() && cutting.project().song.length == before.song.length, "cut undone");
+    }
+  }
   std::printf("ok: insert silence\n");
 }
 

@@ -212,6 +212,39 @@ void InsertSilence::apply(Project& project) {
   if (ticks_ < 1) throw std::out_of_range("insert at least one tick");
   if (project.song.length + ticks_ > kMaxSong) throw std::out_of_range("the song would pass 65536 ticks");
   at_ = tick_ / 16 * 16;
+  lanesBefore_.clear();
+  if (cut_) {
+    lanesBefore_ = project.lanes;
+    static int counter = 0;
+    for (Lane& lane : project.lanes) {
+      for (std::size_t k = 0, n = lane.placements.size(); k < n; k++) {   // (the halves are added at the end: only the old placements are looked at)
+        const Placement across = lane.placements[k];
+        const Pattern* whole = nullptr;
+        for (const Pattern& p : lane.patterns) if (p.id == across.pattern) whole = &p;
+        if (!whole) continue;
+        const int shown = std::min(across.length, static_cast<int>(whole->rows.size())), cutAt = at_ - across.start;
+        if (cutAt <= 0 || cutAt >= shown) continue;
+        std::set<int> used;
+        for (const Pattern& p : lane.patterns) used.insert(p.index);
+        int firstIndex = 0, secondIndex = 0;
+        while (used.count(firstIndex)) firstIndex++;
+        used.insert(firstIndex);
+        while (used.count(secondIndex)) secondIndex++;
+        if (secondIndex > 255) continue;
+        const Pattern source = *whole;
+        Pattern first = source, second = source;
+        first.id = "cut" + std::to_string(counter++); first.index = firstIndex; first.name = source.name + ".1";
+        first.rows.assign(source.rows.begin(), source.rows.begin() + cutAt);
+        second.id = "cut" + std::to_string(counter++); second.index = secondIndex; second.name = source.name + ".2";
+        second.rows.assign(source.rows.begin() + cutAt, source.rows.begin() + shown);
+        lane.placements[k].pattern = first.id;
+        lane.placements[k].length = cutAt;
+        lane.placements.push_back({second.id, at_, shown - cutAt});
+        lane.patterns.push_back(std::move(first));
+        lane.patterns.push_back(std::move(second));
+      }
+    }
+  }
   for (Lane& lane : project.lanes) {
     for (Placement& p : lane.placements) p.start = movedBy(p.start, at_, ticks_);
     for (int& t : lane.mutes) t = movedBy(t, at_, ticks_);
@@ -228,7 +261,8 @@ void InsertSilence::apply(Project& project) {
 }
 
 void InsertSilence::revert(Project& project) {
-  for (Lane& lane : project.lanes) {
+  if (!lanesBefore_.empty()) project.lanes = lanesBefore_;   // (cut: the lanes as they were, halves and all)
+  else for (Lane& lane : project.lanes) {
     for (Placement& p : lane.placements) if (p.start >= at_ + ticks_) p.start -= ticks_;
     for (int& t : lane.mutes) if (t >= at_ + ticks_) t -= ticks_;
     for (int& t : lane.offs) if (t >= at_ + ticks_) t -= ticks_;

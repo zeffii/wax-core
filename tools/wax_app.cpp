@@ -666,7 +666,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     }
     {   // insert silence at the cursor row: everything from there on moves later (the web's Insert box)
       const auto insert = [&](int ticks) {
-        doc.apply(std::make_unique<InsertSilence>(editor.tick(), ticks));
+        doc.apply(std::make_unique<InsertSilence>(editor.tick(), ticks, app::settings().insertCut));
         const std::vector<std::string> problems = syncLanes(doc, player.engine());
         syncLoop(doc, player.engine());
         session->editStatus = problems.empty() ? std::string() : problems.front();
@@ -684,6 +684,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         if (fits(label)) ImGui::SameLine(0, 6 * scale);
         if (app::textButton(label)) { session->silenceTicks = preset; insert(preset); }
       }
+      if (ImGui::Checkbox("cut patterns across the cursor", &app::settings().insertCut)) app::saveSettings();
       {   // an empty lane for a machine the song already has
         std::vector<std::string> machines;
         for (const Instrument& i : doc.project().instruments) if (i.id != kMaster && !i.isMeta) machines.push_back(i.id);
