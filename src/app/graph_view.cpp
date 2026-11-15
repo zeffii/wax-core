@@ -1,11 +1,13 @@
 #include "app/graph_view.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <map>
 #include <memory>
 #include <set>
 
+#include "app/node_look.h"
 #include "app/theme.h"
 #include "app/widgets.h"
 #include "core/node_registry.h"
@@ -14,9 +16,87 @@ namespace wax::app {
 
 namespace {
 
-struct Tile { ImVec2 min, max; };
+constexpr float kPortRadius = 4;     // a port's reach for the mouse; the compact look draws it half as big
+constexpr float kStripStep = 11, kStripGap = 7;   // parameter ports hang in a strip of dots under the tile
+constexpr float kGrid = 24, kGridMajor = 12;      // the dot grid, and the dots between the brighter ones
+constexpr float kPlainRow = 16;      // port spacing on a node that draws its own face
 
 std::string nodeOfAddress(const std::string& address) { return address.substr(0, address.find('.')); }
+std::string portOfAddress(const std::string& address) { const auto dot = address.find('.'); return dot == std::string::npos ? "" : address.substr(dot + 1); }
+
+// What each kind of wire is coloured (the web app's defaults).
+ImU32 kindColour(PortKind kind) {
+  switch (kind) {
+    case PortKind::Control: return IM_COL32(0xe0, 0x94, 0x29, 255);
+    case PortKind::Stereo: return IM_COL32(0xb1, 0x77, 0xc5, 255);
+    case PortKind::Param: return IM_COL32(0xf4, 0x85, 0x7b, 255);
+    default: return IM_COL32(0x5e, 0x94, 0xc9, 255);
+  }
+}
+
+PortKind portKind(const NodeType& type, const GraphNode& node, const std::string& name) {
+  if (!name.empty() && name[0] == '@') return PortKind::Param;
+  if (node.stereo && std::find(type.stereoOptional.begin(), type.stereoOptional.end(), name) != type.stereoOptional.end()) return PortKind::Stereo;
+  const auto it = type.kinds.find(name);
+  return it == type.kinds.end() ? PortKind::Audio : it->second;
+}
+
+struct Tile {
+  const GraphNode* node = nullptr;
+  const NodeType* type = nullptr;
+  TileShape shape = TileShape::Box;
+  bool compact = true;
+  TileLayout layout;
+  ImVec2 min, max;            // screen pixels
+  std::vector<std::string> inputs;   // every input port: the type's, then one per '@' parameter
+  float faceInputs = 0;       // how many of them sit on the tile's edge (the others hang in the strip)
+  std::string glyph;
+};
+
+ImVec2 centreOf(const Tile& t) { return ImVec2((t.min.x + t.max.x) / 2, (t.min.y + t.max.y) / 2); }
+
+// Where a port sits, in screen pixels (-1 index: the tile's middle edge, for a port the type does not have).
+ImVec2 portPos(const Tile& t, bool output, int index, float scale) {
+  const float w = t.max.x - t.min.x, h = t.max.y - t.min.y;
+  if (!output && t.compact && index >= static_cast<int>(t.faceInputs)) return ImVec2(t.min.x + (8 + (index - t.faceInputs) * kStripStep) * scale, t.max.y + kStripGap * scale);
+  const float n = output ? static_cast<float>(t.type->outputs.size()) : t.faceInputs;
+  const float row = (t.compact ? kCompactRow : kPlainRow) * scale;
+  const float y = t.min.y + (h - n * row) / 2 + row / 2 + static_cast<float>(std::max(index, 0)) * row;
+  float x = output ? t.max.x : t.min.x;
+  if (t.shape == TileShape::Circle) {   // keep the dot on the circle's edge
+    const float r = w / 2, dy = y - (t.min.y + r), dx = std::sqrt(std::max(0.0f, r * r - dy * dy));
+    x = t.min.x + r + (output ? dx : -dx);
+  }
+  return ImVec2(x, y);
+}
+
+float wireArm(ImVec2 a, ImVec2 b, float scale) {   // wires between close nodes lose their S-curve (the web's default distance is 60)
+  const float straight = 60 * scale;
+  return 50 * scale * std::clamp((std::hypot(b.x - a.x, b.y - a.y) - straight) / straight, 0.0f, 1.0f);
+}
+
+ImVec2 bezierAt(ImVec2 a, ImVec2 b, float arm, float t) {
+  const ImVec2 c1(a.x + arm, a.y), c2(b.x - arm, b.y);
+  const float u = 1 - t;
+  const float w0 = u * u * u, w1 = 3 * u * u * t, w2 = 3 * u * t * t, w3 = t * t * t;
+  return ImVec2(w0 * a.x + w1 * c1.x + w2 * c2.x + w3 * b.x, w0 * a.y + w1 * c1.y + w2 * c2.y + w3 * b.y);
+}
+
+// A wire from a to b; control and parameter wires are dashed.
+void drawWire(ImDrawList* dl, ImVec2 a, ImVec2 b, ImU32 colour, float width, bool dashed, float scale) {
+  const float arm = wireArm(a, b, scale);
+  if (!dashed) { dl->AddBezierCubic(a, ImVec2(a.x + arm, a.y), ImVec2(b.x - arm, b.y), b, colour, width); return; }
+  constexpr int kSteps = 48;
+  ImVec2 prev = a;
+  float walked = 0;
+  const float dash = 7 * scale, gap = 5 * scale;
+  for (int i = 1; i <= kSteps; i++) {
+    const ImVec2 q = bezierAt(a, b, arm, static_cast<float>(i) / kSteps);
+    if (std::fmod(walked, dash + gap) < dash) dl->AddLine(prev, q, colour, width);
+    walked += std::hypot(q.x - prev.x, q.y - prev.y);
+    prev = q;
+  }
+}
 
 }  // namespace
 
@@ -26,132 +106,242 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
   if (!instrument) return false;
   const Graph& graph = instrument->graph;
   const float scale = ImGui::GetStyle().FontScaleDpi;
-  bool moved = false, rewired = false;
+  const NodeRegistry& types = builtinNodes();
+  bool moved = false;
 
   ImGui::BeginChild("graph", ImVec2(0, height), false, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoNav);
   ImDrawList* dl = ImGui::GetWindowDrawList();
   const ImVec2 origin = ImGui::GetCursorScreenPos();
-  const float tileH = 22 * scale;
+  const ImGuiIO& io = ImGui::GetIO();
+  const bool windowHovered = ImGui::IsWindowHovered();
+  ImFont* font = ImGui::GetFont();
+  const float nameSize = 11 * scale, labelSize = 10 * scale;
+  auto textWidth = [&](float size, const char* s) { return font->CalcTextSizeA(size, FLT_MAX, 0, s).x; };
 
-  std::set<std::string> hasInput;
-  for (const Connection& c : graph.connections) hasInput.insert(nodeOfAddress(c.to));
-
-  // tiles: positions in web pixels, scaled; nodes without one are laid out in a row
-  std::map<std::string, Tile> tiles;
-  float right = 0;
-  for (std::size_t i = 0; i < graph.nodes.size(); ++i) {
-    const GraphNode& n = graph.nodes[i];
-    const float x = static_cast<float>(n.placed ? n.x : 24 + 130.0 * static_cast<double>(i));
-    const float y = static_cast<float>(n.placed ? n.y : 40);
-    const float w = ImGui::CalcTextSize(n.id.c_str()).x + (n.type == "out" ? 34 : 22) * scale;
-    tiles[n.id] = {ImVec2(origin.x + x * scale * 0.8f, origin.y + (y - 100) * scale * 0.8f + 12 * scale),
-                   ImVec2(origin.x + x * scale * 0.8f + w, origin.y + (y - 100) * scale * 0.8f + 12 * scale + tileH)};
-    right = std::max(right, x * scale * 0.8f + w);
+  // a very faint grid of dots, a brighter one every few
+  {
+    const ImVec2 lo = dl->GetClipRectMin(), hi = dl->GetClipRectMax();
+    const float step = kGrid * scale;
+    const int i0 = static_cast<int>(std::floor((lo.x - origin.x) / step)), j0 = static_cast<int>(std::floor((lo.y - origin.y) / step));
+    for (int j = j0; origin.y + j * step < hi.y; j++) {
+      for (int i = i0; origin.x + i * step < hi.x; i++) {
+        const bool major = i % static_cast<int>(kGridMajor) == 0 && j % static_cast<int>(kGridMajor) == 0;
+        const ImVec2 p(std::round(origin.x + i * step), std::round(origin.y + j * step));
+        const float r = (major ? 1.0f : 0.75f) * std::max(1.0f, scale * 0.9f);
+        dl->AddRectFilled(ImVec2(p.x - r, p.y - r), ImVec2(p.x + r, p.y + r), textAlpha(major ? 76 : 28));
+      }
+    }
   }
 
-  // wires: from the right edge of the sender to the left edge of the receiver, a gentle S
+  // the tiles: each node's shape and size, from the type; a node the file gave no position is laid out in a row
+  std::map<std::string, Tile> tiles;
+  float right = 0, bottom = 0;
+  int unplaced = 0;
+  for (const GraphNode& n : graph.nodes) {
+    const NodeType* type = types.find(n.type);
+    if (!type || n.type == "tempo") continue;   // (the master's tempo node is not shown)
+    Tile t;
+    t.node = &n; t.type = type;
+    const NodeLookInfo look = lookOf(n.type);
+    t.shape = look.shape; t.glyph = look.glyph;
+    t.compact = look.sizeW <= 0 && look.shape != TileShape::Dot;
+    t.inputs = type->inputs;
+    for (const std::string& p : n.ports) t.inputs.push_back("@" + p);
+    t.faceInputs = static_cast<float>(t.compact ? type->inputs.size() : t.inputs.size());
+    float w = look.sizeW, h = look.sizeH;
+    if (t.compact) {
+      t.layout = compactLayout(t.shape, std::vector<std::string>(t.inputs.begin(), t.inputs.begin() + static_cast<long>(t.faceInputs)), type->outputs);
+      w = t.layout.w; h = t.layout.h;
+    }
+    const double x = n.placed ? n.x : 24 + 130.0 * unplaced, y = n.placed ? n.y : 40;
+    if (!n.placed) unplaced++;
+    t.min = ImVec2(origin.x + static_cast<float>(x) * scale, origin.y + static_cast<float>(y) * scale);
+    t.max = ImVec2(t.min.x + w * scale, t.min.y + h * scale);
+    right = std::max(right, t.max.x - origin.x);
+    bottom = std::max(bottom, t.max.y - origin.y);
+    tiles[n.id] = t;
+  }
+
+  // what each port carries: a dual node whose audio input receives stereo runs as a pair, so its audio ports are stereo too
+  std::set<std::string> wide;
+  for (bool changed = true; changed;) {
+    changed = false;
+    for (const Connection& c : graph.connections) {
+      const auto a = tiles.find(nodeOfAddress(c.from)), b = tiles.find(nodeOfAddress(c.to));
+      if (a == tiles.end() || b == tiles.end() || !b->second.type->dual || wide.count(b->first)) continue;
+      const PortKind from = portKind(*a->second.type, *a->second.node, portOfAddress(c.from));
+      const bool fromStereo = from == PortKind::Stereo || (from == PortKind::Audio && wide.count(a->first));
+      if (portKind(*b->second.type, *b->second.node, portOfAddress(c.to)) == PortKind::Audio && fromStereo) { wide.insert(b->first); changed = true; }
+    }
+  }
+  auto kindOf = [&](const Tile& t, const std::string& port) {
+    const PortKind k = portKind(*t.type, *t.node, port);
+    return k == PortKind::Audio && wide.count(t.node->id) ? PortKind::Stereo : k;
+  };
+  auto indexOf = [](const std::vector<std::string>& names, const std::string& name) {
+    const auto it = std::find(names.begin(), names.end(), name);
+    return it == names.end() ? -1 : static_cast<int>(it - names.begin());
+  };
+
+  // the port under the mouse (ports win over tiles): reach is the port's radius plus a little
+  struct Hit { std::string node, port; bool output = false; };
+  Hit hover;
+  if (windowHovered) {
+    float best = (kPortRadius + 4) * scale;
+    for (const auto& [id, t] : tiles) {
+      for (int side = 0; side < 2; side++) {
+        const std::vector<std::string>& names = side ? t.type->outputs : t.inputs;
+        for (int i = 0; i < static_cast<int>(names.size()); i++) {
+          const ImVec2 p = portPos(t, side == 1, i, scale);
+          const float d = std::hypot(io.MousePos.x - p.x, io.MousePos.y - p.y);
+          if (d <= best) { best = d; hover = {id, names[static_cast<std::size_t>(i)], side == 1}; }
+        }
+      }
+    }
+  }
+
+  // wires, from an output port to an input port: a gentle S, coloured by what the signal is
+  bool cut = false;
   for (const Connection& c : graph.connections) {
     const auto a = tiles.find(nodeOfAddress(c.from)), b = tiles.find(nodeOfAddress(c.to));
     if (a == tiles.end() || b == tiles.end()) continue;
-    const ImVec2 p0(a->second.max.x, (a->second.min.y + a->second.max.y) / 2), p1(b->second.min.x, (b->second.min.y + b->second.max.y) / 2);
-    const float k = std::max(24 * scale, std::fabs(p1.x - p0.x) * 0.4f);
-    dl->AddBezierCubic(p0, ImVec2(p0.x + k, p0.y), ImVec2(p1.x - k, p1.y), p1, dimAlpha(190), 1.2f);
-    dl->AddCircleFilled(p1, 2.5f * scale, kDimText);
-    // the dot in the middle of the wire cuts it
-    const ImVec2 mid((p0.x + p1.x) / 2, (p0.y + p1.y) / 2);
-    const bool near = std::hypot(ImGui::GetIO().MousePos.x - mid.x, ImGui::GetIO().MousePos.y - mid.y) < 7 * scale && ImGui::IsWindowHovered();
-    dl->AddCircle(mid, 3.5f * scale, near ? kWarm : dimAlpha(120), 12, 1.0f);
-    if (near && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) { doc.apply(std::make_unique<Disconnect>(instrumentId, c.from, c.to)); moved = true; rewired = true; break; }
-  }
-  const NodeRegistry& types = builtinNodes();
-
-  // tiles
-  const ImGuiIO& io = ImGui::GetIO();
-  for (const GraphNode& n : graph.nodes) {
-    const Tile& t = tiles[n.id];
-    const bool on = n.id == picked;
-    const ImU32 line = on ? kAccent : kSoft;
-    const ImU32 fill = kField;
-    const ImVec2 mid((t.min.x + t.max.x) / 2, (t.min.y + t.max.y) / 2);
-    if (n.type == "out") {
-      // the speaker: a small box and a cone
-      dl->AddRectFilled(t.min, ImVec2(t.min.x + tileH * 0.5f, t.max.y), fill);
-      dl->AddQuadFilled(ImVec2(t.min.x + tileH * 0.5f, t.min.y + tileH * 0.25f), ImVec2(t.min.x + tileH, t.min.y), ImVec2(t.min.x + tileH, t.max.y), ImVec2(t.min.x + tileH * 0.5f, t.max.y - tileH * 0.25f), fill);
-      dl->AddPolyline(std::array<ImVec2, 7>{t.min, ImVec2(t.min.x + tileH * 0.5f, t.min.y), ImVec2(t.min.x + tileH * 0.5f, t.min.y + tileH * 0.25f), ImVec2(t.min.x + tileH, t.min.y), ImVec2(t.min.x + tileH, t.max.y), ImVec2(t.min.x, t.max.y), t.min}.data(), 7, line, ImDrawFlags_None, 1.2f);
-    } else if (n.type == "voices") {
-      const float r = std::max(tileH * 0.5f + 2, (t.max.x - t.min.x) * 0.5f - 2 * scale);
-      dl->AddCircleFilled(mid, r, fill, 24);
-      dl->AddCircle(mid, r, line, 24, 1.2f);
-    } else if (!hasInput.count(n.id)) {
-      dl->AddRectFilled(t.min, t.max, fill, tileH * 0.5f);
-      dl->AddRect(t.min, t.max, line, tileH * 0.5f, 0, 1.2f);
-    } else {
-      dl->AddRectFilled(t.min, t.max, fill, 2);
-      dl->AddRect(t.min, t.max, line, 2, 0, 1.2f);
+    const std::string fromPort = portOfAddress(c.from), toPort = portOfAddress(c.to);
+    const ImVec2 p0 = portPos(a->second, true, indexOf(a->second.type->outputs, fromPort), scale);
+    const ImVec2 p1 = portPos(b->second, false, indexOf(b->second.inputs, toPort), scale);
+    const PortKind kind = kindOf(a->second, fromPort);
+    const float width = (kind == PortKind::Stereo ? 3.0f : 1.75f) * 0.65f * std::max(1.0f, scale);
+    drawWire(dl, p0, p1, kindColour(kind), width, kind == PortKind::Control || kind == PortKind::Param, scale);
+    // the dot in the middle of a wire cuts it (shown while the mouse is near)
+    const ImVec2 mid = bezierAt(p0, p1, wireArm(p0, p1, scale), 0.5f);
+    const bool near = windowHovered && std::hypot(io.MousePos.x - mid.x, io.MousePos.y - mid.y) < 7 * scale && hover.node.empty() && state.wiring.empty();
+    if (near) {
+      dl->AddCircle(mid, 3.5f * scale, kWarm, 12, 1.0f);
+      if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) { doc.apply(std::make_unique<Disconnect>(instrumentId, c.from, c.to)); moved = true; cut = true; break; }
     }
-    const ImVec2 size = ImGui::CalcTextSize(n.id.c_str());
-    const float shift = n.type == "out" ? tileH * 0.5f : 0;   // the text sits beside the cone
-    dl->AddText(ImVec2(mid.x + shift - size.x / 2, mid.y - size.y / 2), on ? kAccent : kDimText, n.id.c_str());
+  }
+  if (cut) { ImGui::EndChild(); return true; }
+
+  // the tiles themselves
+  const ImU32 ink = kText;
+  const ImU32 flat = IM_COL32(128, 128, 128, 51);   // the compact look: a flat grey fill, an outline only when chosen
+  for (const GraphNode& n : graph.nodes) {
+    const auto found = tiles.find(n.id);
+    if (found == tiles.end()) continue;
+    const Tile& t = found->second;
+    const bool chosen = n.id == picked;
+    const float w = t.max.x - t.min.x, h = t.max.y - t.min.y;
+    const ImVec2 mid = centreOf(t);
+    const float lineWidth = (chosen ? 2.0f : 1.0f) * std::max(1.0f, scale);
+    if (t.shape == TileShape::Circle || t.shape == TileShape::Dot) {
+      if (t.shape == TileShape::Dot) {
+        dl->AddCircleFilled(mid, w / 2, kindColour(kindOf(t, t.type->outputs.empty() ? "" : t.type->outputs.front())), 20);
+        dl->AddCircle(mid, w / 2, ink, 20, 1.0f);
+      } else {
+        dl->AddCircleFilled(mid, w / 2, kBg, 32);
+        dl->AddCircleFilled(mid, w / 2, flat, 32);
+        if (chosen) dl->AddCircle(mid, w / 2, kAccent, 32, lineWidth);
+      }
+    } else if (t.shape == TileShape::Speaker) {   // a small back and a cone that opens to the right
+      const std::array<ImVec2, 6> poly = {ImVec2(t.min.x, t.min.y + 0.3f * h), ImVec2(t.min.x + 0.38f * w, t.min.y + 0.3f * h), ImVec2(t.max.x, t.min.y),
+                                          ImVec2(t.max.x, t.max.y), ImVec2(t.min.x + 0.38f * w, t.min.y + 0.7f * h), ImVec2(t.min.x, t.min.y + 0.7f * h)};
+      dl->AddConcavePolyFilled(poly.data(), 6, kBg);
+      dl->AddConcavePolyFilled(poly.data(), 6, flat);
+      if (chosen) dl->AddPolyline(poly.data(), 6, kAccent, ImDrawFlags_Closed, lineWidth);
+    } else {
+      const float rounding = (t.shape == TileShape::Rounded ? 10.0f : 2.0f) * scale;
+      dl->AddRectFilled(t.min, t.max, kBg, rounding);
+      dl->AddRectFilled(t.min, t.max, flat, rounding);
+      if (chosen) dl->AddRect(t.min, t.max, kAccent, rounding, 0, lineWidth);
+    }
+    // the name sits above the shape (a route dot shows it only when chosen)
+    if (t.shape != TileShape::Dot || chosen) {
+      const float nameW = textWidth(nameSize, n.id.c_str());
+      dl->AddText(font, nameSize, ImVec2(mid.x - nameW / 2, t.min.y - 4 * scale - nameSize), ink, n.id.c_str());
+    }
+    if (n.type == "sidechain" || n.type == "listen") {   // where it listens to
+      const std::string where = n.source.empty() ? "<- (none)" : "<- " + n.source;
+      dl->AddText(font, nameSize, ImVec2(mid.x - textWidth(nameSize, where.c_str()) / 2, t.max.y + 2 * scale), textAlpha(190), where.c_str());
+    }
+    if (t.compact) drawGlyph(dl, t.glyph, t.shape, ImVec2(t.min.x + t.layout.glyphX * scale, mid.y), scale, ink);
+
+    // the ports
+    for (int side = 0; side < 2 && t.shape != TileShape::Dot; side++) {
+      const std::vector<std::string>& names = side ? t.type->outputs : t.inputs;
+      for (int i = 0; i < static_cast<int>(names.size()); i++) {
+        const std::string& name = names[static_cast<std::size_t>(i)];
+        const ImVec2 p = portPos(t, side == 1, i, scale);
+        const bool hot = hover.node == n.id && hover.port == name && hover.output == (side == 1);
+        const float pulse = hot ? 0.4f + 1.0f * (0.5f + 0.5f * std::sin(static_cast<float>(ImGui::GetTime()) * 1000 / 260)) : 0;
+        const float r = ((t.compact ? kPortRadius / 2 : kPortRadius) + pulse) * std::max(1.0f, scale);
+        dl->AddCircleFilled(p, r, kindColour(kindOf(t, name)), 12);
+        if (!t.compact) dl->AddCircle(p, r, ink, 12, 1.0f);
+        const bool inStrip = side == 0 && t.compact && i >= static_cast<int>(t.faceInputs);   // a parameter dot under the tile: named by hover, not drawn
+        std::string label;
+        if (!inStrip) label = t.compact ? (side ? t.layout.outLabels : t.layout.inLabels)[static_cast<std::size_t>(i)] : (name[0] == '@' ? name.substr(1) : name);
+        if (t.shape != TileShape::Circle && !label.empty()) {
+          const float lw = textWidth(labelSize, label.c_str());
+          dl->AddText(font, labelSize, ImVec2(side ? p.x - 8 * scale - lw : p.x + 8 * scale, p.y - labelSize / 2), textAlpha(190), label.c_str());
+        }
+      }
+    }
 
     ImGui::SetCursorScreenPos(t.min);
     ImGui::PushID(n.id.c_str());
-    ImGui::InvisibleButton("tile", ImVec2(t.max.x - t.min.x, tileH));
+    ImGui::InvisibleButton("tile", ImVec2(std::max(1.0f, w), std::max(1.0f, h)));
     ImGui::PopID();
-    if (ImGui::IsItemClicked()) { picked = n.id; state.held = n.id; state.grabX = io.MousePos.x - t.min.x; state.grabY = io.MousePos.y - t.min.y; }
-    if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+    if (ImGui::IsItemClicked() && hover.node.empty()) { picked = n.id; state.held = n.id; state.grabX = io.MousePos.x - t.min.x; state.grabY = io.MousePos.y - t.min.y; }
+    if (ImGui::IsItemHovered() && hover.node.empty()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     if (n.type != "out" && ImGui::BeginPopupContextItem("tilemenu")) {
-      if (textButton("delete")) { doc.apply(std::make_unique<DeleteNode>(instrumentId, n.id)); moved = true; if (picked == n.id) picked.clear(); ImGui::CloseCurrentPopup(); ImGui::EndPopup(); ImGui::PopID(); ImGui::EndChild(); return true; }
+      if (textButton("delete")) { doc.apply(std::make_unique<DeleteNode>(instrumentId, n.id)); if (picked == n.id) picked.clear(); ImGui::CloseCurrentPopup(); ImGui::EndPopup(); ImGui::EndChild(); return true; }
       ImGui::EndPopup();
-    }
-    // the dot a new wire is pulled from
-    if (n.type == "out") continue;   // the output has nothing to pull from
-    const ImVec2 dot(t.max.x + 7 * scale, mid.y);
-    const bool overDot = std::hypot(io.MousePos.x - dot.x, io.MousePos.y - dot.y) < 7 * scale && ImGui::IsWindowHovered();
-    dl->AddCircleFilled(dot, 3 * scale, state.wiring == n.id || overDot ? kWarm : dimAlpha(160));
-    if (overDot && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) { state.wiring = n.id; state.held.clear(); }
-  }
-  if (!state.wiring.empty()) {
-    const Tile& from = tiles[state.wiring];
-    const ImVec2 start(from.max.x + 7 * scale, (from.min.y + from.max.y) / 2);
-    dl->AddLine(start, io.MousePos, kWarm, 1.2f);
-    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-      for (const GraphNode& n : graph.nodes) {
-        const Tile& t = tiles[n.id];
-        if (n.id == state.wiring || io.MousePos.x < t.min.x || io.MousePos.x > t.max.x || io.MousePos.y < t.min.y || io.MousePos.y > t.max.y) continue;
-        const GraphNode* source = nullptr;
-        for (const GraphNode& m : graph.nodes) if (m.id == state.wiring) source = &m;
-        const NodeType* fromType = source ? types.find(source->type) : nullptr;
-        const NodeType* toType = types.find(n.type);
-        if (!fromType || !toType || fromType->outputs.empty() || toType->inputs.empty()) break;
-        doc.apply(std::make_unique<Connect>(instrumentId, state.wiring + "." + fromType->outputs.front(), n.id + "." + toType->inputs.front()));
-        moved = true; rewired = true;
-        break;
-      }
-      state.wiring.clear();
     }
   }
 
-  // dragging the held tile
+  // a new wire: pull from an output port to an input port (or onto a tile, for its first input)
+  if (state.wiring.empty() && !hover.node.empty() && hover.output && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+    state.wiring = hover.node + "." + hover.port;
+    state.held.clear();
+  }
+  if (!state.wiring.empty()) {
+    const auto from = tiles.find(nodeOfAddress(state.wiring));
+    if (from == tiles.end()) { state.wiring.clear(); }
+    else {
+      const ImVec2 start = portPos(from->second, true, indexOf(from->second.type->outputs, portOfAddress(state.wiring)), scale);
+      drawWire(dl, start, io.MousePos, kAccent, 1.75f * std::max(1.0f, scale) * 0.65f, false, scale);
+      if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        std::string target;
+        if (!hover.node.empty() && !hover.output && hover.node != from->first) target = hover.node + "." + hover.port;
+        else {
+          for (const auto& [id, t] : tiles) {
+            if (id == from->first || t.inputs.empty() || io.MousePos.x < t.min.x || io.MousePos.x > t.max.x || io.MousePos.y < t.min.y || io.MousePos.y > t.max.y) continue;
+            target = id + "." + t.inputs.front();
+            break;
+          }
+        }
+        if (!target.empty()) { doc.apply(std::make_unique<Connect>(instrumentId, state.wiring, target)); moved = true; }
+        state.wiring.clear();
+      }
+    }
+  }
+
+  // dragging the held tile; it lands on the grid unless Ctrl is held
   if (!state.held.empty()) {
     if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
       state.held.clear();
     } else {
-      const float nx = (io.MousePos.x - state.grabX - origin.x) / (scale * 0.8f);
-      const float ny = (io.MousePos.y - state.grabY - origin.y - 12 * scale) / (scale * 0.8f) + 100;
+      float nx = (io.MousePos.x - state.grabX - origin.x) / scale, ny = (io.MousePos.y - state.grabY - origin.y) / scale;
+      if (!io.KeyCtrl) { nx = std::round(nx / kGrid) * kGrid; ny = std::round(ny / kGrid) * kGrid; }
       const GraphNode* held = nullptr;
       for (const GraphNode& n : graph.nodes) if (n.id == state.held) held = &n;
-      if (held && (std::fabs(nx - held->x) > 0.5 || std::fabs(ny - held->y) > 0.5 || !held->placed)) {
-        const bool drag = std::hypot(io.MouseDelta.x, io.MouseDelta.y) > 0 || held->placed;
-        if (drag && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 3)) {
-          doc.apply(std::make_unique<MoveNode>(instrumentId, state.held, std::max(0.0f, nx), std::max(0.0f, ny)), true);
-          moved = true;
-        }
+      if (held && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 3) && (std::fabs(nx - held->x) > 0.5 || std::fabs(ny - held->y) > 0.5 || !held->placed)) {
+        doc.apply(std::make_unique<MoveNode>(instrumentId, state.held, std::max(0.0f, nx), std::max(0.0f, ny)), true);
+        moved = true;
       }
     }
   }
   // right-click on empty space: add a node (a flat list of the types, filtered as you type)
   if (ImGui::IsWindowHovered(ImGuiHoveredFlags_None) && !ImGui::IsAnyItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
-    state.addAt = ImVec2((io.MousePos.x - origin.x) / (scale * 0.8f), (io.MousePos.y - origin.y - 12 * scale) / (scale * 0.8f) + 100);
+    state.addAt = ImVec2((io.MousePos.x - origin.x) / scale, (io.MousePos.y - origin.y) / scale);
     state.filter[0] = 0;
     ImGui::OpenPopup("addnode");
   }
@@ -180,7 +370,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     ImGui::EndChild();
     ImGui::EndPopup();
   }
-  ImGui::SetCursorScreenPos(ImVec2(origin.x + right + 40 * scale, origin.y));
+  ImGui::SetCursorScreenPos(ImVec2(origin.x + right + 40 * scale, origin.y + bottom + 40 * scale));
   ImGui::Dummy(ImVec2(1, 1));
   ImGui::EndChild();
   return moved;

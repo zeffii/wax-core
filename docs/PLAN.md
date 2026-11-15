@@ -141,3 +141,10 @@ What the user will most likely ask for next, in order: (1) the header's File men
 - Icons (`app/icons`): the web's rail/header icons live in `art/icons/*.svg` (white, extracted from index.html), rasterised at run time with nanosvg (`third_party/nanosvg`) at the pixel size shown and cached per size, drawn tinted (dim / lit on hover or `on`), no frames: `iconButton(name, tip, on, size)`. The rail uses them. Still to do: use them in the header (play, pause, rec, follow, loop), the Instrument screen and docks.
 
 - Themes and status bar: the web's eight colour themes (generated into `app/themes_table.inc` from themes.css) plus the native `slate`, chosen from the status bar's dropdown (kept in the user's preferences folder; `--theme name` for headless). Views read runtime colour variables (`kText`, `kAccent`, `textAlpha(n)`, ...). Status bar (bottom): edit state, lane and tick, octave, undo/redo, last message; at the right cpu, mixer toggle, limiter, panic, theme. Still to do from the web footer: copy load line, streams, live picture, latency, meters, cut, build number, the parameter float; the web's per-theme details (glow, radius, pattern hue) are not carried over.
+
+### Graph tiles (as the web's compact look)
+Shapes (rounded sources, boxes, circle for voices, speaker for out, route dot), sizes (compactLayout in src/app/node_look.cpp, a port of
+tilelayout.js), glyphs and per-type shapes come from the web app: `node tools/gen-node-looks.mjs /path/to/webtracker > src/app/node_looks_table.inc`
+records each glyph by running the web's own drawing code. Ports sit on the tile edge (the real port, so wiring picks the port; parameter
+ports hang in a strip of dots under the tile), wires are coloured by kind (dashed for control/param), nodes snap to the 24px dot grid
+(Ctrl for free). Not yet: node faces (the arpeggiator's step mask), hover tips on ports, wire selection, pull-out/inline insert.
