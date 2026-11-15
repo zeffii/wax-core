@@ -36,11 +36,12 @@ PatternViewResult drawPatternView(const std::vector<std::vector<std::string>>& r
   const float rowHeight = ImGui::GetTextLineHeightWithSpacing();
   if (follow && playTick >= 0) {
     const float visible = ImGui::GetWindowHeight() - rowHeight * 2;
-    ImGui::SetScrollY(std::max(0.0f, playTick * rowHeight - visible * 0.4f));
+    ImGui::SetScrollY(std::max(0.0f, (static_cast<float>(playTick) + cursor.playFrac) * rowHeight - visible * 0.4f));
   }
 
   const int beat = std::max(1, ticksPerBeat), bar = beat * std::max(1, beatsPerBar);
   ImGuiListClipper clipper;
+  float playY = -1;   // screen y of the playing row's top, when it was drawn
   clipper.Begin(static_cast<int>(rows.size()));
   if (cursor.show && cursor.scrollTo && cursor.tick >= 0) clipper.IncludeItemByIndex(cursor.tick);
   while (clipper.Step()) {
@@ -49,6 +50,7 @@ PatternViewResult drawPatternView(const std::vector<std::vector<std::string>>& r
       const ImU32 tint = tick == playTick ? kPlayRow : tick % bar == 0 ? kBarRow : tick % beat == 0 ? kBeatRow : 0;
       if (tint) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, tint);
       ImGui::TableSetColumnIndex(0);
+      if (tick == playTick) playY = ImGui::GetCursorScreenPos().y - 1;
       if (cursor.loop && tick >= cursor.loopStart && tick < cursor.loopEnd) {   // the loop: a bar down the row-number column, ends marked
         const ImVec2 at = ImGui::GetCursorScreenPos();
         const float rowH = ImGui::GetTextLineHeightWithSpacing();
@@ -79,6 +81,15 @@ PatternViewResult drawPatternView(const std::vector<std::vector<std::string>>& r
         ImGui::PopID();
       }
     }
+  }
+  if (playY >= 0) {   // the playhead: a thin line across the table, moving down through the row as the song plays
+    const float y = playY + cursor.playFrac * rowHeight;
+    const ImVec2 from = ImGui::GetWindowPos();
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const float headerBottom = from.y + rowHeight * 1.5f;   // keep the line out from under the column headings
+    draw->PushClipRect(ImVec2(from.x, headerBottom), ImVec2(from.x + ImGui::GetWindowWidth(), from.y + ImGui::GetWindowHeight()), false);
+    draw->AddLine(ImVec2(from.x, y), ImVec2(from.x + ImGui::GetWindowWidth(), y), kAccent, 1.5f);
+    draw->PopClipRect();
   }
   ImGui::EndTable();
   return result;

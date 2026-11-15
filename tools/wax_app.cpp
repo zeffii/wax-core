@@ -567,6 +567,12 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
           cursor.scrollTo = session->scrollToCursor;
           const CellEditor::Selection sel = editor.selection();
           { const LoopRange lr = loopOf(song); cursor.loop = song.raw.is_object() && song.raw.contains("loop") && song.raw["loop"].is_object(); cursor.loopOn = lr.on; cursor.loopStart = lr.start; cursor.loopEnd = lr.end; }
+          {   // how far through the playing row we are: the time since the tick changed over one tick's length
+            static int lastTick = -1; static double changedAt = 0;
+            if (tick != lastTick) { lastTick = tick; changedAt = ImGui::GetTime(); }
+            const double tickSeconds = 60.0 / (std::max(1.0, song.bpm) * std::max(1, song.ticksPerBeat));
+            cursor.playFrac = playing ? static_cast<float>(std::clamp((ImGui::GetTime() - changedAt) / tickSeconds, 0.0, 1.0)) : 0.0f;
+          }
           cursor.selected = sel.active; cursor.tick0 = sel.tick0; cursor.tick1 = sel.tick1; cursor.cell0 = sel.cell0; cursor.cell1 = sel.cell1;
           session->scrollToCursor = false;
           const app::PatternViewResult result = app::drawPatternView(
