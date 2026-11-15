@@ -101,6 +101,23 @@ private:
   bool added_ = false;
 };
 
+// A wire's end moved to another port (a dragged wire dropped on a port): `from -> to` becomes `newFrom -> newTo`, in the same place in the list.
+// A loop is refused (as Connect does) and nothing changes.
+class MoveWire final : public Edit {
+public:
+  MoveWire(std::string instrument, std::string from, std::string to, std::string newFrom, std::string newTo)
+      : instrument_(std::move(instrument)), from_(std::move(from)), to_(std::move(to)), newFrom_(std::move(newFrom)), newTo_(std::move(newTo)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Move wire to " + newFrom_ + " -> " + newTo_; }
+  std::string graphInstrument() const override { return instrument_; }
+
+private:
+  std::string instrument_, from_, to_, newFrom_, newTo_;
+  std::size_t at_ = 0;
+  bool replaced_ = false, duplicate_ = false;
+};
+
 // A wire cut.
 class Disconnect final : public Edit {
 public:

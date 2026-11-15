@@ -201,26 +201,57 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     }
   }
 
-  // wires, from an output port to an input port: a gentle S, coloured by what the signal is
-  bool cut = false;
+  // wires, from an output port to an input port: a gentle S, coloured by what the signal is. The one nearest the mouse is lit; a click selects it.
+  struct WireEnds { const Connection* c; ImVec2 p0, p1; PortKind kind; };
+  std::vector<WireEnds> wires;
   for (const Connection& c : graph.connections) {
     const auto a = tiles.find(nodeOfAddress(c.from)), b = tiles.find(nodeOfAddress(c.to));
     if (a == tiles.end() || b == tiles.end()) continue;
     const std::string fromPort = portOfAddress(c.from), toPort = portOfAddress(c.to);
-    const ImVec2 p0 = portPos(a->second, true, indexOf(a->second.type->outputs, fromPort), scale);
-    const ImVec2 p1 = portPos(b->second, false, indexOf(b->second.inputs, toPort), scale);
-    const PortKind kind = kindOf(a->second, fromPort);
-    const float width = (kind == PortKind::Stereo ? 3.0f : 1.75f) * 0.65f * std::max(1.0f, scale);
-    drawWire(dl, p0, p1, kindColour(kind), width, settings().wireDashed && (kind == PortKind::Control || kind == PortKind::Param), scale);
-    // the dot in the middle of a wire cuts it (shown while the mouse is near)
-    const ImVec2 mid = bezierAt(p0, p1, wireArm(p0, p1, scale), 0.5f);
-    const bool near = windowHovered && std::hypot(io.MousePos.x - mid.x, io.MousePos.y - mid.y) < 7 * scale && hover.node.empty() && state.wiring.empty();
-    if (near) {
-      dl->AddCircle(mid, 3.5f * scale, kWarm, 12, 1.0f);
-      if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) { doc.apply(std::make_unique<Disconnect>(instrumentId, c.from, c.to)); moved = true; cut = true; break; }
+    wires.push_back({&c, portPos(a->second, true, indexOf(a->second.type->outputs, fromPort), scale), portPos(b->second, false, indexOf(b->second.inputs, toPort), scale), kindOf(a->second, fromPort)});
+  }
+  const bool dragging = !state.wiring.empty() || !state.wiringIn.empty() || state.rewire.started;
+  const auto lifted = [&](const Connection& c) { return state.rewire.started && c.from == state.rewire.from && c.to == state.rewire.to; };
+  const Connection* hoverWire = nullptr;
+  if (windowHovered && hover.node.empty() && !dragging) {
+    float best = 6 * scale;
+    for (const WireEnds& w : wires) {
+      const float arm = wireArm(w.p0, w.p1, scale);
+      for (int k = 0; k <= 24; k++) {
+        const ImVec2 pt = bezierAt(w.p0, w.p1, arm, static_cast<float>(k) / 24);
+        const float d = std::hypot(io.MousePos.x - pt.x, io.MousePos.y - pt.y);
+        if (d < best) { best = d; hoverWire = w.c; }
+      }
     }
   }
-  if (cut) { ImGui::EndChild(); return true; }
+  for (const WireEnds& w : wires) {
+    if (lifted(*w.c)) continue;
+    const bool chosenWire = w.c->from == state.wireFrom && w.c->to == state.wireTo;
+    const float width = (w.kind == PortKind::Stereo ? 3.0f : 1.75f) * 0.65f * std::max(1.0f, scale) * (chosenWire || w.c == hoverWire ? 1.8f : 1.0f);
+    drawWire(dl, w.p0, w.p1, chosenWire ? kWarm : kindColour(w.kind), width, settings().wireDashed && (w.kind == PortKind::Control || w.kind == PortKind::Param), scale);
+  }
+  std::string hoverText;   // what the thing under the mouse is, as in the web app's status line
+  {
+    const auto kindText = [](PortKind k) {
+      switch (k) {
+        case PortKind::Control: return "control: an envelope, lfo or trigger signal";
+        case PortKind::Stereo: return "stereo audio: left and right travel on this one wire";
+        case PortKind::Param: return "parameter control: a 0 to 1 signal mapped onto a parameter";
+        default: return "audio: a mono signal";
+      }
+    };
+    if (!hover.node.empty() && !dragging) {
+      const auto t = tiles.find(hover.node);
+      const std::string address = hover.node + "." + hover.port;
+      int count = 0;
+      for (const Connection& c : graph.connections) count += hover.output ? c.from == address : c.to == address;
+      hoverText = std::string(hover.output ? "Output " : "Input ") + address + ", " + kindText(kindOf(t->second, hover.port));
+      if (count) hoverText += count > 1 ? " - " + std::to_string(count) + " wires: drag to move the first (Shift+drag makes a new wire)" : " - drag to move its wire (Shift+drag makes a new wire)";
+    } else if (hoverWire) {
+      const auto a = tiles.find(nodeOfAddress(hoverWire->from));
+      hoverText = "Wire " + hoverWire->from + " to " + hoverWire->to + ", " + kindText(kindOf(a->second, portOfAddress(hoverWire->from)));
+    }
+  }
 
   // the tiles themselves
   const ImU32 ink = kText;
@@ -298,31 +329,90 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     }
   }
 
-  // a new wire: pull from an output port to an input port (or onto a tile, for its first input)
-  if (state.wiring.empty() && !hover.node.empty() && hover.output && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-    state.wiring = hover.node + "." + hover.port;
-    state.held.clear();
-  }
-  if (!state.wiring.empty()) {
-    const auto from = tiles.find(nodeOfAddress(state.wiring));
-    if (from == tiles.end()) { state.wiring.clear(); }
-    else {
-      const ImVec2 start = portPos(from->second, true, indexOf(from->second.type->outputs, portOfAddress(state.wiring)), scale);
-      drawWire(dl, start, io.MousePos, kAccent, 1.75f * std::max(1.0f, scale) * 0.65f, false, scale);
-      if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-        std::string target;
-        if (!hover.node.empty() && !hover.output && hover.node != from->first) target = hover.node + "." + hover.port;
-        else {
-          for (const auto& [id, t] : tiles) {
-            if (id == from->first || t.inputs.empty() || io.MousePos.x < t.min.x || io.MousePos.x > t.max.x || io.MousePos.y < t.min.y || io.MousePos.y > t.max.y) continue;
-            target = id + "." + t.inputs.front();
-            break;
-          }
-        }
-        if (!target.empty()) { doc.apply(std::make_unique<Connect>(instrumentId, state.wiring, target)); moved = true; }
-        state.wiring.clear();
+  // Wiring, as in the web app. Pressing a port with wires (no Shift) picks up a wire by that end once the mouse has moved a little; pressing
+  // a free input pulls a wire from it towards an output; pressing an output (or Shift+pressing any port) pulls a new wire from it.
+  const auto portAt = [&](const std::string& address, bool output) {
+    const auto t = tiles.find(nodeOfAddress(address));
+    return t == tiles.end() ? ImVec2(0, 0) : portPos(t->second, output, indexOf(output ? t->second.type->outputs : t->second.inputs, portOfAddress(address)), scale);
+  };
+  const bool idle = state.wiring.empty() && state.wiringIn.empty() && !state.rewire.active;
+  if (idle && windowHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+    state.message.clear();
+    if (!hover.node.empty()) {
+      const std::string address = hover.node + "." + hover.port;
+      const Connection* first = nullptr;
+      for (const Connection& c : graph.connections) if (!first && (hover.output ? c.from == address : c.to == address)) first = &c;
+      state.held.clear();
+      state.wireFrom.clear(); state.wireTo.clear();
+      if (first && !io.KeyShift) {
+        state.rewire = {true, false, !hover.output, first->from, first->to, io.MousePos};
+        picked = hover.node;
+      } else if (!hover.output) {
+        state.wiringIn = address;
+        picked = hover.node;
+      } else {
+        state.wiring = address;
       }
+    } else if (hoverWire) {
+      state.wireFrom = hoverWire->from; state.wireTo = hoverWire->to;
+    } else if (!state.held.empty()) {
+      state.wireFrom.clear(); state.wireTo.clear();   // (a click on a tile)
+    } else {
+      state.wireFrom.clear(); state.wireTo.clear();
     }
+  }
+  const auto tryApply = [&](std::unique_ptr<Edit> edit) {
+    try { doc.apply(std::move(edit)); moved = true; state.message.clear(); }
+    catch (const std::exception& e) { state.message = e.what(); }
+  };
+  if (!state.wiring.empty()) {   // a new wire from an output: it lands on an input port
+    const ImVec2 start = portAt(state.wiring, true);
+    drawWire(dl, start, io.MousePos, kAccent, 1.75f * std::max(1.0f, scale) * 0.65f, false, scale);
+    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+      if (!hover.node.empty() && !hover.output) tryApply(std::make_unique<Connect>(instrumentId, state.wiring, hover.node + "." + hover.port));
+      state.wiring.clear();
+    }
+  }
+  if (!state.wiringIn.empty()) {   // a new wire from a free input: it lands on an output port
+    const ImVec2 end = portAt(state.wiringIn, false);
+    drawWire(dl, io.MousePos, end, kAccent, 1.75f * std::max(1.0f, scale) * 0.65f, false, scale);
+    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+      if (!hover.node.empty() && hover.output) tryApply(std::make_unique<Connect>(instrumentId, hover.node + "." + hover.port, state.wiringIn));
+      state.wiringIn.clear();
+    }
+  }
+  if (state.rewire.active) {   // a picked-up wire: dropped on a port of the same side it moves there, anywhere else it is unplugged, Esc puts it back
+    auto& r = state.rewire;
+    if (!r.started && ImGui::IsMouseDown(ImGuiMouseButton_Left) && std::hypot(io.MousePos.x - r.press.x, io.MousePos.y - r.press.y) > 4 * scale) {
+      r.started = true;
+      state.message = "Drop it on another port, or anywhere else to leave it unplugged (Esc puts it back)";
+    }
+    if (r.started) {
+      const ImVec2 fixed = r.movingTo ? portAt(r.from, true) : portAt(r.to, false);
+      if (r.movingTo) drawWire(dl, fixed, io.MousePos, kAccent, 1.75f * std::max(1.0f, scale) * 0.65f, false, scale);
+      else drawWire(dl, io.MousePos, fixed, kAccent, 1.75f * std::max(1.0f, scale) * 0.65f, false, scale);
+    }
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { r = {}; state.message.clear(); }
+    else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+      if (r.started) {
+        const bool onWanted = !hover.node.empty() && hover.output == !r.movingTo;
+        if (onWanted) {
+          const std::string port = hover.node + "." + hover.port;
+          if (r.movingTo) tryApply(std::make_unique<MoveWire>(instrumentId, r.from, r.to, r.from, port));
+          else tryApply(std::make_unique<MoveWire>(instrumentId, r.from, r.to, port, r.to));
+          if (state.message.empty()) state.message = "Wire moved to " + port;
+        } else {
+          tryApply(std::make_unique<Disconnect>(instrumentId, r.from, r.to));
+          state.message = "Wire unplugged";
+        }
+      }
+      r = {};
+    }
+  }
+  // Delete cuts the selected wire
+  if (!state.wireFrom.empty() && windowHovered && !io.WantTextInput && (ImGui::IsKeyPressed(ImGuiKey_Delete, false) || ImGui::IsKeyPressed(ImGuiKey_Backspace, false))) {
+    tryApply(std::make_unique<Disconnect>(instrumentId, state.wireFrom, state.wireTo));
+    state.wireFrom.clear(); state.wireTo.clear();
   }
 
   // dragging the held tile; it lands on the grid unless Ctrl is held
@@ -362,6 +452,10 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       picked = id;
       moved = true;
     }
+  }
+  {   // the line under the graph: a refused wire, else what the mouse is over
+    const std::string& text = !state.message.empty() ? state.message : hoverText;
+    if (!text.empty()) dl->AddText(font, nameSize, ImVec2(dl->GetClipRectMin().x + 8 * scale, dl->GetClipRectMax().y - nameSize - 6 * scale), dimAlpha(220), text.c_str());
   }
   ImGui::SetCursorScreenPos(ImVec2(origin.x + right + 40 * scale, origin.y + bottom + 40 * scale));
   ImGui::Dummy(ImVec2(1, 1));

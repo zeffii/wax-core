@@ -368,10 +368,29 @@ Graph& graphOf(Project& project, const std::string& instrumentId) {
 }
 }  // namespace
 
+namespace {
+std::string nodePart(const std::string& address) { return address.substr(0, address.find('.')); }
+
+// Whether the wires lead from node `start` to node `target` (a node reaches itself).
+bool reaches(const Graph& graph, const std::string& start, const std::string& target) {
+  std::vector<std::string> todo{start};
+  std::set<std::string> seen;
+  while (!todo.empty()) {
+    const std::string at = todo.back();
+    todo.pop_back();
+    if (at == target) return true;
+    if (!seen.insert(at).second) continue;
+    for (const Connection& c : graph.connections) if (nodePart(c.from) == at) todo.push_back(nodePart(c.to));
+  }
+  return false;
+}
+}  // namespace
+
 void Connect::apply(Project& project) {
   Graph& g = graphOf(project, instrument_);
   added_ = false;
   for (const Connection& c : g.connections) if (c.from == from_ && c.to == to_) return;
+  if (reaches(g, nodePart(to_), nodePart(from_))) throw std::runtime_error("That would make a loop.");
   g.connections.push_back({from_, to_});
   added_ = true;
 }
@@ -382,6 +401,33 @@ void Connect::revert(Project& project) {
   for (std::size_t i = g.connections.size(); i-- > 0;) {
     if (g.connections[i].from == from_ && g.connections[i].to == to_) { g.connections.erase(g.connections.begin() + static_cast<std::ptrdiff_t>(i)); return; }
   }
+}
+
+void MoveWire::apply(Project& project) {
+  Graph& g = graphOf(project, instrument_);
+  replaced_ = duplicate_ = false;
+  std::size_t index = g.connections.size();
+  for (std::size_t i = 0; i < g.connections.size(); i++) if (g.connections[i].from == from_ && g.connections[i].to == to_) index = i;
+  if (index == g.connections.size()) throw std::runtime_error("That wire is gone.");
+  const Connection old = g.connections[index];
+  g.connections.erase(g.connections.begin() + static_cast<std::ptrdiff_t>(index));
+  if (reaches(g, nodePart(newTo_), nodePart(newFrom_))) {
+    g.connections.insert(g.connections.begin() + static_cast<std::ptrdiff_t>(index), old);
+    throw std::runtime_error("That would make a loop.");
+  }
+  at_ = index;
+  replaced_ = true;
+  for (const Connection& c : g.connections) duplicate_ |= c.from == newFrom_ && c.to == newTo_;
+  if (!duplicate_) g.connections.insert(g.connections.begin() + static_cast<std::ptrdiff_t>(index), Connection{newFrom_, newTo_});
+}
+
+void MoveWire::revert(Project& project) {
+  if (!replaced_) return;
+  Graph& g = graphOf(project, instrument_);
+  if (!duplicate_) {
+    for (std::size_t i = 0; i < g.connections.size(); i++) if (g.connections[i].from == newFrom_ && g.connections[i].to == newTo_) { g.connections.erase(g.connections.begin() + static_cast<std::ptrdiff_t>(i)); break; }
+  }
+  g.connections.insert(g.connections.begin() + static_cast<std::ptrdiff_t>(std::min(at_, g.connections.size())), Connection{from_, to_});
 }
 
 void Disconnect::apply(Project& project) {

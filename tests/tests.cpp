@@ -887,6 +887,30 @@ void testSongLength() {
   std::printf("ok: song length and name\n");
 }
 
+void testWireEdits() {
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax"));
+  const wax::Instrument* inst = nullptr;
+  for (const wax::Instrument& i : doc.project().instruments) if (i.graph.connections.size() >= 2 && i.id != "master") { inst = &i; break; }
+  check(inst != nullptr, "an instrument with wires");
+  const std::string id = inst->id;
+  const auto wires = [&] { for (const wax::Instrument& i : doc.project().instruments) if (i.id == id) return i.graph.connections; return std::vector<wax::Connection>(); };
+  const std::vector<wax::Connection> before = wires();
+  // a wire back from the end of a chain to its start would make a loop
+  const wax::Connection last = before.back();
+  bool refused = false;
+  try { doc.apply(std::make_unique<wax::Connect>(id, last.to.substr(0, last.to.find('.')) + ".out", before.front().from.substr(0, before.front().from.find('.')) + ".in")); }
+  catch (const std::exception&) { refused = true; }
+  check(wires().size() == before.size(), "no wire was added by a refused connect");
+  (void)refused;
+  // moving a wire's end and undoing it
+  const wax::Connection first = before.front();
+  doc.apply(std::make_unique<wax::MoveWire>(id, first.from, first.to, first.from, first.to));
+  check(wires().size() == before.size(), "moving a wire onto itself changes nothing");
+  doc.undo();
+  check(wires().size() == before.size() && wires().front().from == first.from, "undo puts the wire back in its place");
+  std::printf("ok: wire edits\n");
+}
+
 void testMoveNode() {
   const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
   wax::Document doc(original);
@@ -959,6 +983,7 @@ int main() {
   testInsertSilence();
   testPatternColour();
   testSongLength();
+  testWireEdits();
   testAddNode();
   testUnits();
   testRewire();
