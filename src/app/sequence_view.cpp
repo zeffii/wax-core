@@ -1,4 +1,5 @@
 #include "app/sequence_view.h"
+#include "seq/loop.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -89,6 +90,16 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
   const int first = std::max(0, static_cast<int>((scrollY - headHeight) / rowHeight));
   const int last = std::min(rows - 1, static_cast<int>((scrollY + viewHeight) / rowHeight));
   const int bar16 = cell * 4;   // a brighter number every four bars
+
+  // the loop: a bar beside the tick numbers over its rows, and a line across the sheet at each end
+  const LoopRange loop = loopOf(project.song);
+  if (loop.on) {
+    const float top = origin.y + headHeight + static_cast<float>(loop.start / cell) * rowHeight;
+    const float bottom = origin.y + headHeight + static_cast<float>((loop.end + cell - 1) / cell) * rowHeight;
+    draw->AddRectFilled(ImVec2(origin.x, top), ImVec2(origin.x + 3 * scale, bottom), kWarm);
+    draw->AddLine(ImVec2(origin.x, top), ImVec2(origin.x + totalWidth, top), withAlpha(kWarm, 110));
+    draw->AddLine(ImVec2(origin.x, bottom), ImVec2(origin.x + totalWidth, bottom), withAlpha(kWarm, 110));
+  }
 
   // the gutter: tick numbers, the bright ones every four bars
   for (int r = first; r <= last; ++r) {
