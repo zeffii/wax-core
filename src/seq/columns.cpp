@@ -1,5 +1,7 @@
 #include "seq/columns.h"
+#include "seq/names.h"
 
+#include <set>
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
@@ -42,6 +44,8 @@ Column commandColumn(const Instrument& instrument, const ParamRegistry& registry
   Column column;
   column.kind = ColumnKind::Cmd;
   column.token = Token::Cmd;
+  column.label = "Cmd";
+  column.longName = "Command";
 
   for (const Command& c : instrument.commands) {
     CommandTarget target;
@@ -143,9 +147,17 @@ std::vector<Column> metaColumns(const Instrument& self, const Project& project, 
       const int slot = registry.slotOf(spec.instrument + "." + spec.node + "." + spec.param);
       if (shown == target.exposed.end() || slot < 0) continue;
       column = paramColumn(slot, registry, spec.bits ? spec.bits : shown->bits, shown->log, spec.node, spec.param);
+      column.label = shown->label.empty() ? spec.param : shown->label;
+      column.longName = !shown->longName.empty() ? shown->longName : longName(spec.param);
       column.target = spec.instrument;
     } else {
       continue;
+    }
+    if (column.label.empty()) {   // a proxy: named as the column it stands for, with the machine in front in the long name
+      column.label = column.kind == ColumnKind::Note ? "Note" : column.kind == ColumnKind::Vel ? "Vel" : column.kind == ColumnKind::Trig ? "T" + std::to_string(column.tc + 1) : column.param;
+      column.longName = spec.instrument + " \xc2\xb7 " + column.label;
+    } else {
+      column.longName = spec.instrument + " \xc2\xb7 " + column.longName;
     }
     columns.push_back(std::move(column));
   }
@@ -161,12 +173,16 @@ std::vector<Column> ownColumns(const Instrument& instrument, const ParamRegistry
     note.kind = ColumnKind::Note;
     note.token = Token::Note;
     note.nc = k;
+    note.label = notePairs(instrument) > 1 ? "N" + std::to_string(k + 1) : "Note";
+    note.longName = "Note";
     columns.push_back(note);
     if (!instrument.noVel) {   // a MOD channel has no velocity
       Column vel;
       vel.kind = ColumnKind::Vel;
       vel.token = Token::Hex2;
       vel.nc = k;
+      vel.label = notePairs(instrument) > 1 ? "V" + std::to_string(k + 1) : "Vel";
+      vel.longName = "Velocity";
       columns.push_back(vel);
     }
   }
@@ -177,12 +193,20 @@ std::vector<Column> ownColumns(const Instrument& instrument, const ParamRegistry
     trig.token = Token::Hex1;
     trig.tc = static_cast<int>(i);
     trig.note = instrument.triggers[i].note;
+    trig.label = instrument.triggers[i].label.empty() ? "T" + std::to_string(i + 1) : instrument.triggers[i].label;
+    trig.longName = instrument.triggers[i].longName.empty() ? trig.label : instrument.triggers[i].longName;
     columns.push_back(trig);
   }
+  std::set<std::string> shownNodes;   // the node's name too in the long name, when parameters of several nodes are shown
+  for (const Exposed& e : instrument.exposed) shownNodes.insert(e.node);
+  const bool context = shownNodes.size() > 1;
   for (const Exposed& e : instrument.exposed) {
     const int slot = registry.slotOf(instrument.id + "." + e.node + "." + e.param);
     if (slot < 0) throw std::runtime_error("\"" + instrument.id + "\" does not expose " + e.node + "." + e.param);
-    columns.push_back(paramColumn(slot, registry, e.bits, e.log, e.node, e.param));
+    Column column = paramColumn(slot, registry, e.bits, e.log, e.node, e.param);
+    column.label = e.label.empty() ? e.param : e.label;
+    column.longName = !e.longName.empty() ? e.longName : longName(e.param) + (context ? " \xc2\xb7 " + e.node : std::string());
+    columns.push_back(std::move(column));
   }
   const bool hasPresets = !instrument.raw.value("presets", Json::array()).empty();
   if (!instrument.commands.empty() || hasPresets) columns.push_back(commandColumn(instrument, registry));

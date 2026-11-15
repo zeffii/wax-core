@@ -44,6 +44,7 @@
 #include "edit/cell_editor.h"
 #include "edit/document.h"
 #include "edit/presets.h"
+#include "app/column_info.h"
 #include "edit/sync.h"
 #include "seq/loop.h"
 #include "live/audio_out.h"
@@ -874,6 +875,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
             const double tickSeconds = 60.0 / (std::max(1.0, song.bpm) * std::max(1, song.ticksPerBeat));
             cursor.playFrac = playing ? static_cast<float>(std::clamp((ImGui::GetTime() - changedAt) / tickSeconds, 0.0, 1.0)) : 0.0f;
           }
+          cursor.info = app::describeColumn(doc.project(), lane, session->player->engine().laneColumns(lane.id), session->rows[lane.id], editor.tick(), editor.cell());
           cursor.selected = sel.active; cursor.tick0 = sel.tick0; cursor.tick1 = sel.tick1; cursor.cell0 = sel.cell0; cursor.cell1 = sel.cell1;
           session->scrollToCursor = false;
           const app::PatternViewResult result = app::drawPatternView(

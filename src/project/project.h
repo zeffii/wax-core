@@ -58,6 +58,7 @@ struct Exposed {
   std::string param;
   int bits = 8;            // 16: a four-digit column, 4: one digit, otherwise two
   bool log = false;        // the column runs across the range on a log scale
+  std::string label, longName;   // the header ("Cut") and the name for the status line ("Filter cutoff"); empty: made up
 };
 
 // An entry of the command column's table (CCXXYY): command id -> a parameter.
@@ -74,6 +75,7 @@ struct Command {
 // A trigger column (the hi-hat's Cl and Op): each filled cell is a hit with this note number.
 struct Trigger {
   int note = 0;
+  std::string label, longName;   // the header ("Cl") and the name for the status line ("Closed hat"); empty: made up
 };
 
 // One column of a meta machine: a proxy for one thing of another instrument (see seq/columns.cpp).

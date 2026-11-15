@@ -50,6 +50,7 @@ struct Column {
   int nc = 0;                   // Note, Vel: which note column
   int tc = 0;                   // Trig: which trigger column
   int note = 0;                 // Trig: the note number a hit sends
+  std::string label, longName;  // the header text before it is squeezed to the cell ("Cut"), and the name for the status line
   std::string target;           // Note, Trig of a meta machine: the instrument it plays (empty: the lane's own)
   bool rel = false;             // Note: a two-digit cell relative to `root`
   int root = 60;

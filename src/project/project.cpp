@@ -65,7 +65,7 @@ Instrument readInstrument(const std::string& id, const Json& data) {
   instrument.noVel = data.value("noVel", false);
 
   for (const Json& e : data.value("exposed", Json::array())) {
-    instrument.exposed.push_back({text(e, "node"), text(e, "param"), e.value("bits", 8), text(e, "scale") == "log"});
+    instrument.exposed.push_back({text(e, "node"), text(e, "param"), e.value("bits", 8), text(e, "scale") == "log", text(e, "label"), text(e, "long")});
   }
   for (const Json& c : data.value("commands", Json::array())) {
     Command command;
@@ -80,7 +80,7 @@ Instrument readInstrument(const std::string& id, const Json& data) {
   }
   const Json triggers = data.value("triggers", Json::array());
   for (std::size_t i = 0; i < triggers.size(); i++) {
-    instrument.triggers.push_back({triggers[i].value("note", static_cast<int>(i))});
+    instrument.triggers.push_back({triggers[i].value("note", static_cast<int>(i)), text(triggers[i], "label"), text(triggers[i], "long")});
   }
   if (data.contains("meta")) {
     instrument.isMeta = true;

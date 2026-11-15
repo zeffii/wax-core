@@ -27,7 +27,8 @@ PatternViewResult drawPatternView(const std::vector<std::vector<std::string>>& r
   const int columns = static_cast<int>(labels.size());
   const ImGuiTableFlags flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX | ImGuiTableFlags_BordersInnerV |
                                 ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings;
-  if (!ImGui::BeginTable("pattern", columns + 1, flags)) return result;
+  const float infoHeight = ImGui::GetTextLineHeightWithSpacing();   // room for the line under the grid
+  if (!ImGui::BeginTable("pattern", columns + 1, flags, ImVec2(0, std::max(60.0f, ImGui::GetContentRegionAvail().y - infoHeight)))) return result;
   ImGui::TableSetupScrollFreeze(1, 1);
   ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed);
   for (const std::string& label : labels) ImGui::TableSetupColumn(label.c_str());
@@ -93,6 +94,11 @@ PatternViewResult drawPatternView(const std::vector<std::vector<std::string>>& r
     draw->PopClipRect();
   }
   ImGui::EndTable();
+  if (!cursor.info.empty()) {   // the line under the grid: a small face, so a long description fits
+    ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 0.85f);
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(kDimText), "%s", cursor.info.c_str());
+    ImGui::PopFont();
+  }
   return result;
 }
 

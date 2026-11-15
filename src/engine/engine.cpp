@@ -1,4 +1,7 @@
 #include "engine/engine.h"
+#include "seq/names.h"
+#include <set>
+#include <cctype>
 
 #include <stdexcept>
 
@@ -120,15 +123,18 @@ void Engine::rememberLane(const PreparedLane& lane) {
   laneInstrument_[lane.id] = lane.instrument;
   std::vector<std::string>& names = labels_[lane.id];
   names.clear();
+  std::set<std::string> taken;   // a header differs from the others in the lane
   for (const Column& column : lane.columns) {
-    switch (column.kind) {
-      case ColumnKind::Note: names.push_back("N" + std::to_string(column.nc + 1)); break;
-      case ColumnKind::Vel: names.push_back("V" + std::to_string(column.nc + 1)); break;
-      case ColumnKind::Trig: names.push_back("T" + std::to_string(column.tc + 1)); break;
-      case ColumnKind::Param: names.push_back(column.param); break;
-      case ColumnKind::Cmd: names.push_back("CMD"); break;
-      case ColumnKind::Spacer: names.push_back(""); break;
+    if (column.kind == ColumnKind::Spacer) { names.push_back(""); continue; }
+    const int width = column.token == Token::Note ? 3 : column.token == Token::Hex4 ? 4 : column.token == Token::Cmd ? 6 : column.token == Token::Hex2 ? 2 : 1;
+    const std::string label = column.label.empty() ? column.param : column.label;
+    std::string header = shortName(label, width);
+    if (taken.count(header)) {
+      header = label.substr(0, static_cast<std::size_t>(width));
+      for (char& c : header) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     }
+    taken.insert(header);
+    names.push_back(header);
   }
 }
 
