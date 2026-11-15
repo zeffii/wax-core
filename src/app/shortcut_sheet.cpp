@@ -37,6 +37,7 @@ const std::vector<Shortcut>& patternShortcuts() {
       {"Ctrl+B, Ctrl+E, Ctrl+L", "start the loop at this row, end it with this row; Ctrl+L switches it off and on"},
       {"Z-M, Q-P", "play notes (and type them while editing)"},
       {"[ ]", "octave down / up"},
+      {"Space", "on a parameter column: write the parameter's live value into the cell and move down (Shift+Space: every parameter column of the row)"},
       {"=", "note off"},
       {"`", "note cut"},
       {"0-9, A-F", "overwrite the character under the cursor (an empty cell fills with zeros)"},

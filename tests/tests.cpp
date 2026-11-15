@@ -367,6 +367,18 @@ void testBlockEdit() {
   std::printf("ok: block edits\n");
 }
 
+// A parameter's live value becomes the cell that gives it back: linear, integer and logarithmic columns.
+void testLiveCellText() {
+  wax::Column lin; lin.kind = wax::ColumnKind::Param; lin.token = wax::Token::Hex2; lin.min = 0; lin.max = 1; lin.denom = 255;
+  check(wax::CellEditor::liveCellText(lin, 0.0) == "00" && wax::CellEditor::liveCellText(lin, 1.0) == "FF" && wax::CellEditor::liveCellText(lin, 0.5) == "80", "a linear value is its share of the range in hex");
+  check(wax::CellEditor::liveCellText(lin, 7.0) == "FF" && wax::CellEditor::liveCellText(lin, -3.0) == "00", "a value outside the range is held at the ends");
+  wax::Column whole; whole.kind = wax::ColumnKind::Param; whole.token = wax::Token::Hex1; whole.isInt = true; whole.min = 2; whole.max = 12; whole.denom = 10;
+  check(wax::CellEditor::liveCellText(whole, 5.0) == "3", "an integer column holds the value less its minimum");
+  wax::Column logc; logc.kind = wax::ColumnKind::Param; logc.token = wax::Token::Hex2; logc.log = true; logc.min = 20; logc.max = 20000; logc.denom = 255;
+  check(wax::CellEditor::liveCellText(logc, 20.0) == "00" && wax::CellEditor::liveCellText(logc, 20000.0) == "FF" && wax::CellEditor::liveCellText(logc, 112.468) == "40", "a logarithmic column is in equal steps per octave");
+  std::printf("ok: live cell text\n");
+}
+
 void testCellEditor() {
   wax::Project project;
   project.song.length = 8;
@@ -1130,6 +1142,7 @@ void testSetParam() {
 int main() {
   testBlockEdit();
   testSongSettings();
+  testLiveCellText();
   testLoop();
   testPlacePattern();
   testAddInstrument();

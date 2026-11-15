@@ -1,3 +1,4 @@
+#include <cmath>
 #include "edit/cell_editor.h"
 
 #include <algorithm>
@@ -225,6 +226,33 @@ bool CellEditor::typeHexDigit(int digit) {
   typed_ = now;
   if (typed_ >= width) advance();
   return true;
+}
+
+std::string CellEditor::liveCellText(const Column& column, double value) {
+  const double span = column.max - column.min;
+  double x = 0;
+  if (column.isInt) x = value - column.min;
+  else if (column.log && column.min > 0 && column.max > column.min && value > 0) x = std::log(value / column.min) / std::log(column.max / column.min) * column.denom;
+  else if (span != 0) x = (value - column.min) / span * column.denom;
+  return hexText(static_cast<int>(std::clamp(std::lround(x), 0L, static_cast<long>(column.denom))), cellWidth(column.token));
+}
+
+bool CellEditor::writeLive(const std::function<std::optional<double>(const Column&)>& live, bool whole) {
+  bool wrote = false;
+  const int first = whole ? 0 : cell_, last = whole ? static_cast<int>(columns_.size()) - 1 : cell_;
+  for (int c = first; c <= last && c < static_cast<int>(columns_.size()); c++) {
+    const Column& column = columns_[static_cast<std::size_t>(c)];
+    if (column.kind != ColumnKind::Param) continue;
+    const std::optional<double> value = live(column);
+    if (!value) continue;
+    const int was = cell_;
+    cell_ = c;
+    const bool done = setCell(liveCellText(column, *value), wrote);   // later cells fold into the first one's undo step
+    cell_ = was;
+    wrote = wrote || done;
+  }
+  if (wrote) advance();
+  return wrote;
 }
 
 bool CellEditor::clearCell(bool doAdvance) {

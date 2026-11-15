@@ -6,6 +6,8 @@
 // pattern the cursor's tick belongs to, so every place that pattern is used changes with it.
 #pragma once
 
+#include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -60,6 +62,11 @@ public:
   bool typeNoteOff();               // "==="  (a relative cell: 00)
   bool typeNoteCut();               // "^^^"
   bool typeHexDigit(int digit);     // 0..15
+  // A parameter's live value written back as the cell that would give it (the inverse of how the sequencer reads a cell), then down a row.
+  // `live` gives a column's current value (nullopt: none). The cursor's cell only, or (whole: Shift+Space) every parameter column of the row, as one undo step.
+  bool writeLive(const std::function<std::optional<double>(const Column&)>& live, bool whole);
+  // The hex cell text of a value for a parameter column.
+  static std::string liveCellText(const Column& column, double value);
   bool clearCell(bool advance);
   bool insertRow();                 // a blank row at the cursor's row: the rows below move down, the last one falls off
   bool deleteRow();                 // the cursor's row goes: the rows below move up

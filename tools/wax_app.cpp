@@ -426,7 +426,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) { player.ring().push({LiveCommand::Play, std::max(0, session->pausedAt), 1}); session->pausedAt = -1; }
     if (ImGui::IsKeyPressed(ImGuiKey_F8, false)) { player.ring().push({LiveCommand::Stop, 0, 1}); session->pausedAt = -1; }
     if (ImGui::IsKeyPressed(ImGuiKey_F9, false)) follow = !follow;
-    if (ImGui::IsKeyPressed(ImGuiKey_Space, false) && !(session->edit && session->screen == Screen::Song)) {   // (on the Song screen, editing, Space places a pattern)
+    if (ImGui::IsKeyPressed(ImGuiKey_Space, false) && !(session->edit && (session->screen == Screen::Song || session->screen == Screen::Pattern))) {   // (editing, Space places a pattern on the Song screen and writes the live value on the Pattern screen)
       if (playing) player.ring().push({LiveCommand::Stop, 0, 1});
       else player.ring().push({LiveCommand::Play, 0, 1});
     }
@@ -494,6 +494,18 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       if (ImGui::IsKeyPressed(ImGuiKey_Delete)) edited |= io.KeyShift ? editor.deleteRow() : editor.clearCell(true);
       if (ImGui::IsKeyPressed(ImGuiKey_Backspace)) edited |= editor.clearCell(false);
       if (ImGui::IsKeyPressed(ImGuiKey_Insert)) edited |= editor.insertRow();
+      if (session->screen == Screen::Pattern && ImGui::IsKeyPressed(ImGuiKey_Space, false)) {   // the live value of a parameter column (Ctrl+Space: the whole row's) into the grid
+        std::string instrumentId;
+        for (const Lane& l : doc.project().lanes) if (l.id == editor.lane()) instrumentId = l.instrument;
+        const bool whole = io.KeyShift;
+        const bool wrote = editor.writeLive([&](const Column& column) -> std::optional<double> {
+          const std::string address = instrumentId + "." + column.node + "." + column.param;
+          if (player.engine().registry().slotOf(address) < 0) return std::nullopt;
+          return player.engine().registry().get(address);
+        }, whole);
+        edited |= wrote;
+        session->editStatus = wrote ? std::string() : whole ? "This lane has no parameter columns with a live value." : "Only parameter columns have a live value; move to one.";
+      }
       if (ImGui::IsKeyPressed(ImGuiKey_Equal, false)) edited |= editor.typeNoteOff();
       if (ImGui::IsKeyPressed(ImGuiKey_GraveAccent, false)) edited |= editor.typeNoteCut();
       if (editor.onHexCell()) {
