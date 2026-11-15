@@ -70,8 +70,9 @@ std::string drawMachineTree() {
   ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12 * scale, 10 * scale));
   ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, 1.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(ImGui::GetStyle().ItemSpacing.x, 0));   // rows touch, so the tree's lines run unbroken
   const bool open = ImGui::BeginPopup("machinetree", ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove);
-  if (!open) { ImGui::PopStyleVar(2); ImGui::PopStyleColor(5); return picked; }
+  if (!open) { ImGui::PopStyleVar(3); ImGui::PopStyleColor(5); return picked; }
   std::vector<VisibleRow> rows;
   walk(machineTree(), 0, "", -1, rows);
   const int n = static_cast<int>(rows.size());
@@ -113,7 +114,7 @@ std::string drawMachineTree() {
 
   // the rows: guide lines in front, then the label (a shut group has a + after it)
   ImDrawList* dl = ImGui::GetWindowDrawList();
-  const float lineH = ImGui::GetTextLineHeightWithSpacing(), step = 14 * scale;
+  const float lineH = std::round(ImGui::GetTextLineHeight() * 17.0f / 14.0f), step = 14 * scale;
   for (int i = 0; i < n; i++) {
     const VisibleRow& row = rows[static_cast<std::size_t>(i)];
     const ImVec2 at = ImGui::GetCursorScreenPos();
@@ -143,7 +144,7 @@ std::string drawMachineTree() {
   }
   if (!picked.empty()) ImGui::CloseCurrentPopup();
   ImGui::EndPopup();
-  ImGui::PopStyleVar(2);
+  ImGui::PopStyleVar(3);
   ImGui::PopStyleColor(5);
   return picked;
 }
