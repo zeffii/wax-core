@@ -12,6 +12,8 @@ Json laneJson(const Lane& lane) {
   Json out = lane.raw.is_object() ? lane.raw : Json::object();
   out["id"] = lane.id;
   out["instrument"] = lane.instrument;
+  if (lane.silenced) out["silenced"] = true;
+  else out.erase("silenced");
 
   const Json oldPatterns = out.value("patterns", Json::object());
   Json patterns = Json::object();

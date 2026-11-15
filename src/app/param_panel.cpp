@@ -52,7 +52,7 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
 
   const NodeType* type = types.find(picked->type);
   bool changed = false;
-  ImGui::BeginChild("sliders", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
+  ImGui::BeginChild("sliders", ImVec2(0, 3.4f * ImGui::GetTextLineHeightWithSpacing()), false, ImGuiWindowFlags_HorizontalScrollbar);
   for (std::size_t i = 0; i < type->params.size(); ++i) {
     const ParamSpec& spec = type->params[i];
     if (spec.name == "bypass") continue;

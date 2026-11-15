@@ -64,6 +64,20 @@ private:
   Json before_;
 };
 
+// Silences a lane as a whole (the M button of the mixer), or lets it play again.
+class SetSilenced final : public Edit {
+public:
+  SetSilenced(std::string lane, bool silenced) : lane_(std::move(lane)), silenced_(silenced) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return silenced_ ? "Silence " + lane_ : "Unsilence " + lane_; }
+  std::string lane() const override { return lane_; }
+
+private:
+  std::string lane_;
+  bool silenced_, before_ = false;
+};
+
 // A new pattern and where it is placed. Typing into the first cell of a new pattern folds into this edit, so one undo takes
 // the pattern and what was typed in it away together.
 class AddPattern final : public Edit {

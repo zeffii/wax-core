@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "app/sequence_view.h"
+#include "app/mixer_view.h"
 #include "app/param_panel.h"
 #include "app/pattern_view.h"
 #include "app/theme.h"
@@ -81,6 +82,7 @@ struct Session {
   bool scrollToCursor = false;
   std::string editStatus;
   app::ParamPanelState panel;
+  app::MixerState mixer;
   std::string wantLane;                  // a lane the arrangement asked for; its tab opens next frame
   int wantTick = -1;                     // and the cursor goes here
   std::string path;                      // the file this song was opened from, where Ctrl+S saves it
@@ -308,7 +310,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   }
 
   // The lanes (the panel below them takes the bottom of the window).
-  const float panelHeight = 6.0f * ImGui::GetTextLineHeightWithSpacing();
+  const float panelHeight = 6.0f * ImGui::GetTextLineHeightWithSpacing() + app::mixerHeight() + 8;
   const float sequenceSpan = std::min(app::sequenceWidth(doc.project()), ImGui::GetContentRegionAvail().x * 0.45f);
   ImGui::BeginChild("sequenceArea", ImVec2(sequenceSpan, -panelHeight), false);
   {
@@ -353,6 +355,12 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   ImGui::EndChild();
   ImGui::Separator();
   if (!laneInstrument.empty() && app::drawParamPanel(session->panel, doc, player.engine(), laneInstrument)) syncParams(doc, player.engine());
+  ImGui::Separator();
+  if (app::drawMixer(session->mixer, doc, player.engine(), selectedLane)) {
+    syncParams(doc, player.engine());
+    const std::vector<std::string> problems = syncLanes(doc, player.engine());
+    if (!problems.empty()) session->editStatus = problems.front();
+  }
   ImGui::End();
 }
 

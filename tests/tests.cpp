@@ -475,6 +475,11 @@ void testSetParam() {
   bool saved = false;
   for (const auto& n : reread.instruments[1].graph.nodes) if (n.id == nid) saved = n.params[pname] == 0.5;
   check(saved, "the edited value is in the saved file");
+  doc.apply(std::make_unique<wax::SetSilenced>("lone", true));
+  check(doc.project().lanes[1].silenced && doc.takeChangedLanes().count("lone") == 1, "silencing a lane marks it changed");
+  check(wax::parseProject(wax::serializeProject(doc.project())).lanes[1].silenced, "and the silence is saved");
+  doc.undo();
+  check(!doc.project().lanes[1].silenced, "undo lets it play again");
   std::printf("ok: parameter edits\n");
 }
 

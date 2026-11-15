@@ -101,6 +101,23 @@ GraphNode& findGraphNode(Project& project, const std::string& instrumentId, cons
 
 }  // namespace
 
+namespace {
+
+Lane& findLane(Project& project, const std::string& laneId) {
+  for (Lane& lane : project.lanes) if (lane.id == laneId) return lane;
+  throw std::out_of_range("no lane " + laneId);
+}
+
+}  // namespace
+
+void SetSilenced::apply(Project& project) {
+  Lane& lane = findLane(project, lane_);
+  before_ = lane.silenced;
+  lane.silenced = silenced_;
+}
+
+void SetSilenced::revert(Project& project) { findLane(project, lane_).silenced = before_; }
+
 SetParam::SetParam(std::string instrument, std::string node, std::string param, double value)
     : instrument_(std::move(instrument)), node_(std::move(node)), param_(std::move(param)), value_(value) {}
 

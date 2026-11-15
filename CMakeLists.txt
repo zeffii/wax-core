@@ -278,7 +278,7 @@ if(WAX_LIVE)
       third_party/imgui/imgui.cpp third_party/imgui/imgui_draw.cpp third_party/imgui/imgui_tables.cpp
       third_party/imgui/imgui_widgets.cpp third_party/imgui/imgui_impl_sdl3.cpp third_party/imgui/imgui_impl_sdlrenderer3.cpp
       PROPERTIES COMPILE_OPTIONS "$<IF:$<CXX_COMPILER_ID:MSVC>,/W0,-w>")
-    add_executable(wax-app tools/wax_app.cpp src/app/theme.cpp src/app/pattern_view.cpp src/app/widgets.cpp src/app/param_panel.cpp src/app/sequence_view.cpp)
+    add_executable(wax-app tools/wax_app.cpp src/app/theme.cpp src/app/pattern_view.cpp src/app/widgets.cpp src/app/param_panel.cpp src/app/sequence_view.cpp src/app/mixer_view.cpp)
     target_include_directories(wax-app PRIVATE third_party/imgui)
     target_link_libraries(wax-app PRIVATE waxcore waxlive waximgui)
     if(MSVC)
