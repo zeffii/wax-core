@@ -12,6 +12,10 @@ namespace wax::app {
 
 namespace {
 
+// The tree's own colours, the same in every theme (as in the web app): amber on near-black, the selected row filled amber.
+const ImU32 kTreeBg = IM_COL32(0x1f, 0x1f, 0x1f, 255), kTreeBorder = IM_COL32(0x3a, 0x3a, 0x3a, 255);
+const ImU32 kTreeInk = IM_COL32(0xff, 0x8a, 0x00, 255), kTreeGuide = IM_COL32(0xc2, 0x5f, 0x00, 255), kTreeDark = IM_COL32(0x1b, 0x1b, 0x1b, 255);
+
 struct VisibleRow {
   const MachineNode* node;
   const VisibleRow* parent;       // (an index would do; a pointer into the same vector is stable while it is not resized)
@@ -58,8 +62,16 @@ void openMachineTree() {
 
 std::string drawMachineTree() {
   std::string picked;
-  if (!ImGui::BeginPopup("machinetree", ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove)) return picked;
   const float scale = ImGui::GetStyle().FontScaleDpi;
+  ImGui::PushStyleColor(ImGuiCol_PopupBg, kTreeBg);
+  ImGui::PushStyleColor(ImGuiCol_Border, kTreeBorder);
+  ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 0, 0, 0));          // (the rows are drawn here, not by the list widget)
+  ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
+  ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12 * scale, 10 * scale));
+  ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, 1.0f);
+  const bool open = ImGui::BeginPopup("machinetree", ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove);
+  if (!open) { ImGui::PopStyleVar(2); ImGui::PopStyleColor(5); return picked; }
   std::vector<VisibleRow> rows;
   walk(machineTree(), 0, "", -1, rows);
   const int n = static_cast<int>(rows.size());
@@ -105,21 +117,22 @@ std::string drawMachineTree() {
   for (int i = 0; i < n; i++) {
     const VisibleRow& row = rows[static_cast<std::size_t>(i)];
     const ImVec2 at = ImGui::GetCursorScreenPos();
-    const float w = std::max(ImGui::GetContentRegionAvail().x, 190.0f * scale);
+    const float w = std::max(ImGui::GetContentRegionAvail().x, 150.0f * scale);
     ImGui::PushID(i);
-    ImGui::Selectable("##row", i == cursor, 0, ImVec2(w, lineH));
+    ImGui::Selectable("##row", false, 0, ImVec2(w, lineH));
+    if (i == cursor) dl->AddRectFilled(at, ImVec2(at.x + w, at.y + lineH), kTreeInk);
     ImGui::PopID();
     if (ImGui::IsItemHovered() && (io.MouseDelta.x != 0 || io.MouseDelta.y != 0)) cursor = i;
     if (ImGui::IsItemClicked()) { cursor = i; activate(i); }
-    const ImU32 ink = row.node->disabled ? kDimText : i == cursor ? kWarm : kText;
-    const ImU32 guide = i == cursor ? kWarm : lineAlpha(160);
+    const ImU32 ink = i == cursor ? kTreeDark : withAlpha(kTreeInk, row.node->disabled ? 102 : 255);
+    const ImU32 guide = i == cursor ? kTreeDark : kTreeGuide;
     const float midY = at.y + lineH / 2;
     for (std::size_t g = 0; g < row.guides.size(); g++) {
       const float x = at.x + (static_cast<float>(g) + 0.5f) * step;
       const char kind = row.guides[g];
-      if (kind == 'v') dl->AddLine(ImVec2(x, at.y), ImVec2(x, at.y + lineH), lineAlpha(160));
+      if (kind == 'v') dl->AddLine(ImVec2(x, at.y), ImVec2(x, at.y + lineH), guide);
       else if (kind == 't' || kind == 'l') {
-        dl->AddLine(ImVec2(x, at.y), ImVec2(x, kind == 'l' ? midY : at.y + lineH), g + 1 == row.guides.size() ? guide : lineAlpha(160));
+        dl->AddLine(ImVec2(x, at.y), ImVec2(x, kind == 'l' ? midY : at.y + lineH), guide);
         if (g + 1 == row.guides.size()) dl->AddLine(ImVec2(x, midY), ImVec2(x + step * 0.8f, midY), guide);
       }
     }
@@ -128,9 +141,10 @@ std::string drawMachineTree() {
     dl->AddText(ImVec2(at.x + static_cast<float>(row.guides.size()) * step + (row.guides.empty() ? 0 : step * 0.2f), at.y + (lineH - ImGui::GetTextLineHeight()) / 2), ink, label.c_str());
     if (i == cursor) ImGui::SetScrollHereY(0.5f);
   }
-  ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(kDimText), "up/down move   left/right fold   enter pick");
   if (!picked.empty()) ImGui::CloseCurrentPopup();
   ImGui::EndPopup();
+  ImGui::PopStyleVar(2);
+  ImGui::PopStyleColor(5);
   return picked;
 }
 
