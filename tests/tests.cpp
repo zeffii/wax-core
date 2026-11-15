@@ -13,6 +13,7 @@
 #include "engine/offline.h"
 #include "edit/cell_editor.h"
 #include "edit/document.h"
+#include "seq/loop.h"
 #include "edit/spline_ops.h"
 #include "edit/sync.h"
 #include "nodes/bezier.h"
@@ -714,6 +715,36 @@ void testSongSettings() {
   std::printf("ok: song settings\n");
 }
 
+void testLoop() {
+  const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
+  wax::Document doc(original);
+  std::string message;
+  doc.apply(std::make_unique<wax::SetLoop>(wax::loopWithPoint(doc.project().song, "start", 4, message), message));
+  doc.apply(std::make_unique<wax::SetLoop>(wax::loopWithPoint(doc.project().song, "end", 8, message), message));
+  const wax::LoopRange range = wax::loopOf(doc.project().song);
+  check(range.on && range.start == 4 && range.end == 8, "Ctrl+B and Ctrl+E set the loop");
+  wax::Engine engine(doc.project(), 44100);
+  engine.sequencer().play(0);
+  std::vector<float> l(wax::kEngineBlock), r(wax::kEngineBlock);
+  int lowest = 1 << 30, highest = 0;
+  bool passedLoop = false;
+  for (int b = 0; b < 3000; b++) {
+    engine.sequencer().process(l.data(), r.data(), wax::kEngineBlock);
+    const int t = engine.sequencer().tick();
+    if (t >= 4) passedLoop = true;
+    if (passedLoop) { lowest = std::min(lowest, t); highest = std::max(highest, t); }
+  }
+  check(passedLoop && lowest >= 4 && highest <= 8, "a song with a loop plays round inside it");
+  const wax::Project reread = wax::parseProject(wax::serializeProject(doc.project()));
+  const wax::LoopRange saved = wax::loopOf(reread.song);
+  check(saved.on && saved.start == 4 && saved.end == 8, "the loop is saved with the song");
+  doc.apply(std::make_unique<wax::SetLoop>(wax::loopToggled(doc.project().song), "Loop off"));
+  check(!wax::loopOf(doc.project().song).on && wax::loopOf(doc.project().song).start == 4, "Ctrl+L switches the loop off and keeps its points");
+  doc.undo(); doc.undo(); doc.undo();
+  check(!doc.project().song.raw.contains("loop") && !doc.canUndo(), "undo takes the loop away again");
+  std::printf("ok: song loop\n");
+}
+
 void testMoveNode() {
   const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
   wax::Document doc(original);
@@ -778,6 +809,7 @@ void testSetParam() {
 int main() {
   testBlockEdit();
   testSongSettings();
+  testLoop();
   testAddNode();
   testUnits();
   testRewire();

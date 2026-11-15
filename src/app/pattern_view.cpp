@@ -49,6 +49,15 @@ PatternViewResult drawPatternView(const std::vector<std::vector<std::string>>& r
       const ImU32 tint = tick == playTick ? kPlayRow : tick % bar == 0 ? kBarRow : tick % beat == 0 ? kBeatRow : 0;
       if (tint) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, tint);
       ImGui::TableSetColumnIndex(0);
+      if (cursor.loop && tick >= cursor.loopStart && tick < cursor.loopEnd) {   // the loop: a bar down the row-number column, ends marked
+        const ImVec2 at = ImGui::GetCursorScreenPos();
+        const float rowH = ImGui::GetTextLineHeightWithSpacing();
+        const ImU32 mark = cursor.loopOn ? kAccent : lineAlpha(140);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->AddRectFilled(ImVec2(at.x - 3, at.y - 1), ImVec2(at.x - 1, at.y + rowH - 1), mark);
+        if (tick == cursor.loopStart) dl->AddRectFilled(ImVec2(at.x - 3, at.y - 1), ImVec2(at.x + 8, at.y + 1), mark);
+        if (tick == cursor.loopEnd - 1) dl->AddRectFilled(ImVec2(at.x - 3, at.y + rowH - 3), ImVec2(at.x + 8, at.y + rowH - 1), mark);
+      }
       char number[16];
       std::snprintf(number, sizeof number, "%03d", tick);
       ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(tick % beat == 0 ? kWarm : kDimText));

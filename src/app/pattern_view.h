@@ -19,6 +19,9 @@ struct CursorView {
   bool scrollTo = false;
   bool selected = false;                 // a block of cells is selected: ticks tick0..tick1, cells cell0..cell1
   int tick0 = 0, tick1 = 0, cell0 = 0, cell1 = 0;
+  bool loop = false;                     // the song has a loop: ticks loopStart..loopEnd-1 (loopOn false: set, but switched off)
+  bool loopOn = false;
+  int loopStart = 0, loopEnd = 0;
 };
 
 struct PatternViewResult {

@@ -35,6 +35,7 @@
 #include "edit/cell_editor.h"
 #include "edit/document.h"
 #include "edit/sync.h"
+#include "seq/loop.h"
 #include "live/audio_out.h"
 #include "project/save.h"
 #include "live/player.h"
@@ -209,6 +210,15 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   }
   ImGui::SameLine();
   if (app::iconButton("follow", "Follow the song (F9): the grids scroll with the playing row", follow, 20)) follow = !follow;
+  ImGui::SameLine();
+  {
+    const LoopRange loop = loopOf(song);
+    const bool hasLoop = song.raw.is_object() && song.raw.contains("loop") && song.raw["loop"].is_object();
+    if (app::iconButton("loopbtn", hasLoop ? (loop.on ? "Loop on (Ctrl+L): Ctrl+B sets its start, Ctrl+E its end" : "Loop off (Ctrl+L)") : "No loop: Ctrl+B sets its start, Ctrl+E its end", hasLoop && loop.on, 20) && hasLoop) {
+      doc.apply(std::make_unique<SetLoop>(loopToggled(song), loop.on ? "Loop off" : "Loop on"));
+      syncLoop(doc, player.engine());
+    }
+  }
   ImGui::SameLine(0, 24 * ImGui::GetStyle().FontScaleDpi);
   const int tick = player.tick();
   const int perBeat = std::max(1, song.ticksPerBeat), perBar = perBeat * std::max(1, song.beatsPerBar);
@@ -338,6 +348,27 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         session->editStatus = e.what();
       }
     }
+    if (ctrl && !io.KeyShift && !io.KeyAlt && session->screen == Screen::Pattern) {   // the song loop: start and end at the cursor row, switch
+      const auto setPoint = [&](const char* which, int at) {
+        std::string message;
+        Json loop = loopWithPoint(song, which, at, message);
+        doc.apply(std::make_unique<SetLoop>(std::move(loop), message));
+        syncLoop(doc, player.engine());
+        session->editStatus = message;
+      };
+      if (ImGui::IsKeyPressed(ImGuiKey_B, false)) setPoint("start", editor.tick());
+      if (ImGui::IsKeyPressed(ImGuiKey_E, false)) setPoint("end", editor.tick() + 1);
+      if (ImGui::IsKeyPressed(ImGuiKey_L, false)) {
+        Json loop = loopToggled(song);
+        if (loop.is_null()) session->editStatus = "No loop to switch: Ctrl+B and Ctrl+E set one.";
+        else {
+          const bool off = loop.value("off", false);
+          doc.apply(std::make_unique<SetLoop>(std::move(loop), off ? "Loop off" : "Loop on"));
+          syncLoop(doc, player.engine());
+          session->editStatus = off ? "Loop off (its points are kept)." : "Loop on.";
+        }
+      }
+    }
     if (ctrl && session->edit && session->screen == Screen::Pattern && !io.KeyAlt) {   // block editing: copy, cut, paste, select all
       if (ImGui::IsKeyPressed(ImGuiKey_C, false)) ImGui::SetClipboardText(editor.copy().c_str());
       if (ImGui::IsKeyPressed(ImGuiKey_X, false)) { ImGui::SetClipboardText(editor.copy().c_str()); edited |= editor.cut(); }
@@ -449,6 +480,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
           cursor.cell = editor.cell();
           cursor.scrollTo = session->scrollToCursor;
           const CellEditor::Selection sel = editor.selection();
+          { const LoopRange lr = loopOf(song); cursor.loop = song.raw.is_object() && song.raw.contains("loop") && song.raw["loop"].is_object(); cursor.loopOn = lr.on; cursor.loopStart = lr.start; cursor.loopEnd = lr.end; }
           cursor.selected = sel.active; cursor.tick0 = sel.tick0; cursor.tick1 = sel.tick1; cursor.cell0 = sel.cell0; cursor.cell1 = sel.cell1;
           session->scrollToCursor = false;
           const app::PatternViewResult result = app::drawPatternView(

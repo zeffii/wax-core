@@ -78,6 +78,9 @@ std::string serializeProject(const Project& project) {
       if (node.params.contains("tpb") && number("tpb") != song.value("ticksPerBeat", 4)) song["ticksPerBeat"] = number("tpb");
     }
     if (project.song.beatsPerBar != song.value("beatsPerBar", 4)) song["beatsPerBar"] = project.song.beatsPerBar;
+    // the loop as edited (set, switched off, or taken away)
+    if (project.song.raw.is_object() && project.song.raw.contains("loop")) song["loop"] = project.song.raw["loop"];
+    else song.erase("loop");
   }
   return out.dump(1);
 }
