@@ -181,12 +181,12 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
 
   // The transport.
   const bool playing = player.playing();
-  if (ImGui::Button(playing ? "Stop" : "Play", ImVec2(70, 0))) {
+  if (app::iconButton("play", playing ? "Stop (F8)" : "Play (F5)", playing, 20)) {
     if (playing) player.ring().push({LiveCommand::Stop, 0, 1});
     else player.ring().push({LiveCommand::Play, 0, 1});
   }
   ImGui::SameLine();
-  ImGui::Checkbox("Follow", &follow);
+  if (app::iconButton("follow", "Follow the song (F9): the grids scroll with the playing row", follow, 20)) follow = !follow;
   ImGui::SameLine(0, 24 * ImGui::GetStyle().FontScaleDpi);
   const int tick = player.tick();
   const int perBeat = std::max(1, song.ticksPerBeat), perBar = perBeat * std::max(1, song.beatsPerBar);
@@ -299,6 +299,9 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   if (!io.WantTextInput) {
     if (ImGui::IsKeyPressed(ImGuiKey_LeftBracket, false)) octave = std::max(0, octave - 1);
     if (ImGui::IsKeyPressed(ImGuiKey_RightBracket, false)) octave = std::min(8, octave + 1);
+    if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) player.ring().push({LiveCommand::Play, 0, 1});
+    if (ImGui::IsKeyPressed(ImGuiKey_F8, false)) player.ring().push({LiveCommand::Stop, 0, 1});
+    if (ImGui::IsKeyPressed(ImGuiKey_F9, false)) follow = !follow;
     if (ImGui::IsKeyPressed(ImGuiKey_Space, false)) {
       if (playing) player.ring().push({LiveCommand::Stop, 0, 1});
       else player.ring().push({LiveCommand::Play, 0, 1});
