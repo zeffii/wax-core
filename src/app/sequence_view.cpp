@@ -199,7 +199,7 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
   for (const Lane& lane : project.lanes) {
     const float w = laneWidth(lane, scale);
     draw->PushClipRect(ImVec2(left, headTop), ImVec2(left + w, headTop + headHeight), true);
-    draw->AddText(ImVec2(left + 4 * scale, headTop + 2 * scale), lane.id == selectedLane ? kAccent : kDimText, lane.id.c_str());
+    draw->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.85f, ImVec2(left + 4 * scale, headTop + 3 * scale), lane.id == selectedLane ? kAccent : kDimText, lane.id.c_str());   // a small face, so names fit the lane
     draw->PopClipRect();
     left += w;
   }

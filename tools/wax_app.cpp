@@ -852,7 +852,10 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         ImGuiTabItemFlags tabFlags = ImGuiTabItemFlags_None;
         if (!session->pickedTab && lane.id != kMaster) { tabFlags |= ImGuiTabItemFlags_SetSelected; session->pickedTab = true; }
         if (lane.id == session->wantLane) tabFlags |= ImGuiTabItemFlags_SetSelected;
-        if (ImGui::BeginTabItem(label.c_str(), nullptr, tabFlags)) {
+        ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 0.85f);   // lane names in a small face
+        const bool tabOpen = ImGui::BeginTabItem(label.c_str(), nullptr, tabFlags);
+        ImGui::PopFont();
+        if (tabOpen) {
           selectedLane = lane.id;
           laneInstrument = lane.instrument;
           editor.setLane(lane.id, session->player->engine().laneColumns(lane.id));
