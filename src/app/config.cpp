@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "app/config.h"
 
 #include <SDL3/SDL.h>
@@ -57,6 +58,7 @@ void loadSettings() {
   s.insertCut = data.value("insertCut", s.insertCut);
   s.patternAll = data.value("patternAll", s.patternAll);
   s.hideEmpty = data.value("hideEmpty", s.hideEmpty);
+  s.patternText = std::clamp(data.value("patternText", s.patternText), 0.6f, 2.0f);
   s.notePreview = data.value("notePreview", s.notePreview);
   s.tintPatterns = data.value("tintPatterns", s.tintPatterns);
 }
@@ -66,7 +68,7 @@ void saveSettings() {
   if (path.empty()) return;
   const Settings& s = gSettings;
   Json data = {{"wireAudio", hexOf(s.wireAudio)}, {"wireControl", hexOf(s.wireControl)}, {"wireStereo", hexOf(s.wireStereo)},
-               {"wireParam", hexOf(s.wireParam)}, {"wireDashed", s.wireDashed}, {"playhead", s.playhead}, {"follow", s.follow}, {"arrangementRow", s.arrangementRow}, {"insertCut", s.insertCut}, {"patternAll", s.patternAll}, {"hideEmpty", s.hideEmpty}, {"notePreview", s.notePreview}, {"tintPatterns", s.tintPatterns}};
+               {"wireParam", hexOf(s.wireParam)}, {"wireDashed", s.wireDashed}, {"playhead", s.playhead}, {"follow", s.follow}, {"arrangementRow", s.arrangementRow}, {"insertCut", s.insertCut}, {"patternAll", s.patternAll}, {"hideEmpty", s.hideEmpty}, {"patternText", s.patternText}, {"notePreview", s.notePreview}, {"tintPatterns", s.tintPatterns}};
   std::ofstream(path, std::ios::trunc) << data.dump(1) << "\n";
 }
 

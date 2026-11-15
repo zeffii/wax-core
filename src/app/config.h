@@ -23,6 +23,7 @@ struct Settings {
   bool patternAll = false;     // the Pattern screen shows every lane side by side (off: one lane, picked by its tab)
   static constexpr bool kNotePreviewDefault = true;   // never off by default
   bool notePreview = kNotePreviewDefault;   // a note typed into the grid sounds as it goes in
+  float patternText = 1.0f;    // the Pattern grid's text size, as a multiple of the normal size
   bool hideEmpty = false;      // the Pattern screen leaves out columns with nothing in them
   bool tintPatterns = true;    // the Pattern screen tints each pattern's rows with the pattern's colour
   int arrangementRow = 0;   // the Song screen's row size in ticks (Ctrl+wheel); 0: a bar

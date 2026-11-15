@@ -606,6 +606,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         if (ImGui::Checkbox("All lanes side by side", &app::settings().patternAll)) app::saveSettings();
         if (ImGui::Checkbox("Tint patterns by colour", &app::settings().tintPatterns)) app::saveSettings();
         if (ImGui::Checkbox("Note preview", &app::settings().notePreview)) app::saveSettings();
+        ImGui::SetNextItemWidth(120 * ImGui::GetStyle().FontScaleDpi);
+        if (ImGui::SliderFloat("Text size", &app::settings().patternText, 0.6f, 2.0f, "%.2fx")) app::saveSettings();
         if (ImGui::Checkbox("Hide empty columns", &app::settings().hideEmpty)) app::saveSettings();
         if (ImGui::Checkbox("Follow the playing row", &follow)) { app::settings().follow = follow; app::saveSettings(); }
       }
@@ -942,7 +944,9 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       cursor.info = app::describeColumn(doc.project(), cursorOwner, session->player->engine().laneColumns(cursorOwner.id), session->rows[cursorOwner.id], editor.tick(), editor.cell());
       cursor.selected = sel.active; cursor.tick0 = sel.tick0; cursor.tick1 = sel.tick1; cursor.cell0 = sel.cell0; cursor.cell1 = sel.cell1;
       session->scrollToCursor = false;
+      ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * app::settings().patternText);   // Text size
       const app::PatternViewResult result = app::drawPatternView(grids, song.ticksPerBeat, song.beatsPerBar, playing ? tick : -1, follow && playing && !session->edit, cursor);
+      ImGui::PopFont();
       if (result.clickedTick >= 0) playFromRequest = result.clickedTick;
       if (result.cell >= 0 && result.lane >= 0) {
         const Lane& clicked = *shown[static_cast<std::size_t>(result.lane)];
