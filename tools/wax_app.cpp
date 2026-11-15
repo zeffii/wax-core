@@ -376,6 +376,14 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     const std::vector<std::string> problems = syncLanes(doc, player.engine());
     if (!problems.empty()) session->editStatus = problems.front();
   }
+  {   // the wiring changed (an edit, undo or redo): the engine takes the new graph; when it cannot be compiled the change is taken back
+    const std::vector<std::string> wiring = syncGraphs(doc, player.engine());
+    if (!wiring.empty()) {
+      session->editStatus = wiring.front();
+      doc.undo();
+      syncGraphs(doc, player.engine());
+    }
+  }
   ImGui::End();
 }
 

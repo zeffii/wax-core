@@ -53,4 +53,14 @@ void syncData(Document& document, Engine& engine) {
   }
 }
 
+std::vector<std::string> syncGraphs(Document& document, Engine& engine) {
+  engine.collectRetired();
+  std::vector<std::string> problems;
+  for (const std::string& instrumentId : document.takeChangedGraphs()) {
+    const std::string why = engine.sendGraph(document.project(), instrumentId);
+    if (!why.empty()) problems.push_back(instrumentId + ": " + why);
+  }
+  return problems;
+}
+
 }  // namespace wax

@@ -134,6 +134,7 @@ bool Engine::sendLane(const Project& project, const std::string& laneId) {
 }
 
 void Engine::applySentLanes() {
+  runtime_.applyGraphs();
   runtime_.applyData();
   std::shared_ptr<void> built;
   while (sent_.pop(built)) {
@@ -144,6 +145,20 @@ void Engine::applySentLanes() {
 
 bool Engine::sendData(const std::string& instrument, const std::string& nodeId, Json data) {
   return runtime_.sendData(instrument, nodeId, std::make_shared<const Json>(std::move(data)));
+}
+
+std::string Engine::sendGraph(const Project& project, const std::string& instrumentId) {
+  for (const Instrument& instrument : project.instruments) {
+    if (instrument.id != instrumentId) continue;
+    try {
+      auto compiled = std::make_shared<const CompiledGraph>(
+          compileGraph(graphWithSamplerStereo(instrument, decodeSamples(project.samples)), instrument.id, builtinNodes(), registry_));
+      return runtime_.sendGraph(std::move(compiled)) ? std::string() : std::string("busy, try again");
+    } catch (const std::exception& e) {
+      return e.what();
+    }
+  }
+  return "no instrument " + instrumentId;
 }
 
 void Engine::collectRetired() {

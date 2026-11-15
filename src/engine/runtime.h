@@ -56,6 +56,10 @@ public:
   // A node's data (its drawn envelopes and the like) changed while the song plays. The window thread queues it; the audio thread
   // hands it to the node's copies at the start of its next block (applyData). False when the queue is full: try again later.
   bool sendData(const std::string& instrument, const std::string& nodeId, std::shared_ptr<const Json> data);
+  // An instrument's graph was rewired (a connection made or cut, a node deleted) while the song plays. Compiled on the window thread;
+  // the audio thread loads it at the start of its next block and puts back the samples and drawings the nodes had.
+  bool sendGraph(std::shared_ptr<const CompiledGraph> compiled);
+  void applyGraphs();       // audio thread, at the start of a block (before applyData)
   void applyData();         // audio thread, at the start of a block
   void collectRetiredData();   // window thread, now and then: what was replaced is freed here, not while sound is being made
 
@@ -124,6 +128,7 @@ private:
   bool hears(const std::string& caller, const std::string& other) const;
   void resetOrder();
   void rebuild(const std::string& id);
+  void replay(const std::string& id);   // puts back the samples and drawings the nodes of a (re)loaded instrument had
   bool dozing(const std::string& id, Instrument& inst, int n);
   void settle(Instrument& inst, int n);
 
@@ -138,6 +143,7 @@ private:
   std::vector<std::string> loadOrder_;                                        // instrument ids, in the order they were first loaded
   std::unordered_map<std::string, std::unique_ptr<Instrument>> instruments_;
   struct DataMessage { std::string instrument, node; std::shared_ptr<const Json> data; };
+  SpscQueue<std::shared_ptr<const CompiledGraph>, 8> graphSent_, graphRetired_;
   SpscQueue<DataMessage, 64> dataSent_;
   SpscQueue<std::shared_ptr<const Json>, 64> dataRetired_;
   std::map<std::string, std::shared_ptr<const Json>> datas_;   // the latest data sent for each node (audio thread), put back when an instrument is rebuilt

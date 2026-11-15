@@ -137,6 +137,64 @@ bool SetDrawing::absorb(const Edit& next) {
   return true;
 }
 
+namespace {
+Graph& graphOf(Project& project, const std::string& instrumentId) {
+  for (Instrument& instrument : project.instruments) if (instrument.id == instrumentId) return instrument.graph;
+  throw std::out_of_range("no instrument " + instrumentId);
+}
+}  // namespace
+
+void Connect::apply(Project& project) {
+  Graph& g = graphOf(project, instrument_);
+  added_ = false;
+  for (const Connection& c : g.connections) if (c.from == from_ && c.to == to_) return;
+  g.connections.push_back({from_, to_});
+  added_ = true;
+}
+
+void Connect::revert(Project& project) {
+  if (!added_) return;
+  Graph& g = graphOf(project, instrument_);
+  for (std::size_t i = g.connections.size(); i-- > 0;) {
+    if (g.connections[i].from == from_ && g.connections[i].to == to_) { g.connections.erase(g.connections.begin() + static_cast<std::ptrdiff_t>(i)); return; }
+  }
+}
+
+void Disconnect::apply(Project& project) {
+  Graph& g = graphOf(project, instrument_);
+  removed_ = false;
+  for (std::size_t i = 0; i < g.connections.size(); i++) {
+    if (g.connections[i].from == from_ && g.connections[i].to == to_) { at_ = i; g.connections.erase(g.connections.begin() + static_cast<std::ptrdiff_t>(i)); removed_ = true; return; }
+  }
+}
+
+void Disconnect::revert(Project& project) {
+  if (!removed_) return;
+  Graph& g = graphOf(project, instrument_);
+  g.connections.insert(g.connections.begin() + static_cast<std::ptrdiff_t>(std::min(at_, g.connections.size())), Connection{from_, to_});
+}
+
+void DeleteNode::apply(Project& project) {
+  Graph& g = graphOf(project, instrument_);
+  wires_.clear();
+  for (std::size_t i = 0; i < g.nodes.size(); i++) {
+    if (g.nodes[i].id == node_) { saved_ = g.nodes[i]; nodeAt_ = i; g.nodes.erase(g.nodes.begin() + static_cast<std::ptrdiff_t>(i)); break; }
+  }
+  const auto touches = [&](const std::string& address) { return address.substr(0, address.find('.')) == node_; };
+  for (std::size_t i = g.connections.size(); i-- > 0;) {
+    if (touches(g.connections[i].from) || touches(g.connections[i].to)) {
+      wires_.insert(wires_.begin(), {i, g.connections[i]});
+      g.connections.erase(g.connections.begin() + static_cast<std::ptrdiff_t>(i));
+    }
+  }
+}
+
+void DeleteNode::revert(Project& project) {
+  Graph& g = graphOf(project, instrument_);
+  g.nodes.insert(g.nodes.begin() + static_cast<std::ptrdiff_t>(std::min(nodeAt_, g.nodes.size())), saved_);
+  for (const auto& [at, c] : wires_) g.connections.insert(g.connections.begin() + static_cast<std::ptrdiff_t>(std::min(at, g.connections.size())), c);
+}
+
 MoveNode::MoveNode(std::string instrument, std::string node, double x, double y)
     : instrument_(std::move(instrument)), node_(std::move(node)), x_(x), y_(y) {}
 
@@ -250,6 +308,7 @@ void Document::touched(const Edit& edit) {
   if (!edit.lane().empty()) changed_.insert(edit.lane());
   if (!edit.paramAddress().empty()) changedParams_.insert(edit.paramAddress());
   if (!edit.dataNode().empty()) changedData_.insert(edit.dataNode());
+  if (!edit.graphInstrument().empty()) changedGraphs_.insert(edit.graphInstrument());
 }
 
 void Document::apply(std::unique_ptr<Edit> edit, bool foldIntoPrevious) {
@@ -274,6 +333,12 @@ void Document::redo() {
   touched(*redo_.back());
   undo_.push_back(std::move(redo_.back()));
   redo_.pop_back();
+}
+
+std::set<std::string> Document::takeChangedGraphs() {
+  std::set<std::string> out;
+  out.swap(changedGraphs_);
+  return out;
 }
 
 std::set<std::string> Document::takeChangedData() {

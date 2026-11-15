@@ -21,6 +21,7 @@ public:
   virtual std::string label() const = 0;               // "Set cell", shown next to Undo in the window
   virtual std::string lane() const { return {}; }      // the lane whose sound this changes ("" when none)
   virtual std::string paramAddress() const { return {}; }   // "instrument.node.param" of the parameter this sets ("" when none)
+  virtual std::string graphInstrument() const { return {}; }   // the instrument whose wiring this changes ("" when none)
   virtual std::string dataNode() const { return {}; }      // "instrument\x1fnode" whose data (drawings) this changes ("" when none)
   // Typing in one cell is many edits; the next one may fold into this one so a single undo takes back the whole entry.
   // Return true when `next` has been absorbed (and keeps what this edit needs to revert it).
@@ -81,6 +82,51 @@ private:
   Json points_;
   bool captured_ = false, hadData_ = false, hadEnv_ = false, hadDrawing_ = false;
   Json before_, beforeData_;
+};
+
+// A wire made from "node.port" to "node.port" (the same wire twice is one wire). Undo takes it away again.
+class Connect final : public Edit {
+public:
+  Connect(std::string instrument, std::string from, std::string to) : instrument_(std::move(instrument)), from_(std::move(from)), to_(std::move(to)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Connect " + from_ + " to " + to_; }
+  std::string graphInstrument() const override { return instrument_; }
+
+private:
+  std::string instrument_, from_, to_;
+  bool added_ = false;
+};
+
+// A wire cut.
+class Disconnect final : public Edit {
+public:
+  Disconnect(std::string instrument, std::string from, std::string to) : instrument_(std::move(instrument)), from_(std::move(from)), to_(std::move(to)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Cut " + from_ + " to " + to_; }
+  std::string graphInstrument() const override { return instrument_; }
+
+private:
+  std::string instrument_, from_, to_;
+  std::size_t at_ = 0;
+  bool removed_ = false;
+};
+
+// A node taken out with its wires; undo puts them back where they were.
+class DeleteNode final : public Edit {
+public:
+  DeleteNode(std::string instrument, std::string node) : instrument_(std::move(instrument)), node_(std::move(node)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Delete " + node_; }
+  std::string graphInstrument() const override { return instrument_; }
+
+private:
+  std::string instrument_, node_;
+  GraphNode saved_;
+  std::size_t nodeAt_ = 0;
+  std::vector<std::pair<std::size_t, Connection>> wires_;
 };
 
 // Moves a node's tile in the graph view. A drag folds into one undo step. (Positions do not touch the sound.)
@@ -210,13 +256,15 @@ public:
   // The nodes whose data changed, as "instrument\x1fnode" (undo and redo count). markDataChanged puts one back when it could not be sent.
   std::set<std::string> takeChangedData();
   void markDataChanged(const std::string& node) { changedData_.insert(node); }
+  // The instruments whose wiring changed (undo and redo count).
+  std::set<std::string> takeChangedGraphs();
   void markLaneChanged(const std::string& lane) { changed_.insert(lane); }   // to try again later
 
 private:
   Project project_;
   std::vector<std::unique_ptr<Edit>> undo_, redo_;
   int revision_ = 0, savedRevision_ = 0;
-  std::set<std::string> changed_, changedParams_, changedData_;
+  std::set<std::string> changed_, changedParams_, changedData_, changedGraphs_;
 
   void touched(const Edit& edit);
 };

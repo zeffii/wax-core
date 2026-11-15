@@ -20,4 +20,8 @@ void syncParams(Document& document, Engine& engine);
 // Sends every node whose data (drawn envelopes) changed since the last call to the engine.
 void syncData(Document& document, Engine& engine);
 
+// Sends every instrument whose wiring changed since the last call to the engine. Returns a message for each one that could not be
+// compiled (a loop, say); the caller then undoes the edit that caused it.
+std::vector<std::string> syncGraphs(Document& document, Engine& engine);
+
 }  // namespace wax

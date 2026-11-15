@@ -581,6 +581,41 @@ void testBankEdit() {
   std::printf("ok: bank edits\n");
 }
 
+void testRewire() {
+  const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
+  wax::Document doc(original), reference(original);
+  const auto rewire = [](wax::Document& d) {
+    d.apply(std::make_unique<wax::DeleteNode>("lone", "prismacanyon1"));
+    d.apply(std::make_unique<wax::Connect>("lone", "poly.out", "out.in"));
+  };
+  rewire(doc);
+  rewire(reference);
+  const auto play = [&](wax::Engine& engine, wax::Document* during, int at) {
+    std::vector<float> out, l(wax::kEngineBlock), r(wax::kEngineBlock);
+    engine.sequencer().play(500);
+    for (int b = 0; b < 700; b++) {
+      if (during && b == at) check(wax::syncGraphs(*during, engine).empty(), "the new wiring compiles");
+      engine.applySentLanes();
+      engine.sequencer().process(l.data(), r.data(), wax::kEngineBlock);
+      out.insert(out.end(), l.begin(), l.end());
+    }
+    return out;
+  };
+  wax::Engine live(original, 44100), fresh(reference.project(), 44100), untouched(original, 44100), midplay(original, 44100);
+  wax::Document doc2(original);
+  rewire(doc2);
+  const auto a = play(live, &doc, 0), b = play(fresh, nullptr, 0), c = play(untouched, nullptr, 0), m = play(midplay, &doc2, 150);
+  check(a == b, "rewiring a node graph live gives the sound of the rewired song");
+  check(a != c, "and the rewiring is heard");
+  check(m != c, "rewiring in the middle of a song is heard too");
+  doc.undo();
+  doc.undo();
+  check(doc.project().instruments[1].graph.nodes.size() == original.instruments[1].graph.nodes.size() &&
+            doc.project().instruments[1].graph.connections.size() == original.instruments[1].graph.connections.size() && !doc.canUndo(),
+        "undo puts the node and its wires back");
+  std::printf("ok: rewiring\n");
+}
+
 void testMoveNode() {
   const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
   wax::Document doc(original);
@@ -643,6 +678,7 @@ void testSetParam() {
 }
 
 int main() {
+  testRewire();
   testMoveNode();
   testBankEdit();
   testDrawingEdit();

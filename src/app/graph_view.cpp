@@ -7,6 +7,8 @@
 #include <set>
 
 #include "app/theme.h"
+#include "app/widgets.h"
+#include "core/node_registry.h"
 
 namespace wax::app {
 
@@ -24,7 +26,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
   if (!instrument) return false;
   const Graph& graph = instrument->graph;
   const float scale = ImGui::GetStyle().FontScaleDpi;
-  bool moved = false;
+  bool moved = false, rewired = false;
 
   ImGui::BeginChild("graph", ImVec2(0, height), false, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoNav);
   ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -55,7 +57,13 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     const float k = std::max(24 * scale, std::fabs(p1.x - p0.x) * 0.4f);
     dl->AddBezierCubic(p0, ImVec2(p0.x + k, p0.y), ImVec2(p1.x - k, p1.y), p1, IM_COL32(120, 134, 146, 190), 1.2f);
     dl->AddCircleFilled(p1, 2.5f * scale, kDimText);
+    // the dot in the middle of the wire cuts it
+    const ImVec2 mid((p0.x + p1.x) / 2, (p0.y + p1.y) / 2);
+    const bool near = std::hypot(ImGui::GetIO().MousePos.x - mid.x, ImGui::GetIO().MousePos.y - mid.y) < 7 * scale && ImGui::IsWindowHovered();
+    dl->AddCircle(mid, 3.5f * scale, near ? kWarm : IM_COL32(120, 134, 146, 120), 12, 1.0f);
+    if (near && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) { doc.apply(std::make_unique<Disconnect>(instrumentId, c.from, c.to)); moved = true; rewired = true; break; }
   }
+  const NodeRegistry& types = builtinNodes();
 
   // tiles
   const ImGuiIO& io = ImGui::GetIO();
@@ -91,6 +99,36 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     ImGui::PopID();
     if (ImGui::IsItemClicked()) { picked = n.id; state.held = n.id; state.grabX = io.MousePos.x - t.min.x; state.grabY = io.MousePos.y - t.min.y; }
     if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+    if (n.type != "out" && ImGui::BeginPopupContextItem("tilemenu")) {
+      if (textButton("delete")) { doc.apply(std::make_unique<DeleteNode>(instrumentId, n.id)); moved = true; if (picked == n.id) picked.clear(); ImGui::CloseCurrentPopup(); ImGui::EndPopup(); ImGui::PopID(); ImGui::EndChild(); return true; }
+      ImGui::EndPopup();
+    }
+    // the dot a new wire is pulled from
+    if (n.type == "out") continue;   // the output has nothing to pull from
+    const ImVec2 dot(t.max.x + 7 * scale, mid.y);
+    const bool overDot = std::hypot(io.MousePos.x - dot.x, io.MousePos.y - dot.y) < 7 * scale && ImGui::IsWindowHovered();
+    dl->AddCircleFilled(dot, 3 * scale, state.wiring == n.id || overDot ? kWarm : IM_COL32(120, 134, 146, 160));
+    if (overDot && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) { state.wiring = n.id; state.held.clear(); }
+  }
+  if (!state.wiring.empty()) {
+    const Tile& from = tiles[state.wiring];
+    const ImVec2 start(from.max.x + 7 * scale, (from.min.y + from.max.y) / 2);
+    dl->AddLine(start, io.MousePos, kWarm, 1.2f);
+    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+      for (const GraphNode& n : graph.nodes) {
+        const Tile& t = tiles[n.id];
+        if (n.id == state.wiring || io.MousePos.x < t.min.x || io.MousePos.x > t.max.x || io.MousePos.y < t.min.y || io.MousePos.y > t.max.y) continue;
+        const GraphNode* source = nullptr;
+        for (const GraphNode& m : graph.nodes) if (m.id == state.wiring) source = &m;
+        const NodeType* fromType = source ? types.find(source->type) : nullptr;
+        const NodeType* toType = types.find(n.type);
+        if (!fromType || !toType || fromType->outputs.empty() || toType->inputs.empty()) break;
+        doc.apply(std::make_unique<Connect>(instrumentId, state.wiring + "." + fromType->outputs.front(), n.id + "." + toType->inputs.front()));
+        moved = true; rewired = true;
+        break;
+      }
+      state.wiring.clear();
+    }
   }
 
   // dragging the held tile

@@ -48,6 +48,9 @@ public:
   void collectRetired();                                              // window thread, now and then
 
   // A node's data (its drawn envelopes) changed while the song plays: sent like a lane, taken at the start of the next block.
+  // Compiles an instrument's graph as the project now holds it and sends it to the audio thread (see GraphRuntime::sendGraph). Empty string
+  // when sent; otherwise why not (a loop in the wiring, a full queue), and the sound goes on as it was.
+  std::string sendGraph(const Project& project, const std::string& instrument);
   bool sendData(const std::string& instrument, const std::string& nodeId, Json data);   // false when the queue is full: try again later
 
 private:

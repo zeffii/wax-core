@@ -676,6 +676,23 @@ int GraphRuntime::alignment() {
 void GraphRuntime::rebuild(const std::string& id) {
   const CompiledGraph copy = *graphs_.at(id);
   load(copy);
+  replay(id);
+}
+
+bool GraphRuntime::sendGraph(std::shared_ptr<const CompiledGraph> compiled) { return graphSent_.push(std::move(compiled)); }
+
+void GraphRuntime::applyGraphs() {
+  std::shared_ptr<const CompiledGraph> compiled;
+  while (graphSent_.pop(compiled)) {
+    const std::string id = compiled->instrument;
+    load(*compiled);
+    replay(id);
+    killed_.erase(id);
+    graphRetired_.push(std::move(compiled));   // freed by the window thread (collectRetiredData)
+  }
+}
+
+void GraphRuntime::replay(const std::string& id) {
   for (const auto& [key, message] : samples_) {   // the samples it was sent are put back (drawn curves and the like are not ported yet)
     const std::size_t first = key.find('\0'), second = key.find('\0', first + 1);
     if (key.substr(0, first) == id) sendSample(id, key.substr(first + 1, second - first - 1), message);
@@ -854,6 +871,8 @@ void GraphRuntime::applyData() {
 }
 
 void GraphRuntime::collectRetiredData() {
+  std::shared_ptr<const CompiledGraph> oldGraph;
+  while (graphRetired_.pop(oldGraph)) oldGraph.reset();
   std::shared_ptr<const Json> old;
   while (dataRetired_.pop(old)) old.reset();
 }
