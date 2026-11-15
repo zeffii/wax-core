@@ -16,6 +16,7 @@
 #include "edit/spline_ops.h"
 #include "edit/sync.h"
 #include "nodes/bezier.h"
+#include "nodes/dx7core.h"
 #include "engine/engine.h"
 #include "engine/takes.h"
 #include "io/wav.h"
@@ -544,6 +545,42 @@ void testDrawingEdit() {
   std::printf("ok: drawing edits\n");
 }
 
+void testBankEdit() {
+  const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
+  std::vector<int> bank = wax::dx7::defaultBank();
+  wax::dx7::Voice v = wax::dx7::unpackVoice(bank, 3 * 128);
+  v.alg = (v.alg + 5) % 32;
+  v.ops[1].ol = 40;
+  v.fb = 6;
+  wax::dx7::packVoice(v, bank, 3 * 128);
+
+  wax::Document doc(original), reference(original);
+  reference.apply(std::make_unique<wax::SetBank>("lone", "synth", bank));
+  const auto play = [&](wax::Engine& engine, wax::Document* during) {
+    std::vector<float> out, l(wax::kEngineBlock), r(wax::kEngineBlock);
+    engine.sequencer().play(500);
+    for (int b = 0; b < 700; b++) {
+      if (during && b == 100) {
+        during->apply(std::make_unique<wax::SetBank>("lone", "synth", bank));
+        wax::syncData(*during, engine);
+      }
+      engine.applySentLanes();
+      engine.sequencer().process(l.data(), r.data(), wax::kEngineBlock);
+      out.insert(out.end(), l.begin(), l.end());
+    }
+    return out;
+  };
+  wax::Engine live(original, 44100), fresh(reference.project(), 44100), untouched(original, 44100);
+  const auto a = play(live, &doc), b = play(fresh, nullptr), c = play(untouched, nullptr);
+  check(a == b, "a DX bank edited while the song plays sounds like the edited song from the start");
+  check(a != c, "and the edit is heard");
+  const wax::Project reread = wax::parseProject(wax::serializeProject(doc.project()));
+  check(reread.instruments[1].graph.nodes[0].data["bank"].size() == 4096, "the bank is in the saved file");
+  doc.undo();
+  check(doc.project().instruments[1].graph.nodes[0].data.is_null() && !doc.canUndo(), "undo takes it back");
+  std::printf("ok: bank edits\n");
+}
+
 void testLevels() {
   const wax::Project song = wax::loadProject(std::string(WAX_TEST_SONGS) + "/jawharp.wax");
   wax::Engine engine(song, 44100);
@@ -592,6 +629,7 @@ void testSetParam() {
 }
 
 int main() {
+  testBankEdit();
   testDrawingEdit();
   testSpline();
   testLevels();

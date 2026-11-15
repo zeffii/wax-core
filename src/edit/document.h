@@ -83,6 +83,24 @@ private:
   Json before_, beforeData_;
 };
 
+// A DX bank, replaced as a whole (the 4096 bytes of 32 packed voices, as the node's data.bank holds them). While a control is dragged each
+// step folds into the one before, so a drag is a single undo.
+class SetBank final : public Edit {
+public:
+  SetBank(std::string instrument, std::string node, std::vector<int> bytes, std::string what = "voice");
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Edit " + what_; }
+  std::string dataNode() const override { return instrument_ + "\x1f" + node_; }
+  bool absorb(const Edit& next) override;
+
+private:
+  std::string instrument_, node_, what_;
+  std::vector<int> bytes_;
+  bool captured_ = false;
+  Json beforeData_;
+};
+
 // Silences a lane as a whole (the M button of the mixer), or lets it play again.
 class SetSilenced final : public Edit {
 public:

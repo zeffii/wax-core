@@ -137,6 +137,25 @@ bool SetDrawing::absorb(const Edit& next) {
   return true;
 }
 
+SetBank::SetBank(std::string instrument, std::string node, std::vector<int> bytes, std::string what)
+    : instrument_(std::move(instrument)), node_(std::move(node)), what_(std::move(what)), bytes_(std::move(bytes)) {}
+
+void SetBank::apply(Project& project) {
+  GraphNode& node = findGraphNode(project, instrument_, node_);
+  if (!captured_) { beforeData_ = node.data; captured_ = true; }
+  if (!node.data.is_object()) node.data = Json::object();
+  node.data["bank"] = bytes_;
+}
+
+void SetBank::revert(Project& project) { findGraphNode(project, instrument_, node_).data = beforeData_; }
+
+bool SetBank::absorb(const Edit& next) {
+  const auto* other = dynamic_cast<const SetBank*>(&next);
+  if (!other || other->dataNode() != dataNode()) return false;
+  bytes_ = other->bytes_;
+  return true;
+}
+
 void SetSilenced::apply(Project& project) {
   Lane& lane = findLane(project, lane_);
   before_ = lane.silenced;

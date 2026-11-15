@@ -43,6 +43,16 @@ public:
     v_ = &voices_[0];
   }
 
+  // The bank was edited while the song plays: the next note starts from the new voices.
+  void data(const Json& data) override {
+    std::vector<int> bank;
+    if (data.is_object() && data.contains("bank") && data["bank"].is_array()) {
+      for (const auto& b : data["bank"]) bank.push_back(b.is_number() ? static_cast<int>(b.get<double>()) : 0);
+    }
+    voices_ = dx7::unpackBank(bank);
+    v_ = &voices_[static_cast<std::size_t>(std::max(0, cur_))];
+  }
+
   void note(const NoteEvent& event) override {
     if (event.type == NoteType::On) {
       note_ = event.note;
