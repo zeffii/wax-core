@@ -10,6 +10,7 @@
 #include "core/js_math.h"
 #include "nodes/all_nodes.h"
 #include "nodes/bezier.h"
+#include "nodes/drawings.h"
 #include "nodes/shared_dsp.h"
 
 namespace wax {
@@ -164,11 +165,7 @@ private:
 
   double sampleRate_;
   void loadDrawings(const Json* data) {
-    static const double closedR[] = {0.02, -0.3}, closedL[] = {-0.45, 0};
-    static const double openR[] = {0.04, -0.15}, openL[] = {-0.5, 0};
-    const bezier::Spline defaults[2] = {
-      {bezier::makeAnchor(0, 1, nullptr, closedR), bezier::makeAnchor(1, 0, closedL, nullptr)},
-      {bezier::makeAnchor(0, 1, nullptr, openR), bezier::makeAnchor(1, 0, openL, nullptr)}};
+    const bezier::Spline defaults[2] = {defaultDrawing("hat2", "closed"), defaultDrawing("hat2", "open")};
     static const char* const keys[2] = {"closed", "open"};
     for (int k = 0; k < 2; k++) tables_[k] = bezier::envelopeTable(bezier::drawingOf(data, keys[k], defaults[k]));
   }

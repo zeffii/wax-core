@@ -12,6 +12,7 @@
 #include "core/js_math.h"
 #include "nodes/all_nodes.h"
 #include "nodes/bezier.h"
+#include "nodes/drawings.h"
 #include "nodes/shared_dsp.h"
 
 namespace wax {
@@ -40,13 +41,7 @@ public:
 
 private:
   void loadDrawings(const Json* data) {
-    static const double pitchR[] = {0.015, -0.7}, pitchL[] = {-0.6, 0};
-    static const double ampR[] = {0.06, 0}, ampL[] = {-0.55, 0};
-    static const double noiseR[] = {0.02, -0.55}, noiseL[] = {-0.4, 0};
-    const bezier::Spline defaults[3] = {
-      {bezier::makeAnchor(0, 1, nullptr, pitchR), bezier::makeAnchor(1, 0, pitchL, nullptr)},
-      {bezier::makeAnchor(0, 1, nullptr, ampR), bezier::makeAnchor(1, 0, ampL, nullptr)},
-      {bezier::makeAnchor(0, 1, nullptr, noiseR), bezier::makeAnchor(1, 0, noiseL, nullptr)}};
+    const bezier::Spline defaults[3] = {defaultDrawing("drumsynth2", "pitch"), defaultDrawing("drumsynth2", "amp"), defaultDrawing("drumsynth2", "noise")};
     static const char* const keys[3] = {"pitch", "amp", "noise"};
     for (int k = 0; k < 3; k++) tables_[k] = bezier::envelopeTable(bezier::drawingOf(data, keys[k], defaults[k]));
   }

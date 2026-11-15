@@ -157,6 +157,7 @@ add_library(waxcore
   src/edit/document.cpp
   src/project/save.cpp
   src/edit/spline_ops.cpp
+  src/nodes/drawings.cpp
   src/edit/sync.cpp
   src/edit/cell_editor.cpp
   src/nodes/sweep.cpp

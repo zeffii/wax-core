@@ -7,6 +7,7 @@
 #include "core/js_math.h"
 #include "nodes/all_nodes.h"
 #include "nodes/bezierenv.h"
+#include "nodes/drawings.h"
 #include "nodes/shared_dsp.h"
 #include "nodes/svf.h"
 
@@ -16,12 +17,7 @@ namespace {
 enum Param { kLow = 0, kMid, kHigh, kTone, kLowCut, kVib, kVibRate, kTune, kFine, kATime, kVel, kLevel };
 
 // a slow rise, held, and a long fall when the note ends
-bezier::Spline defaultAmp() {
-  const double r0[2] = {0.08, 0.5}, l1[2] = {-0.1, 0}, r1[2] = {0.1, 0}, l2[2] = {-0.5, 0};
-  bezier::Spline s = {bezier::makeAnchor(0, 0, nullptr, r0), bezier::makeAnchor(0.25, 1, l1, r1), bezier::makeAnchor(1, 0, l2, nullptr)};
-  s[1].sustain = true;
-  return s;
-}
+bezier::Spline defaultAmp() { return defaultDrawing("khufu", "amp"); }
 
 // A falling sawtooth at `phase` (0 to 1) whose jump is rounded over one sample either side (polyBLEP).
 double cleanSaw(double phase, double inc) {

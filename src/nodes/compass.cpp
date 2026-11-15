@@ -7,6 +7,7 @@
 #include "core/js_math.h"
 #include "nodes/all_nodes.h"
 #include "nodes/bezierenv.h"
+#include "nodes/drawings.h"
 #include "nodes/shared_dsp.h"
 #include "nodes/svf.h"
 #include "nodes/vectorcore.h"
@@ -23,17 +24,8 @@ const double kLaneDetune[4] = {-1, 0.33, 1, -0.33};
 const double kLanePan[4] = {-1, 0, 1, 0};
 constexpr int kFilterEvery = 16;
 
-bezier::Spline defaultAmp() {
-  const double r0[2] = {0, 0}, l1[2] = {0, 0}, r1[2] = {0.1, 0}, l2[2] = {-0.5, 0};
-  bezier::Spline s = {bezier::makeAnchor(0, 0, nullptr, r0), bezier::makeAnchor(0.02, 1, l1, r1), bezier::makeAnchor(1, 0, l2, nullptr)};
-  s[1].sustain = true;
-  return s;
-}
-
-bezier::Spline defaultFilter() {
-  const double r0[2] = {0.05, -0.5}, l1[2] = {-0.55, 0};
-  return {bezier::makeAnchor(0, 1, nullptr, r0), bezier::makeAnchor(1, 0, l1, nullptr)};
-}
+bezier::Spline defaultAmp() { return defaultDrawing("compass", "amp"); }
+bezier::Spline defaultFilter() { return defaultDrawing("compass", "filter"); }
 
 class Compass final : public Node {
 public:
