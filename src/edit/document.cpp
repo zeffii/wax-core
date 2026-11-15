@@ -539,6 +539,40 @@ void SetNoteColumns::apply(Project& project) {
 
 void SetNoteColumns::revert(Project& project) { instrumentNamed(project, instrument_).noteColumns = old_; }
 
+void AddLane::apply(Project& project) {
+  for (const Instrument& i : project.instruments) if (i.id == instrument_) { project.lanes.push_back(blankLane(lane_, instrument_)); return; }
+  throw std::out_of_range("no machine " + instrument_);
+}
+
+void AddLane::revert(Project& project) {
+  for (std::size_t i = project.lanes.size(); i-- > 0;) if (project.lanes[i].id == lane_) { project.lanes.erase(project.lanes.begin() + static_cast<long>(i)); break; }
+}
+
+void CloneLaneWithMachine::apply(Project& project) {
+  const int at = laneIndex(project, source_);
+  if (at < 0) throw std::out_of_range("no lane " + source_);
+  if (source_ == "master") throw std::runtime_error("The master lane cannot be cloned.");
+  const int machine = instrumentIndex(project, project.lanes[static_cast<std::size_t>(at)].instrument);
+  if (machine < 0) throw std::out_of_range("no machine for lane " + source_);
+  Instrument copy = project.instruments[static_cast<std::size_t>(machine)];
+  copy.id = instrumentCopy_;
+  project.instruments.insert(project.instruments.begin() + machine + 1, std::move(copy));
+  Lane lane = project.lanes[static_cast<std::size_t>(at)];
+  lane.id = laneCopy_;
+  lane.instrument = instrumentCopy_;
+  lane.silenced = false;
+  if (!patterns_) { lane.patterns.clear(); lane.placements.clear(); lane.mutes.clear(); lane.offs.clear(); }
+  if (lane.raw.is_object()) { lane.raw["id"] = laneCopy_; if (!curves_) lane.raw.erase("curves"); }
+  project.lanes.insert(project.lanes.begin() + at + 1, std::move(lane));
+}
+
+void CloneLaneWithMachine::revert(Project& project) {
+  const int lane = laneIndex(project, laneCopy_);
+  if (lane >= 0) project.lanes.erase(project.lanes.begin() + lane);
+  const int machine = instrumentIndex(project, instrumentCopy_);
+  if (machine >= 0) project.instruments.erase(project.instruments.begin() + machine);
+}
+
 void MoveInstrument::apply(Project& project) {
   from_ = to_ = -1;
   for (std::size_t i = 0; i < project.instruments.size(); i++) if (project.instruments[i].id == instrument_) from_ = static_cast<int>(i);

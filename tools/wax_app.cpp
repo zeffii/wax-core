@@ -128,6 +128,8 @@ struct Session {
   float browserOptions = 0;              // height of the options under the lists in web pixels (0: half the panel)
   Screen browserScreen = Screen::Song;   // the screen the browser last matched its tab to
   int browserTab = 0;                    // 0 Patterns, 1 Machines, 2 Samples
+  bool clonePatterns = true, cloneCurves = true;   // what Clone with machine brings along
+  int addLaneFor = 0;                     // the machine chosen under "Add lane for"
   int selectedPreset = -1;                // the Instrument screen's preset list
   char presetName[48] = {};
   char machineName[64] = {};              // the Instrument screen's rename box
@@ -597,7 +599,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       ImGui::GetWindowDrawList()->AddLine(ImVec2(at.x, at.y + 3 * scale), ImVec2(at.x + ImGui::GetContentRegionAvail().x, at.y + 3 * scale), hot ? app::kAccent : app::lineAlpha(90), 1.0f);
       ImGui::BeginChild("browseroptions", ImVec2(0, 0), false, ImGuiWindowFlags_NoNav);
       // a button goes on the same line when it fits, else it wraps to the next (the browser is narrow)
-      const auto fits = [&](const char* label) { return ImGui::GetContentRegionAvail().x > ImGui::CalcTextSize(label).x + 24 * scale; };
+      const auto fits = [&](const char* label) { return ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x - ImGui::GetItemRectMax().x > ImGui::CalcTextSize(label).x + 24 * scale; };   // room to the right of the last item
       if (session->screen == Screen::Song) {
     {   // the lane under the cursor: rename, move, duplicate, remove (the web's lane tools)
       const Lane* current = nullptr;
@@ -640,6 +642,24 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
             session->wantLane.clear(); selectedLane.clear(); laneEdited = true;
           }
         }
+        if (!laneEdited) {   // a lane with its own copy of the machine, to go on changing one while the other keeps the sound
+          std::vector<std::string> machineIds;
+          for (const Instrument& i : doc.project().instruments) machineIds.push_back(i.id);
+          if (fits("Clone with machine")) ImGui::SameLine(0, 8 * scale);
+          if (app::textButton("Clone with machine")) {
+            const std::string machineCopy = app::uniqueName(curMachine, machineIds), laneCopy = app::uniqueName(curId, laneIds);
+            doc.apply(std::make_unique<CloneLaneWithMachine>(curId, machineCopy, laneCopy, session->clonePatterns, session->cloneCurves));
+            std::vector<std::string> problems = syncGraphs(doc, player.engine());   // the machine first, then its lane
+            laneEdited = true;
+            session->playable.push_back(machineCopy);
+            selectedLane = laneCopy; session->wantLane = laneCopy;
+            session->editStatus = problems.empty() ? std::string() : problems.front();
+          }
+          if (fits("patterns")) ImGui::SameLine(0, 8 * scale);
+          ImGui::Checkbox("patterns", &session->clonePatterns);
+          if (fits("automation")) ImGui::SameLine(0, 8 * scale);
+          ImGui::Checkbox("automation", &session->cloneCurves);
+        }
         if (laneEdited) { const std::vector<std::string> problems = syncLanes(doc, player.engine()); session->editStatus = problems.empty() ? std::string() : problems.front(); }
         if (!laneEdited) { /* a move changes order only */ }
       }
@@ -663,6 +683,31 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         char label[16]; std::snprintf(label, sizeof label, "%d", preset);
         if (fits(label)) ImGui::SameLine(0, 6 * scale);
         if (app::textButton(label)) { session->silenceTicks = preset; insert(preset); }
+      }
+      {   // an empty lane for a machine the song already has
+        std::vector<std::string> machines;
+        for (const Instrument& i : doc.project().instruments) if (i.id != kMaster && !i.isMeta) machines.push_back(i.id);
+        if (!machines.empty()) {
+          session->addLaneFor = std::clamp(session->addLaneFor, 0, static_cast<int>(machines.size()) - 1);
+          if (app::textButton("Add lane for")) {
+            std::vector<std::string> laneIds;
+            for (const Lane& l : doc.project().lanes) laneIds.push_back(l.id);
+            const std::string machine = machines[static_cast<std::size_t>(session->addLaneFor)];
+            std::string base = machine;   // a second lane for 'clap2' is 'clap3', not 'clap22'
+            if (std::find(laneIds.begin(), laneIds.end(), base) != laneIds.end()) { while (!base.empty() && std::isdigit(static_cast<unsigned char>(base.back()))) base.pop_back(); if (base.empty()) base = machine; }
+            const std::string laneId = app::uniqueName(base, laneIds);
+            doc.apply(std::make_unique<AddLane>(machine, laneId));
+            const std::vector<std::string> problems = syncLanes(doc, player.engine());
+            session->editStatus = problems.empty() ? std::string() : problems.front();
+            session->wantLane = laneId;
+          }
+          ImGui::SameLine(0, 8 * scale);
+          ImGui::SetNextItemWidth(-1);
+          if (ImGui::BeginCombo("##addlanefor", machines[static_cast<std::size_t>(session->addLaneFor)].c_str())) {
+            for (int i = 0; i < static_cast<int>(machines.size()); i++) if (ImGui::Selectable(machines[static_cast<std::size_t>(i)].c_str(), i == session->addLaneFor)) session->addLaneFor = i;
+            ImGui::EndCombo();
+          }
+        }
       }
     }
       }

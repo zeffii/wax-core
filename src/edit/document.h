@@ -413,6 +413,37 @@ private:
   std::string lane_;
 };
 
+// An empty lane (at the end) that plays an instrument the song already has.
+class AddLane final : public Edit {
+public:
+  AddLane(std::string instrument, std::string lane) : instrument_(std::move(instrument)), lane_(std::move(lane)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Add lane " + lane_; }
+  std::string lane() const override { return lane_; }
+
+private:
+  std::string instrument_, lane_;
+};
+
+// A clone of a lane together with a copy of its machine: the copy gets its own instrument (listed after the original) and a lane right
+// after the source that plays it, so the sound as it is now is kept while the original goes on changing. `patterns` says whether the
+// patterns (with their placements, mutes and offs) come along, `curves` whether the automation does; without them the lane starts empty.
+class CloneLaneWithMachine final : public Edit {
+public:
+  CloneLaneWithMachine(std::string source, std::string instrumentCopy, std::string laneCopy, bool patterns, bool curves)
+      : source_(std::move(source)), instrumentCopy_(std::move(instrumentCopy)), laneCopy_(std::move(laneCopy)), patterns_(patterns), curves_(curves) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Clone lane " + source_ + " with its machine"; }
+  std::string lane() const override { return laneCopy_; }
+  std::string graphInstrument() const override { return instrumentCopy_; }
+
+private:
+  std::string source_, instrumentCopy_, laneCopy_;
+  bool patterns_, curves_;
+};
+
 // The lane under another name (its instrument and patterns stay). The engine's lane of the old name is replaced by an empty one.
 class RenameLane final : public Edit {
 public:

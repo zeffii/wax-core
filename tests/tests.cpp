@@ -965,6 +965,23 @@ void testInstrumentManage() {
   check(doc.project().instruments[1].noteColumns == 5, "tracks set");
   check(wax::parseProject(wax::serializeProject(doc.project())).instruments[1].noteColumns == 5, "tracks saved");
   doc.undo();
+  {   // a lane for a machine, and a clone of a lane with its machine
+    const std::size_t lanes = doc.project().lanes.size();
+    doc.apply(std::make_unique<wax::AddLane>(id, "extra"));
+    check(doc.project().lanes.size() == lanes + 1 && doc.project().lanes.back().instrument == id, "an empty lane for a machine");
+    doc.undo();
+    std::string source;
+    for (const wax::Lane& lane : doc.project().lanes) if (lane.instrument == id) source = lane.id;
+    if (!source.empty()) {
+      doc.apply(std::make_unique<wax::CloneLaneWithMachine>(source, id + "_c", source + "_c", false, false));
+      check(doc.project().instruments.size() == count + 1, "the machine is copied");
+      bool empty = false;
+      for (const wax::Lane& lane : doc.project().lanes) if (lane.id == source + "_c") empty = lane.placements.empty() && lane.instrument == id + "_c";
+      check(empty, "the clone starts empty on its own machine");
+      doc.undo();
+      check(doc.project().instruments.size() == count && doc.project().lanes.size() == lanes, "clone undone");
+    }
+  }
   std::printf("ok: instrument manage\n");
 }
 
