@@ -7,6 +7,7 @@
 #include "app/theme.h"
 #include "app/widgets.h"
 #include "core/node_registry.h"
+#include "nodes/drawings.h"
 
 namespace wax::app {
 
@@ -47,6 +48,10 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
     ImGui::PopStyleColor();
     if (ImGui::IsItemClicked()) { state.node = nodes[i]->id; state.dragging = false; }
     if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+  }
+  if (!drawingsOf(picked->type).empty()) {
+    ImGui::SameLine(0, 24);
+    if (textButton("draw envelopes")) state.drawNode = picked->id;
   }
   ImGui::Separator();
 

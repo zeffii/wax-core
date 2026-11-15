@@ -107,4 +107,16 @@ void groupDivider(float height) {
   ImGui::Dummy(ImVec2(12 * scale, height));
 }
 
+bool textButton(const char* label, bool on) {
+  const ImVec2 at = ImGui::GetCursorScreenPos();
+  const ImVec2 size = ImGui::CalcTextSize(label);
+  ImGui::PushID(label);
+  ImGui::InvisibleButton("##text", size);
+  ImGui::PopID();
+  const bool hovered = ImGui::IsItemHovered();
+  if (hovered) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+  ImGui::GetWindowDrawList()->AddText(at, on ? kAccent : hovered ? IM_COL32(205, 214, 222, 255) : kDimText, label);
+  return ImGui::IsItemClicked();
+}
+
 }  // namespace wax::app

@@ -105,3 +105,12 @@ The current panel (flat node names, a row of sliders) exists to try sounds. The 
 - keys: Up/Down choose a row, Left/Right change it (Shift more, Ctrl less), Home/End, PageUp/PageDown, Enter opens the
   row menu (type a value, reset, expose as pattern column with 1/2/4 hex width, add a port); the keyjazz keys keep playing;
 - values shown in real units (ms/s, Hz/kHz, %, st, dB, on/off, named choices).
+
+## UI: envelopes
+
+Drawn envelopes (env2, drumsynth2, hat2, compass, khufu, pulsar) open from "draw envelopes" next to the node names, in a floating window:
+the canvas of webtracker's bezier editor (anchors, handles, point types, insert on curve, snap, log time, sustain knot) and its tool row.
+Edits are `SetDrawing` (a drag is one undo) and reach a playing song through `Node::data` (queued, taken at the start of a block).
+Single letters are not used on the canvas (they are piano keys): types and the knot are buttons; Delete and the arrows work while the
+canvas has been clicked. Still to do: drawings of the other nodes (see drawings.cpp), a larger/undocked layout, the web's per-node views.
+Test helpers: `wax-app song.wax --null --envelope inst.node --clicks "x,y;x,y" --press "..." --screenshot out.bmp`.

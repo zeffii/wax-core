@@ -31,4 +31,7 @@ std::string valueText(double value, bool isInt);
 // A thin line down the height of the current row, between groups of controls.
 void groupDivider(float height);
 
+// A word that acts as a button: dim, lit when hovered or `on`, no box. True when clicked.
+bool textButton(const char* label, bool on = false);
+
 }  // namespace wax::app

@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "app/sequence_view.h"
+#include "app/envelope_window.h"
 #include "app/mixer_view.h"
 #include "app/param_panel.h"
 #include "app/pattern_view.h"
@@ -57,7 +58,7 @@ void SDLCALL dialogDone(void* userdata, const char* const* files, int) {
 }
 
 struct Options {
-  std::string path, screenshot, press;   // press: keys to press one after another (for checking the window without a keyboard)
+  std::string path, screenshot, press, clicks, envelope;   // clicks: "x,y;x,y" mouse clicks, one every 6 frames; envelope: "instrument.node" opens its envelope window   // press: keys to press one after another (for checking the window without a keyboard)
   double rate = 48000;
   int threads = 1, midiPort = 0, frames = 3, playFrom = -1, buffer = 0;
   bool useNull = false;
@@ -83,6 +84,7 @@ struct Session {
   std::string editStatus;
   app::ParamPanelState panel;
   app::MixerState mixer;
+  app::EnvelopeWindow envelopes;
   std::string wantLane;                  // a lane the arrangement asked for; its tab opens next frame
   int wantTick = -1;                     // and the cursor goes here
   std::string path;                      // the file this song was opened from, where Ctrl+S saves it
@@ -260,7 +262,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         session->editStatus = e.what();
       }
     }
-    const bool typing = session->edit && !ctrl && !io.KeyAlt;
+    const bool typing = session->edit && !ctrl && !io.KeyAlt && !session->envelopes.wantsKeys();
     if (typing) {
       const int before = editor.tick() * 4096 + editor.cell();
       if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) editor.move(-1, 0);
@@ -355,7 +357,9 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   ImGui::EndChild();
   ImGui::Separator();
   if (!laneInstrument.empty() && app::drawParamPanel(session->panel, doc, player.engine(), laneInstrument)) syncParams(doc, player.engine());
+  if (!session->panel.drawNode.empty()) { app::showEnvelopes(session->envelopes, laneInstrument, session->panel.drawNode); session->panel.drawNode.clear(); }
   ImGui::Separator();
+  if (app::drawEnvelopeWindow(session->envelopes, doc, player.engine())) syncData(doc, player.engine());
   if (app::drawMixer(session->mixer, doc, player.engine(), selectedLane)) {
     syncParams(doc, player.engine());
     const std::vector<std::string> problems = syncLanes(doc, player.engine());
@@ -375,6 +379,22 @@ ImGuiKey keyNamed(const std::string& name) {
   if (name.size() == 1 && name[0] >= '0' && name[0] <= '9') return static_cast<ImGuiKey>(ImGuiKey_0 + (name[0] - '0'));
   if (name.size() == 1 && name[0] >= 'a' && name[0] <= 'z') return static_cast<ImGuiKey>(ImGuiKey_A + (name[0] - 'a'));
   return ImGuiKey_None;
+}
+
+// "100,200;150,220" -> a click at each place, one every six frames: the pointer moves, goes down two frames later and up two after that.
+void feedClicks(const std::string& script, int frame) {
+  std::vector<std::pair<float, float>> places;
+  std::stringstream stream(script);
+  for (std::string item; std::getline(stream, item, ';');) {
+    float x = 0, y = 0;
+    if (std::sscanf(item.c_str(), "%f,%f", &x, &y) == 2) places.emplace_back(x, y);
+  }
+  const int index = frame / 6, phase = frame % 6;
+  if (index < 0 || index >= static_cast<int>(places.size())) return;
+  ImGuiIO& io = ImGui::GetIO();
+  if (phase == 0) io.AddMousePosEvent(places[static_cast<std::size_t>(index)].first, places[static_cast<std::size_t>(index)].second);
+  if (phase == 2) io.AddMouseButtonEvent(0, true);
+  if (phase == 4) io.AddMouseButtonEvent(0, false);
 }
 
 void feedKeys(const std::string& script, int frame) {
@@ -407,6 +427,8 @@ bool parse(int argc, char** argv, Options& o) {
     else if (a == "--midi" && more) o.midiPort = std::atoi(argv[++i]);
     else if (a == "--screenshot" && more) o.screenshot = argv[++i];
     else if (a == "--press" && more) o.press = argv[++i];
+    else if (a == "--clicks" && more) o.clicks = argv[++i];
+    else if (a == "--envelope" && more) o.envelope = argv[++i];
     else if (a == "--frames" && more) o.frames = std::max(1, std::atoi(argv[++i]));
     else if (a == "--play-from" && more) o.playFrom = std::atoi(argv[++i]);
     else if (a == "--null") o.useNull = true;
@@ -480,6 +502,11 @@ int main(int argc, char** argv) {
     }
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
+    if (!options.clicks.empty() && frame >= 4) feedClicks(options.clicks, frame - 4);
+    if (!options.envelope.empty() && frame == 3 && session) {
+      const std::size_t dot = options.envelope.find('.');
+      app::showEnvelopes(session->envelopes, options.envelope.substr(0, dot), options.envelope.substr(dot + 1));
+    }
     if (!options.press.empty() && frame >= 4) feedKeys(options.press, frame - 4);   // (the first frames let the window settle)
     ImGui::NewFrame();
     drawFrame(session.get(), options, status, meterL, meterR, held, octave, selectedLane, follow, playFromRequest);
