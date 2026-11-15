@@ -510,9 +510,10 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         const ImGuiKey key = kPianoKeys[i];
         if (ImGui::IsKeyPressed(key, false) && !io.KeyCtrl && !io.KeyAlt) {
           const int note = std::clamp(12 * (octave + 1) + i, 0, 127);
+          const bool entering = typing && editor.onNoteCell();   // the key puts a note in the grid
           held[key] = note;
-          player.ring().push({LiveCommand::NoteOn, note, 0.8});
-          if (typing && editor.onNoteCell()) edited |= editor.typeNote(note);
+          if (!entering || app::settings().notePreview) player.ring().push({LiveCommand::NoteOn, note, 0.8});   // (Note preview off: entering is silent)
+          if (entering) edited |= editor.typeNote(note);
         }
       }
     }
@@ -604,6 +605,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Pattern view");
         if (ImGui::Checkbox("All lanes side by side", &app::settings().patternAll)) app::saveSettings();
         if (ImGui::Checkbox("Tint patterns by colour", &app::settings().tintPatterns)) app::saveSettings();
+        if (ImGui::Checkbox("Note preview", &app::settings().notePreview)) app::saveSettings();
         if (ImGui::Checkbox("Hide empty columns", &app::settings().hideEmpty)) app::saveSettings();
         if (ImGui::Checkbox("Follow the playing row", &follow)) { app::settings().follow = follow; app::saveSettings(); }
       }
