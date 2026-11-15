@@ -681,7 +681,17 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
           bool setup = false;
           if (step && voices + step >= 1 && voices + step <= 16) { voices += step; setup = true; }
           ImGui::AlignTextToFramePadding();
-          ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "tracks %d", current->noteColumns);
+          ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "tracks");
+          if (current->noteColumns > 0) {   // (a meta machine has none)
+            ImGui::SameLine();
+            char tracks[16]; std::snprintf(tracks, sizeof tracks, "%d", current->noteColumns);
+            const int more = app::spinBox("##tracks", tracks, 56 * scale);
+            if (more && current->noteColumns + more >= 1 && current->noteColumns + more <= 8) {
+              doc.apply(std::make_unique<SetNoteColumns>(name, current->noteColumns + more));
+              const std::vector<std::string> problems = syncLanes(doc, player.engine());
+              session->editStatus = problems.empty() ? std::string() : problems.front();
+            }
+          }
           bool sleeps = !never;
           if (ImGui::Checkbox("sleep when quiet", &sleeps)) { never = !sleeps; setup = true; }
           if (setup) {

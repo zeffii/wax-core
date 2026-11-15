@@ -194,6 +194,20 @@ private:
   std::string label_;
 };
 
+// How many notes a row of an instrument's lanes can hold (1 to 8: the "tracks"). The lanes that play it are rebuilt.
+class SetNoteColumns final : public Edit {
+public:
+  SetNoteColumns(std::string instrument, int columns) : instrument_(std::move(instrument)), columns_(columns) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Tracks of " + instrument_; }
+  bool allLanes() const override { return true; }
+
+private:
+  std::string instrument_;
+  int columns_, old_ = 1;
+};
+
 // An instrument one place earlier (direction -1) or later (+1) in the list. The master stays first.
 class MoveInstrument final : public Edit {
 public:

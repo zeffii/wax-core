@@ -77,6 +77,7 @@ std::string serializeProject(const Project& project) {
     Json& definition = out["instruments"][instrument.id];
     if (instrument.raw.is_object() && instrument.raw.contains("presets")) definition["presets"] = instrument.raw["presets"];   // presets as edited
     else definition.erase("presets");
+    if (instrument.noteColumns != definition.value("noteColumns", 1) && instrument.noteColumns > 0) definition["noteColumns"] = instrument.noteColumns;   // tracks as edited
     Json& graph = definition["graph"];
     if (graph.is_object()) {   // voices and sleep as edited
       if (instrument.graph.voices != 1 || graph.contains("voices")) graph["voices"] = instrument.graph.voices;

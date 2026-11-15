@@ -530,6 +530,15 @@ void SetPresets::revert(Project& project) {
   if (old_.is_null()) instrument.raw.erase("presets"); else instrument.raw["presets"] = old_;
 }
 
+void SetNoteColumns::apply(Project& project) {
+  if (columns_ < 1 || columns_ > 8) throw std::out_of_range("tracks must be 1 to 8");
+  Instrument& instrument = instrumentNamed(project, instrument_);
+  old_ = instrument.noteColumns;
+  instrument.noteColumns = columns_;
+}
+
+void SetNoteColumns::revert(Project& project) { instrumentNamed(project, instrument_).noteColumns = old_; }
+
 void MoveInstrument::apply(Project& project) {
   from_ = to_ = -1;
   for (std::size_t i = 0; i < project.instruments.size(); i++) if (project.instruments[i].id == instrument_) from_ = static_cast<int>(i);

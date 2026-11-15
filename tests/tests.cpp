@@ -961,6 +961,10 @@ void testInstrumentManage() {
     try { doc.apply(std::make_unique<wax::RemoveInstrument>(id)); } catch (const std::exception&) { refused = true; }
     check(refused, "a played machine stays");
   }
+  doc.apply(std::make_unique<wax::SetNoteColumns>(id, 5));
+  check(doc.project().instruments[1].noteColumns == 5, "tracks set");
+  check(wax::parseProject(wax::serializeProject(doc.project())).instruments[1].noteColumns == 5, "tracks saved");
+  doc.undo();
   std::printf("ok: instrument manage\n");
 }
 
