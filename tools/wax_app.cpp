@@ -107,6 +107,10 @@ struct Session {
   int silenceTicks = 128;                // the length of silence Insert puts in
   bool wantTree = false;                 // open the machine tree (Shift+I, or the Instrument screen's add button)
   bool showKeys = true;                  // the shortcut sheet beside the Pattern grid
+  bool showBrowser = true;               // the browser down the left of every screen (Alt+B)
+  float browserWidth = 260;              // in web pixels
+  float browserOptions = 0;              // height of the options under the lists in web pixels (0: half the panel)
+  int browserTab = 0;                    // 0 Patterns, 1 Machines, 2 Samples
   bool showMixer = true;                 // the mixer under the Song and Pattern screens (the status bar's toggle)
   Screen screen = Screen::Pattern;       // the screen shown (the rail at the left)
   std::string instrument;                // the instrument shown on the Instrument screen
@@ -361,6 +365,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         session->editStatus = e.what();
       }
     }
+    if (io.KeyAlt && !ctrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_B, false)) session->showBrowser = !session->showBrowser;   // the browser
     if (io.KeyShift && !ctrl && !io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_I, false)) session->wantTree = true;   // the machine tree
     if (ctrl && !io.KeyShift && !io.KeyAlt && session->screen == Screen::Pattern) {   // the song loop: start and end at the cursor row, switch
       const auto setPoint = [&](const char* which, int at) {
@@ -466,12 +471,48 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   }
   ImGui::EndChild();
   ImGui::SameLine();
-  ImGui::BeginChild("screen", ImVec2(0, below), false);
-  std::string laneInstrument;
-  for (const Lane& lane : doc.project().lanes) if (lane.id == selectedLane) laneInstrument = lane.instrument;
-  if (session->screen == Screen::Song) {
-    const float listW = session->patternList.width * scale;
-    ImGui::BeginChild("seqmain", ImVec2(-listW, 0), false, ImGuiWindowFlags_NoNav);
+  // The browser, down the left of every screen as in the web app: tabs for the lists (patterns, machines, samples), and under them
+  // the options of the screen being shown (the Song screen's lane tools).
+  const Lane* listed = nullptr;
+  for (const Lane& l : doc.project().lanes) if (l.id == selectedLane) listed = &l;
+  if (!listed) for (const Lane& l : doc.project().lanes) if (l.id != kMaster) { listed = &l; selectedLane = l.id; break; }   // none picked yet: the first lane
+  app::PatternListResult listed2;
+  if (session->showBrowser) {
+    ImGui::BeginChild("browser", ImVec2(session->browserWidth * scale, below), false, ImGuiWindowFlags_NoNav);
+    {   // the tabs
+      const char* tabs[] = {"Patterns", "Machines", "Samples"};
+      for (int i = 0; i < 3; i++) {
+        if (i) ImGui::SameLine(0, 8 * scale);
+        if (app::textButton(tabs[i], session->browserTab == i)) session->browserTab = i;
+      }
+    }
+    const bool hasOptions = session->screen == Screen::Song;
+    const float panelH = ImGui::GetContentRegionAvail().y;
+    float optionsH = hasOptions ? (session->browserOptions > 0 ? session->browserOptions * scale : panelH * 0.5f) : 0.0f;
+    optionsH = std::clamp(optionsH, 0.0f, std::max(0.0f, panelH - 120 * scale));
+    ImGui::BeginChild("browserlist", ImVec2(0, panelH - optionsH - (hasOptions ? 7 * scale : 0)), false, ImGuiWindowFlags_NoNav);
+    if (session->browserTab == 0) {
+      listed2 = app::drawPatternList(session->patternList, listed, ImGui::GetContentRegionAvail().y);
+    } else if (session->browserTab == 1) {
+      if (app::textButton("+ add")) session->wantTree = true;
+      for (const Instrument& inst : doc.project().instruments) {
+        if (app::textButton(inst.id.c_str(), inst.id == session->instrument)) session->instrument = inst.id;
+      }
+    } else {
+      ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "samples are not ported yet");
+    }
+    ImGui::EndChild();
+    if (hasOptions) {   // the bar that sets the height of the options, then the options
+      const ImVec2 at = ImGui::GetCursorScreenPos();
+      ImGui::InvisibleButton("##optsplit", ImVec2(-1, 7 * scale));
+      const bool hot = ImGui::IsItemHovered() || ImGui::IsItemActive();
+      if (hot) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+      if (ImGui::IsItemActive()) session->browserOptions = std::clamp(optionsH / scale - ImGui::GetIO().MouseDelta.y / scale, 60.0f, 600.0f);
+      if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) session->browserOptions = 0;
+      ImGui::GetWindowDrawList()->AddLine(ImVec2(at.x, at.y + 3 * scale), ImVec2(at.x + ImGui::GetContentRegionAvail().x, at.y + 3 * scale), hot ? app::kAccent : app::lineAlpha(90), 1.0f);
+      ImGui::BeginChild("browseroptions", ImVec2(0, 0), false, ImGuiWindowFlags_NoNav);
+      // a button goes on the same line when it fits, else it wraps to the next (the browser is narrow)
+      const auto fits = [&](const char* label) { return ImGui::GetContentRegionAvail().x > ImGui::CalcTextSize(label).x + 24 * scale; };
     {   // the lane under the cursor: rename, move, duplicate, remove (the web's lane tools)
       const Lane* current = nullptr;
       for (const Lane& l : doc.project().lanes) if (l.id == selectedLane) current = &l;
@@ -483,7 +524,6 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         ImGui::SameLine();
         ImGui::SetNextItemWidth(110 * scale);
         ImGui::InputText("##lanename", session->laneName, sizeof session->laneName);
-        ImGui::SameLine(0, 8 * scale);
         std::vector<std::string> laneIds;
         for (const Lane& l : doc.project().lanes) laneIds.push_back(l.id);
         bool laneEdited = false;
@@ -492,22 +532,21 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         if (app::textButton("Rename") && !wanted.empty() && wanted != curId && std::find(laneIds.begin(), laneIds.end(), wanted) == laneIds.end()) {
           doc.apply(std::make_unique<RenameLane>(curId, wanted)); selectedLane = wanted; session->wantLane = wanted; session->laneNameFor = wanted; laneEdited = true;
         }
-        ImGui::SameLine(0, 8 * scale);
+        if (fits("<")) ImGui::SameLine(0, 8 * scale);
         if (app::textButton("<")) { doc.apply(std::make_unique<MoveLane>(curId, -1)); }
-        ImGui::SameLine(0, 4 * scale);
+        if (fits(">")) ImGui::SameLine(0, 4 * scale);
         if (app::textButton(">")) { doc.apply(std::make_unique<MoveLane>(curId, 1)); }
-        ImGui::SameLine(0, 8 * scale);
+        if (fits("Duplicate")) ImGui::SameLine(0, 8 * scale);
         if (app::textButton("Duplicate") && !laneEdited) {
           const std::string copy = app::uniqueName(curId, laneIds);
           doc.apply(std::make_unique<DuplicateLane>(curId, copy)); selectedLane = copy; session->wantLane = copy; laneEdited = true;
         }
-        ImGui::SameLine(0, 8 * scale);
         int shares = 0;
         for (const Lane& l : doc.project().lanes) shares += l.instrument == curMachine;
         if (app::textButton("Remove") && !laneEdited) { const std::string gone = curId; doc.apply(std::make_unique<RemoveLane>(gone, false)); session->wantLane.clear(); selectedLane.clear(); laneEdited = true; }
         if (shares == 1 && !laneEdited) {
-          ImGui::SameLine(0, 8 * scale);
-          if (app::textButton("Remove with machine")) {
+          if (fits("Remove + machine")) ImGui::SameLine(0, 8 * scale);
+          if (app::textButton("Remove + machine")) {
             const std::string gone = curId, machine = curMachine;
             doc.apply(std::make_unique<RemoveLane>(gone, true));
             session->playable.erase(std::remove(session->playable.begin(), session->playable.end(), machine), session->playable.end());
@@ -532,22 +571,34 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       char text[16]; std::snprintf(text, sizeof text, "%d", session->silenceTicks);
       const int step = app::spinBox("##silence", text, 56 * scale);
       session->silenceTicks = std::clamp(session->silenceTicks + step * 16, 1, 65536);
-      ImGui::SameLine(0, 8 * scale);
+      if (fits("Insert")) ImGui::SameLine(0, 8 * scale);
       if (app::textButton("Insert")) insert(session->silenceTicks);
       for (const int preset : {16, 32, 48, 64, 128, 256, 512}) {
-        ImGui::SameLine(0, 6 * scale);
         char label[16]; std::snprintf(label, sizeof label, "%d", preset);
+        if (fits(label)) ImGui::SameLine(0, 6 * scale);
         if (app::textButton(label)) { session->silenceTicks = preset; insert(preset); }
       }
     }
-    const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, session->edit ? editor.tick() : -1, follow && playing && !session->edit);
-    if (!hit.lane.empty()) { session->wantLane = hit.lane; session->wantTick = hit.tick; selectedLane = hit.lane; }
+      ImGui::EndChild();
+    }
+    {   // the grip on the right edge: drag to change the width, all the way left closes it
+      const ImVec2 window = ImGui::GetWindowPos();
+      const float x = window.x + ImGui::GetWindowWidth() - 5 * scale;
+      ImGui::SetCursorScreenPos(ImVec2(x, window.y));
+      ImGui::InvisibleButton("##browsergrip", ImVec2(5 * scale, ImGui::GetWindowHeight()));
+      const bool hot = ImGui::IsItemHovered() || ImGui::IsItemActive();
+      if (hot) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+      if (ImGui::IsItemActive()) {
+        session->browserWidth += ImGui::GetIO().MouseDelta.x / scale;
+        if (session->browserWidth < 90) { session->browserWidth = 260; session->showBrowser = false; }
+        session->browserWidth = std::clamp(session->browserWidth, 160.0f, 600.0f);
+      }
+      if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) session->browserWidth = 260;
+      ImGui::GetWindowDrawList()->AddLine(ImVec2(x + 2 * scale, window.y), ImVec2(x + 2 * scale, window.y + ImGui::GetWindowHeight()), hot ? app::kAccent : app::lineAlpha(90), 1.0f);
+    }
     ImGui::EndChild();
     ImGui::SameLine(0, 0);
-    const Lane* listed = nullptr;
-    for (const Lane& l : doc.project().lanes) if (l.id == selectedLane) listed = &l;
-    if (!listed) for (const Lane& l : doc.project().lanes) if (l.id != kMaster) { listed = &l; selectedLane = l.id; break; }   // none picked yet: the first lane
-    const app::PatternListResult listed2 = app::drawPatternList(session->patternList, listed, ImGui::GetContentRegionAvail().y);
+  }
     bool listEdited = false;
     if (listed) editor.setLane(listed->id, player.engine().laneColumns(listed->id));
     if (listed2.create) listEdited |= editor.createPatternHere();
@@ -565,7 +616,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       session->patternList.picked = copyId; listEdited = true;
     }
     std::string toPlace = listed2.place;
-    if (session->edit && ImGui::IsKeyPressed(ImGuiKey_Space, false) && !ImGui::GetIO().WantTextInput) toPlace = session->patternList.picked;   // Space: the outlined pattern here
+    if (session->screen == Screen::Song && session->edit && ImGui::IsKeyPressed(ImGuiKey_Space, false) && !ImGui::GetIO().WantTextInput) toPlace = session->patternList.picked;   // Space: the outlined pattern here
     if (!toPlace.empty()) {
       const int before = editor.tick();
       if (editor.placePatternHere(toPlace)) {
@@ -573,11 +624,19 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         if (listed) for (const Pattern& pat : listed->patterns) if (pat.id == toPlace) editor.moveTo(std::min(before + static_cast<int>(pat.rows.size()), song.length - 1), editor.cell());   // on to where it ends
       }
     }
-    if (ImGui::GetIO().KeyCtrl && !ImGui::GetIO().WantTextInput) {   // Ctrl+Up / Ctrl+Down step through the list
+    if (session->screen == Screen::Song && ImGui::GetIO().KeyCtrl && !ImGui::GetIO().WantTextInput) {   // Ctrl+Up / Ctrl+Down step through the list
       if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) app::stepPatternList(session->patternList, listed, -1);
       if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) app::stepPatternList(session->patternList, listed, 1);
     }
     if (listEdited) { const std::vector<std::string> problems = syncLanes(doc, player.engine()); session->editStatus = problems.empty() ? std::string() : problems.front(); }
+  ImGui::BeginChild("screen", ImVec2(0, below), false);
+  std::string laneInstrument;
+  for (const Lane& lane : doc.project().lanes) if (lane.id == selectedLane) laneInstrument = lane.instrument;
+  if (session->screen == Screen::Song) {
+    ImGui::BeginChild("seqmain", ImVec2(0, 0), false, ImGuiWindowFlags_NoNav);
+    const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, session->edit ? editor.tick() : -1, follow && playing && !session->edit);
+    if (!hit.lane.empty()) { session->wantLane = hit.lane; session->wantTick = hit.tick; selectedLane = hit.lane; }
+    ImGui::EndChild();
   } else if (session->screen == Screen::Pattern) {
     const float sheetW = session->showKeys ? 270 * scale : 0;
     ImGui::BeginChild("patmain", ImVec2(-sheetW, 0), false, ImGuiWindowFlags_NoNav);
@@ -626,15 +685,6 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   } else if (session->screen == Screen::Instrument) {
     // the instruments as flat text on the left, the graph in the middle, the parameter dock at the right
     if (session->instrument.empty()) session->instrument = !laneInstrument.empty() ? laneInstrument : session->playable.empty() ? std::string(kMaster) : session->playable.front();
-    ImGui::BeginChild("instlist", ImVec2(150 * scale, 0), false);
-    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Instrument");
-    ImGui::SameLine(0, 10 * scale);
-    if (app::textButton("+ add")) session->wantTree = true;
-    for (const Instrument& inst : doc.project().instruments) {
-      if (app::textButton(inst.id.c_str(), inst.id == session->instrument)) session->instrument = inst.id;
-    }
-    ImGui::EndChild();
-    ImGui::SameLine();
     laneInstrument = session->instrument;
     ImGui::BeginChild("instmain", ImVec2(-app::paramDockSpan(session->panel), 0), false);
     if (session->panel.instrument != laneInstrument) { session->panel.instrument = laneInstrument; session->panel.node.clear(); }
@@ -713,6 +763,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(load > 0.7 ? app::kWarm : app::kDimText), "cpu %.0f%%  late %ld", 100 * load, session->audio->lateBuffers());
       ImGui::SameLine(0, 14 * scale);
     }
+    if (app::iconButton("browser-toggle", "Browser: the patterns and machines, down the left of every screen (Alt+B)", session->showBrowser, 16)) session->showBrowser = !session->showBrowser;
+    ImGui::SameLine(0, 10 * scale);
     if (app::iconButton("keys-toggle", "Shortcuts: the keys of the Pattern screen, beside the grid", session->showKeys, 16)) session->showKeys = !session->showKeys;
     ImGui::SameLine(0, 10 * scale);
     if (app::iconButton("mixer-toggle", "Mixer: a fader for each lane, along the bottom of the Song and Pattern screens", session->showMixer, 16)) session->showMixer = !session->showMixer;

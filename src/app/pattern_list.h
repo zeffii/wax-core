@@ -1,6 +1,5 @@
 // The Song screen's pattern list: the patterns of the lane under the cursor, one line each (index, name, rows, how often it is placed).
-// Click picks one (outlined); double-click or the Place button puts it at the cursor row; New makes a blank one there. A grip on the
-// list's left edge sets its width.
+// Click picks one (outlined); double-click or the Place button puts it at the cursor row; New makes a blank one there.
 #pragma once
 
 #include <string>
@@ -11,7 +10,6 @@ namespace wax::app {
 
 struct PatternListState {
   std::string picked;      // the outlined pattern's id
-  float width = 190;       // in web pixels
   char name[32] = {0};     // the rename box
   std::string nameFor;     // the pattern that text belongs to
 };

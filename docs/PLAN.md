@@ -165,3 +165,5 @@ instrument, lane duplicate/clone.
 
 - Song screen lane tools: rename, move earlier/later, duplicate, remove, remove with machine (undoable, saved). Still missing: pattern colour (done), (loop markers now drawn on the Song screen).
 - Song screen: insert silence (whole song, patterns crossing the row stay whole; the web's 'cut' option not ported).
+
+- Browser: a panel down the left of every screen (Alt+B or the status bar toggle), tabs Patterns / Machines / Samples (samples not ported), width draggable (all the way left closes it), and under the lists the options of the screen shown (the Song screen's lane tools and insert silence), split by a drag bar. Still missing: the options of the Instrument (voices, presets), Pattern and Sample screens.

@@ -29,18 +29,8 @@ int placements(const Lane& lane, const std::string& id) {
 PatternListResult drawPatternList(PatternListState& state, const Lane* lane, float height) {
   PatternListResult result;
   const float scale = ImGui::GetStyle().FontScaleDpi;
-  // the grip: a thin bar at the list's left edge, dragged to change the width
-  {
-    const ImVec2 at = ImGui::GetCursorScreenPos();
-    ImGui::InvisibleButton("grip", ImVec2(5 * scale, height));
-    const bool hot = ImGui::IsItemHovered() || ImGui::IsItemActive();
-    if (hot) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-    if (ImGui::IsItemActive()) state.width = std::clamp(state.width - ImGui::GetIO().MouseDelta.x / scale, 110.0f, 420.0f);
-    ImGui::GetWindowDrawList()->AddLine(ImVec2(at.x + 2 * scale, at.y), ImVec2(at.x + 2 * scale, at.y + height), hot ? kAccent : lineAlpha(90), 1.0f);
-    ImGui::SameLine(0, 4 * scale);
-  }
   ImGui::BeginGroup();
-  ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(kText), "Patterns%s%s", lane ? "  " : "", lane ? lane->id.c_str() : "");
+  ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(kText), "%s", lane ? lane->id.c_str() : "");
   if (!lane) { ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(kDimText), "no lane"); ImGui::EndGroup(); return result; }
   if (!find(lane, state.picked) && !lane->patterns.empty()) state.picked = lane->patterns.front().id;
   if (textButton("New")) result.create = true;
