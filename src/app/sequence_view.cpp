@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstdio>
 
+#include "app/pattern_colour.h"
 #include "app/theme.h"
 
 namespace wax::app {
@@ -128,7 +129,9 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
       const bool starts = shown != nullptr;
       if (!shown) shown = placementAt(lane, t0);
       if (!shown) continue;
-      draw->AddRectFilled(ImVec2(left + 2 * scale, y), ImVec2(left + w - 2 * scale, y + rowHeight), blockFill);
+      const Pattern* shownPattern = patternOf(lane, shown->pattern);
+      const ImU32 fill = shownPattern ? patternColour(*shownPattern, selected ? 70 : 50) : blockFill;   // the pattern's own colour
+      draw->AddRectFilled(ImVec2(left + 2 * scale, y), ImVec2(left + w - 2 * scale, y + rowHeight), fill);
       draw->AddLine(ImVec2(left + 2 * scale, y), ImVec2(left + 2 * scale, y + rowHeight), blockEdge);
       if (starts) {
         draw->AddLine(ImVec2(left + 2 * scale, y), ImVec2(left + w - 2 * scale, y), blockEdge);

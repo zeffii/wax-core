@@ -5,6 +5,7 @@
 
 #include "imgui.h"
 
+#include "app/pattern_colour.h"
 #include "app/theme.h"
 #include "app/widgets.h"
 
@@ -49,6 +50,19 @@ PatternListResult drawPatternList(PatternListState& state, const Lane* lane, flo
   if (textButton("Clone") && !state.picked.empty()) result.clone = true;
   if (const Pattern* picked = find(lane, state.picked)) {   // the outlined pattern's name, editable
     if (state.nameFor != picked->id) { std::snprintf(state.name, sizeof state.name, "%s", picked->name.c_str()); state.nameFor = picked->id; }
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(kDimText), "colour");
+    ImGui::SameLine(0, 6 * scale);
+    if (textButton("<")) result.colorStep = -1;
+    ImGui::SameLine(0, 4 * scale);
+    {
+      const ImVec2 at = ImGui::GetCursorScreenPos();
+      const float side = ImGui::GetTextLineHeight();
+      ImGui::Dummy(ImVec2(side * 2, side));
+      ImGui::GetWindowDrawList()->AddRectFilled(at, ImVec2(at.x + side * 2, at.y + side), patternColour(*picked, 200), 2.0f);
+    }
+    ImGui::SameLine(0, 4 * scale);
+    if (textButton(">")) result.colorStep = 1;
     ImGui::SetNextItemWidth(-1);
     if (ImGui::InputText("##patname", state.name, sizeof state.name, ImGuiInputTextFlags_EnterReturnsTrue) && state.name[0] && picked->name != state.name) result.rename = state.name;
   }

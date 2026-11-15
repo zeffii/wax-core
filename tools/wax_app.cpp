@@ -26,6 +26,7 @@
 #include "app/graph_view.h"
 #include "app/machine_tree.h"
 #include "app/machines.h"
+#include "app/pattern_colour.h"
 #include "app/pattern_list.h"
 #include "app/shortcut_sheet.h"
 #include "app/widgets.h"
@@ -551,6 +552,13 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (listed) editor.setLane(listed->id, player.engine().laneColumns(listed->id));
     if (listed2.create) listEdited |= editor.createPatternHere();
     if (listed && !listed2.rename.empty()) { doc.apply(std::make_unique<RenamePattern>(listed->id, session->patternList.picked, listed2.rename)); listEdited = true; }
+    if (listed && listed2.colorStep != 0) {
+      for (const Pattern& pat : listed->patterns) if (pat.id == session->patternList.picked) {
+        doc.apply(std::make_unique<SetPatternColor>(listed->id, pat.id, app::steppedPatternColor(pat, listed2.colorStep)));
+        listEdited = true;
+        break;
+      }
+    }
     if (listed && listed2.clone) {
       const std::string copyId = "clone-" + std::to_string(static_cast<long long>(ImGui::GetTime() * 1000)) + "-" + std::to_string(doc.revision());
       doc.apply(std::make_unique<ClonePattern>(listed->id, session->patternList.picked, copyId));

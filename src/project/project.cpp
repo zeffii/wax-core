@@ -111,6 +111,7 @@ Lane readLane(const Json& data) {
     Pattern pattern;
     pattern.id = id;
     pattern.name = p.value("name", id);
+    if (p.contains("color")) pattern.color = p["color"];
     pattern.index = p.value("index", 0);
     pattern.rows = p.value("rows", std::vector<std::string>());
     lane.patterns.push_back(std::move(pattern));

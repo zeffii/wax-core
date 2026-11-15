@@ -351,6 +351,20 @@ private:
   Json loopBefore_;
 };
 
+// The colour of a pattern (null: automatic, 0-15: a preset, "#rrggbb": custom).
+class SetPatternColor final : public Edit {
+public:
+  SetPatternColor(std::string lane, std::string pattern, Json color) : lane_(std::move(lane)), pattern_(std::move(pattern)), color_(std::move(color)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Pattern colour"; }
+  std::string lane() const override { return lane_; }
+
+private:
+  std::string lane_, pattern_;
+  Json color_, old_;
+};
+
 // A pattern under another name.
 class RenamePattern final : public Edit {
 public:

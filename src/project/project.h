@@ -107,6 +107,7 @@ struct Pattern {
   std::string name;
   int index = 0;
   std::vector<std::string> rows;   // one line of text per row, as in the file
+  Json color;              // null: automatic (by index); an integer 0-15: one of the preset pastels; a "#rrggbb" string: custom
 };
 
 struct Placement {

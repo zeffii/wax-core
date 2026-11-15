@@ -852,6 +852,18 @@ void testInsertSilence() {
   std::printf("ok: insert silence\n");
 }
 
+void testPatternColour() {
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax"));
+  const wax::Lane& lane = doc.project().lanes[1];
+  const std::string laneId = lane.id, pat = lane.patterns.front().id;
+  doc.apply(std::make_unique<wax::SetPatternColor>(laneId, pat, wax::Json(5)));
+  const wax::Project reread = wax::parseProject(wax::serializeProject(doc.project()));
+  check(reread.lanes[1].patterns.front().color == wax::Json(5), "a pattern colour is saved");
+  doc.undo();
+  check(doc.project().lanes[1].patterns.front().color == lane.patterns.front().color, "colour undone");
+  std::printf("ok: pattern colour\n");
+}
+
 void testMoveNode() {
   const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
   wax::Document doc(original);
@@ -922,6 +934,7 @@ int main() {
   testLaneEdits();
   testPatternRenameClone();
   testInsertSilence();
+  testPatternColour();
   testAddNode();
   testUnits();
   testRewire();

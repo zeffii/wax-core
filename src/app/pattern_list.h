@@ -20,6 +20,7 @@ struct PatternListResult {
   std::string place;       // a pattern to place at the cursor row ("" none)
   bool create = false;     // New was pressed
   bool clone = false;      // Clone was pressed (the outlined pattern)
+  int colorStep = 0;       // -1 / +1: the outlined pattern's colour one step back / forward
   std::string rename;      // a new name for the outlined pattern ("" none)
 };
 

@@ -163,5 +163,5 @@ step), then the machine compiles into the running engine and its lane follows. T
 sample, is greyed. Undo replaces the lane in the engine by an empty one (the idle instrument stays loaded). Not yet: the sampler, remove/rename
 instrument, lane duplicate/clone.
 
-- Song screen lane tools: rename, move earlier/later, duplicate, remove, remove with machine (undoable, saved). Still missing: pattern colour, (loop markers now drawn on the Song screen).
+- Song screen lane tools: rename, move earlier/later, duplicate, remove, remove with machine (undoable, saved). Still missing: pattern colour (done), (loop markers now drawn on the Song screen).
 - Song screen: insert silence (whole song, patterns crossing the row stay whole; the web's 'cut' option not ported).

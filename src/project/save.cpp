@@ -23,6 +23,7 @@ Json laneJson(const Lane& lane) {
     p["name"] = pattern.name;
     p["index"] = pattern.index;
     p.erase("length");
+    if (pattern.color.is_null()) p.erase("color"); else p["color"] = pattern.color;
     p["rows"] = pattern.rows;
     patterns[pattern.id] = std::move(p);
   }

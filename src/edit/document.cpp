@@ -202,6 +202,15 @@ void InsertSilence::revert(Project& project) {
   if (loopBefore_.is_null()) project.song.raw.erase("loop"); else project.song.raw["loop"] = loopBefore_;
 }
 
+void SetPatternColor::apply(Project& project) {
+  for (Pattern& p : laneNamed(project, lane_).patterns) if (p.id == pattern_) { old_ = p.color; p.color = color_; return; }
+  throw std::out_of_range("no pattern " + pattern_);
+}
+
+void SetPatternColor::revert(Project& project) {
+  for (Pattern& p : laneNamed(project, lane_).patterns) if (p.id == pattern_) p.color = old_;
+}
+
 void RenamePattern::apply(Project& project) {
   for (Pattern& p : laneNamed(project, lane_).patterns) if (p.id == pattern_) { old_ = p.name; p.name = name_; return; }
   throw std::out_of_range("no pattern " + pattern_);
