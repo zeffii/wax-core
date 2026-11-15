@@ -59,6 +59,7 @@ std::string serializeProject(const Project& project) {
       for (const GraphNode& edited : instrument.graph.nodes) {
         if (edited.id != node.value("id", std::string())) continue;
         if (edited.params.is_object() && (!edited.params.empty() || node.contains("params"))) node["params"] = edited.params;
+        if (edited.placed) { node["x"] = edited.x; node["y"] = edited.y; }
         if (edited.data.is_object() && !(node.contains("data") && node["data"] == edited.data)) node["data"] = edited.data;
       }
     }

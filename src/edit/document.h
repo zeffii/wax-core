@@ -83,6 +83,22 @@ private:
   Json before_, beforeData_;
 };
 
+// Moves a node's tile in the graph view. A drag folds into one undo step. (Positions do not touch the sound.)
+class MoveNode final : public Edit {
+public:
+  MoveNode(std::string instrument, std::string node, double x, double y);
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Move " + node_; }
+  bool absorb(const Edit& next) override;
+
+private:
+  std::string instrument_, node_;
+  double x_, y_;
+  double beforeX_ = 0, beforeY_ = 0;
+  bool beforePlaced_ = false, captured_ = false;
+};
+
 // A DX bank, replaced as a whole (the 4096 bytes of 32 packed voices, as the node's data.bank holds them). While a control is dragged each
 // step folds into the one before, so a drag is a single undo.
 class SetBank final : public Edit {

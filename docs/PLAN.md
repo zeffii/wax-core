@@ -116,3 +116,5 @@ canvas has been clicked. Still to do: drawings of the other nodes (see drawings.
 Test helpers: `wax-app song.wax --null --envelope inst.node --clicks "x,y;x,y" --press "..." --screenshot out.bmp`.
 
 - DX loader window (`app/dx_window`): flat tabs voice / operator / scaling / lfo and pitch, opened from "edit voice" on a dvii node (`--dx inst.node` headless). Edits repack the voice into data.bank (SetBank, live). Still to do: bank tab (load/save .syx, names, search, swap, compare), voice names.
+
+- Graph view (`app/graph_view`): tiles + wires of the lane's instrument above the param panel; click picks the node, drag moves it (MoveNode, saved as x/y). Still to do: connect/disconnect/add/delete nodes (needs an engine graph rebuild), tile shapes by node role from the web, zoom/pan.

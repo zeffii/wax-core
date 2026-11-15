@@ -21,6 +21,7 @@
 #include "app/sequence_view.h"
 #include "app/envelope_window.h"
 #include "app/dx_window.h"
+#include "app/graph_view.h"
 #include "app/mixer_view.h"
 #include "app/param_panel.h"
 #include "app/pattern_view.h"
@@ -87,6 +88,8 @@ struct Session {
   app::MixerState mixer;
   app::EnvelopeWindow envelopes;
   app::DxWindow dx;
+  app::GraphViewState graphView;
+  bool showGraph = true;
   std::string wantLane;                  // a lane the arrangement asked for; its tab opens next frame
   int wantTick = -1;                     // and the cursor goes here
   std::string path;                      // the file this song was opened from, where Ctrl+S saves it
@@ -358,6 +361,10 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   }
   ImGui::EndChild();
   ImGui::Separator();
+  if (!laneInstrument.empty() && session->showGraph) {
+    if (session->panel.instrument != laneInstrument) { session->panel.instrument = laneInstrument; session->panel.node.clear(); }
+    app::drawGraphView(session->graphView, doc, laneInstrument, session->panel.node, 3.6f * ImGui::GetTextLineHeightWithSpacing());
+  }
   if (!laneInstrument.empty() && app::drawParamPanel(session->panel, doc, player.engine(), laneInstrument)) syncParams(doc, player.engine());
   if (!session->panel.drawNode.empty()) { app::showEnvelopes(session->envelopes, laneInstrument, session->panel.drawNode); session->panel.drawNode.clear(); }
   ImGui::Separator();

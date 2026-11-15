@@ -581,6 +581,20 @@ void testBankEdit() {
   std::printf("ok: bank edits\n");
 }
 
+void testMoveNode() {
+  const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
+  wax::Document doc(original);
+  doc.apply(std::make_unique<wax::MoveNode>("lone", "synth", 50, 60));
+  doc.apply(std::make_unique<wax::MoveNode>("lone", "synth", 70, 80), true);
+  const wax::Project reread = wax::parseProject(wax::serializeProject(doc.project()));
+  const wax::GraphNode& n = reread.instruments[1].graph.nodes[0];
+  check(n.placed && n.x == 70 && n.y == 80, "a moved node keeps its place in the saved file");
+  doc.undo();
+  const wax::GraphNode& back = doc.project().instruments[1].graph.nodes[0];
+  check(back.x == original.instruments[1].graph.nodes[0].x && !doc.canUndo(), "a drag is one undo step");
+  std::printf("ok: node moves\n");
+}
+
 void testLevels() {
   const wax::Project song = wax::loadProject(std::string(WAX_TEST_SONGS) + "/jawharp.wax");
   wax::Engine engine(song, 44100);
@@ -629,6 +643,7 @@ void testSetParam() {
 }
 
 int main() {
+  testMoveNode();
   testBankEdit();
   testDrawingEdit();
   testSpline();

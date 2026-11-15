@@ -41,6 +41,7 @@ GraphNode readNode(const Json& n) {
   node.source = text(n, "source");
   node.parts = n.value("parts", Json());
   node.data = n.value("data", Json());
+  if (n.contains("x") && n["x"].is_number() && n.contains("y") && n["y"].is_number()) { node.x = n["x"].get<double>(); node.y = n["y"].get<double>(); node.placed = true; }
   return node;
 }
 

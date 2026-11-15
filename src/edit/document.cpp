@@ -137,6 +137,27 @@ bool SetDrawing::absorb(const Edit& next) {
   return true;
 }
 
+MoveNode::MoveNode(std::string instrument, std::string node, double x, double y)
+    : instrument_(std::move(instrument)), node_(std::move(node)), x_(x), y_(y) {}
+
+void MoveNode::apply(Project& project) {
+  GraphNode& node = findGraphNode(project, instrument_, node_);
+  if (!captured_) { beforeX_ = node.x; beforeY_ = node.y; beforePlaced_ = node.placed; captured_ = true; }
+  node.x = x_; node.y = y_; node.placed = true;
+}
+
+void MoveNode::revert(Project& project) {
+  GraphNode& node = findGraphNode(project, instrument_, node_);
+  node.x = beforeX_; node.y = beforeY_; node.placed = beforePlaced_;
+}
+
+bool MoveNode::absorb(const Edit& next) {
+  const auto* other = dynamic_cast<const MoveNode*>(&next);
+  if (!other || other->instrument_ != instrument_ || other->node_ != node_) return false;
+  x_ = other->x_; y_ = other->y_;
+  return true;
+}
+
 SetBank::SetBank(std::string instrument, std::string node, std::vector<int> bytes, std::string what)
     : instrument_(std::move(instrument)), node_(std::move(node)), what_(std::move(what)), bytes_(std::move(bytes)) {}
 
