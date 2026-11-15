@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <set>
 #include "edit/document.h"
 
 #include <sstream>
@@ -157,6 +159,42 @@ void RemoveLane::apply(Project& project) {
 void RemoveLane::revert(Project& project) {
   if (instrumentAt_ >= 0) project.instruments.insert(project.instruments.begin() + instrumentAt_, instrument_);
   project.lanes.insert(project.lanes.begin() + laneAt_, removed_);
+}
+
+namespace {
+Lane& laneNamed(Project& project, const std::string& id) {
+  for (Lane& l : project.lanes) if (l.id == id) return l;
+  throw std::out_of_range("no lane " + id);
+}
+}  // namespace
+
+void RenamePattern::apply(Project& project) {
+  for (Pattern& p : laneNamed(project, lane_).patterns) if (p.id == pattern_) { old_ = p.name; p.name = name_; return; }
+  throw std::out_of_range("no pattern " + pattern_);
+}
+
+void RenamePattern::revert(Project& project) {
+  for (Pattern& p : laneNamed(project, lane_).patterns) if (p.id == pattern_) p.name = old_;
+}
+
+void ClonePattern::apply(Project& project) {
+  Lane& lane = laneNamed(project, lane_);
+  const Pattern* source = nullptr;
+  for (const Pattern& p : lane.patterns) if (p.id == source_) source = &p;
+  if (!source) throw std::out_of_range("no pattern " + source_);
+  Pattern copy = *source;
+  copy.id = copy_;
+  copy.name += "-copy";
+  std::set<int> used;
+  for (const Pattern& p : lane.patterns) used.insert(p.index);
+  copy.index = 0;
+  while (used.count(copy.index)) copy.index++;
+  lane.patterns.push_back(std::move(copy));
+}
+
+void ClonePattern::revert(Project& project) {
+  std::vector<Pattern>& list = laneNamed(project, lane_).patterns;
+  list.erase(std::remove_if(list.begin(), list.end(), [&](const Pattern& p) { return p.id == copy_; }), list.end());
 }
 
 void PlacePattern::apply(Project& project) {

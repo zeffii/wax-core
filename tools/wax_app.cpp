@@ -528,6 +528,12 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     bool listEdited = false;
     if (listed) editor.setLane(listed->id, player.engine().laneColumns(listed->id));
     if (listed2.create) listEdited |= editor.createPatternHere();
+    if (listed && !listed2.rename.empty()) { doc.apply(std::make_unique<RenamePattern>(listed->id, session->patternList.picked, listed2.rename)); listEdited = true; }
+    if (listed && listed2.clone) {
+      const std::string copyId = "clone-" + std::to_string(static_cast<long long>(ImGui::GetTime() * 1000)) + "-" + std::to_string(doc.revision());
+      doc.apply(std::make_unique<ClonePattern>(listed->id, session->patternList.picked, copyId));
+      session->patternList.picked = copyId; listEdited = true;
+    }
     std::string toPlace = listed2.place;
     if (session->edit && ImGui::IsKeyPressed(ImGuiKey_Space, false) && !ImGui::GetIO().WantTextInput) toPlace = session->patternList.picked;   // Space: the outlined pattern here
     if (!toPlace.empty()) {

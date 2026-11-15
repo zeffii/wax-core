@@ -333,6 +333,32 @@ private:
   Instrument instrument_;
 };
 
+// A pattern under another name.
+class RenamePattern final : public Edit {
+public:
+  RenamePattern(std::string lane, std::string pattern, std::string name) : lane_(std::move(lane)), pattern_(std::move(pattern)), name_(std::move(name)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Rename pattern"; }
+  std::string lane() const override { return lane_; }
+
+private:
+  std::string lane_, pattern_, name_, old_;
+};
+
+// A copy of a pattern (same rows) under a new id, the first free index and the name with "-copy" added. It is not placed.
+class ClonePattern final : public Edit {
+public:
+  ClonePattern(std::string lane, std::string source, std::string copyId) : lane_(std::move(lane)), source_(std::move(source)), copy_(std::move(copyId)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Clone pattern"; }
+  std::string lane() const override { return lane_; }
+
+private:
+  std::string lane_, source_, copy_;
+};
+
 // An existing pattern placed on a lane at a tick (a placement already starting there is replaced; undo puts it back).
 class PlacePattern final : public Edit {
 public:

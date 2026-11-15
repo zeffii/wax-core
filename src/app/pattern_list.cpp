@@ -45,6 +45,13 @@ PatternListResult drawPatternList(PatternListState& state, const Lane* lane, flo
   if (textButton("New")) result.create = true;
   ImGui::SameLine(0, 10 * scale);
   if (textButton("Place") && !state.picked.empty()) result.place = state.picked;
+  ImGui::SameLine(0, 10 * scale);
+  if (textButton("Clone") && !state.picked.empty()) result.clone = true;
+  if (const Pattern* picked = find(lane, state.picked)) {   // the outlined pattern's name, editable
+    if (state.nameFor != picked->id) { std::snprintf(state.name, sizeof state.name, "%s", picked->name.c_str()); state.nameFor = picked->id; }
+    ImGui::SetNextItemWidth(-1);
+    if (ImGui::InputText("##patname", state.name, sizeof state.name, ImGuiInputTextFlags_EnterReturnsTrue) && state.name[0] && picked->name != state.name) result.rename = state.name;
+  }
   ImGui::BeginChild("patlist", ImVec2(0, 0), false, ImGuiWindowFlags_NoNav);
   for (const Pattern& p : lane->patterns) {
     char text[96];

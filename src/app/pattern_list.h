@@ -12,11 +12,15 @@ namespace wax::app {
 struct PatternListState {
   std::string picked;      // the outlined pattern's id
   float width = 190;       // in web pixels
+  char name[32] = {0};     // the rename box
+  std::string nameFor;     // the pattern that text belongs to
 };
 
 struct PatternListResult {
   std::string place;       // a pattern to place at the cursor row ("" none)
   bool create = false;     // New was pressed
+  bool clone = false;      // Clone was pressed (the outlined pattern)
+  std::string rename;      // a new name for the outlined pattern ("" none)
 };
 
 // `lane` may be null (no lane). The list picks the first pattern when `picked` is not one of the lane's.

@@ -812,6 +812,27 @@ void testLaneEdits() {
   std::printf("ok: lane edits\n");
 }
 
+void testPatternRenameClone() {
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax"));
+  const wax::Lane* lane = nullptr;
+  for (const wax::Lane& l : doc.project().lanes) if (!l.patterns.empty()) { lane = &l; break; }
+  check(lane != nullptr, "a lane with patterns");
+  const std::string laneId = lane->id, pat = lane->patterns.front().id, oldName = lane->patterns.front().name;
+  const std::size_t count = lane->patterns.size();
+  doc.apply(std::make_unique<wax::RenamePattern>(laneId, pat, "newname"));
+  check(doc.project().lanes[0].id.size() > 0, "project still there");
+  const auto nameOf = [&] { for (const wax::Lane& l : doc.project().lanes) if (l.id == laneId) for (const wax::Pattern& p : l.patterns) if (p.id == pat) return p.name; return std::string(); };
+  check(nameOf() == "newname", "pattern renamed");
+  doc.undo();
+  check(nameOf() == oldName, "rename undone");
+  doc.apply(std::make_unique<wax::ClonePattern>(laneId, pat, "the-copy"));
+  const auto sizeOf = [&] { for (const wax::Lane& l : doc.project().lanes) if (l.id == laneId) return l.patterns.size(); return std::size_t(0); };
+  check(sizeOf() == count + 1, "pattern cloned");
+  doc.undo();
+  check(sizeOf() == count, "clone undone");
+  std::printf("ok: pattern rename and clone\n");
+}
+
 void testMoveNode() {
   const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
   wax::Document doc(original);
@@ -880,6 +901,7 @@ int main() {
   testPlacePattern();
   testAddInstrument();
   testLaneEdits();
+  testPatternRenameClone();
   testAddNode();
   testUnits();
   testRewire();
