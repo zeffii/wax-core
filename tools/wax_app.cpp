@@ -1041,14 +1041,15 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (session->edit) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kWarm), "EDIT");
     else ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Enter: edit");
     ImGui::SameLine(0, 14 * scale);
-    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "%s  tick %d  octave %d", selectedLane.c_str(), editor.tick(), octave);
+    if (session->screen == Screen::Song) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "%s", app::describeSongCursor(doc.project(), selectedLane, editor.tick()).c_str());
+    else ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "%s  tick %d  octave %d", selectedLane.c_str(), editor.tick(), octave);
     ImGui::SameLine(0, 14 * scale);
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "undo: %s  redo: %s", doc.canUndo() ? doc.undoLabel().c_str() : "-", doc.canRedo() ? doc.redoLabel().c_str() : "-");
     if (!session->editStatus.empty()) {
       ImGui::SameLine(0, 14 * scale);
       ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kWarm), "%s", session->editStatus.c_str());
     }
-    ImGui::SameLine(std::max(ImGui::GetCursorPosX() + 20 * scale, ImGui::GetWindowWidth() - 520 * scale));
+    ImGui::SameLine(std::max(ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x + 20 * scale, ImGui::GetWindowWidth() - 520 * scale));   // (to the right of what was written, or at the right edge)
     if (session->audio) {
       const double load = session->audio->load();
       ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(load > 0.7 ? app::kWarm : app::kDimText), "cpu %.0f%%  late %ld", 100 * load, session->audio->lateBuffers());

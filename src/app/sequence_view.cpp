@@ -3,8 +3,10 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <vector>
 
 #include "app/pattern_colour.h"
+#include "app/config.h"
 #include "app/theme.h"
 
 namespace wax::app {
@@ -32,9 +34,42 @@ const Pattern* patternOf(const Lane& lane, const std::string& id) {
   return nullptr;
 }
 
-int rowTicks(const Song& song) { return std::max(1, song.beatsPerBar * song.ticksPerBeat); }
+// The row sizes on offer: the divisors of a bar that are at least a beat, biggest first (16, 8, 4 for 4/4 at 4 ticks a beat).
+std::vector<int> rowSizes(const Song& song) {
+  const int bar = std::max(1, song.beatsPerBar * song.ticksPerBeat), beat = std::min(bar, std::max(1, song.ticksPerBeat));
+  std::vector<int> sizes;
+  for (int d = bar; d >= beat; d--) if (bar % d == 0) sizes.push_back(d);
+  return sizes;
+}
+
+// The row size in use: the one the user zoomed to (Ctrl+wheel), a bar when that size does not fit this song.
+int rowTicks(const Song& song) {
+  const std::vector<int> sizes = rowSizes(song);
+  return std::find(sizes.begin(), sizes.end(), settings().arrangementRow) != sizes.end() ? settings().arrangementRow : sizes.front();
+}
 
 }  // namespace
+
+std::string describeSongCursor(const Project& project, const std::string& laneId, int tick) {
+  const int cell = rowTicks(project.song);
+  const int rows = std::max(1, (project.song.length + cell - 1) / cell);
+  const int rowStart = tick / cell * cell;
+  const int laneIndex = static_cast<int>(std::find_if(project.lanes.begin(), project.lanes.end(), [&](const Lane& l) { return l.id == laneId; }) - project.lanes.begin());
+  if (laneIndex >= static_cast<int>(project.lanes.size())) return std::string();
+  const Lane& lane = project.lanes[static_cast<std::size_t>(laneIndex)];
+  std::string text = "lane " + std::to_string(laneIndex + 1) + "/" + std::to_string(project.lanes.size()) + " " + lane.id +
+                     " \xc2\xb7 row " + std::to_string(tick / cell + 1) + "/" + std::to_string(rows) + " \xc2\xb7 tick " + std::to_string(rowStart) + " \xc2\xb7 ";
+  const Placement* shown = nullptr;   // the pattern that starts inside the row, else the one covering it
+  for (const Placement& p : lane.placements) if (p.start >= rowStart && p.start < rowStart + cell && (!shown || p.start < shown->start)) shown = &p;
+  if (!shown) shown = placementAt(lane, rowStart);
+  const Pattern* pattern = shown ? patternOf(lane, shown->pattern) : nullptr;
+  if (!pattern) return text + "no pattern";
+  int used = 0;
+  for (const Placement& p : lane.placements) used += p.pattern == pattern->id;
+  char index[8];
+  std::snprintf(index, sizeof index, "%02X", pattern->index);
+  return text + index + " \"" + pattern->name + "\" used " + std::to_string(used) + "x in this lane";
+}
 
 float sequenceWidth(const Project& project) {
   const float scale = ImGui::GetStyle().FontScaleDpi;
@@ -46,6 +81,12 @@ float sequenceWidth(const Project& project) {
 SequenceClick drawSequenceView(const Project& project, const std::string& selectedLane, int playTick, int cursorTick, bool follow) {
   SequenceClick result;
   const float scale = ImGui::GetStyle().FontScaleDpi;
+  if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::GetIO().KeyCtrl && ImGui::GetIO().MouseWheel != 0) {   // Ctrl+wheel: the size of a row, a step a notch
+    const std::vector<int> sizes = rowSizes(project.song);
+    const int at = static_cast<int>(std::find(sizes.begin(), sizes.end(), rowTicks(project.song)) - sizes.begin());
+    const int next = std::clamp(at + (ImGui::GetIO().MouseWheel > 0 ? 1 : -1), 0, static_cast<int>(sizes.size()) - 1);
+    if (next != at) { settings().arrangementRow = sizes[static_cast<std::size_t>(next)]; saveSettings(); }
+  }
   const int cell = rowTicks(project.song);
   const int rows = std::max(1, (project.song.length + cell - 1) / cell);
   const float rowHeight = ImGui::GetTextLineHeight() + 2 * scale;
