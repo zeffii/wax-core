@@ -34,6 +34,7 @@
 #include "app/curve_view.h"
 #include "app/dx_window.h"
 #include "app/gate_window.h"
+#include "app/shape_window.h"
 #include "app/graph_view.h"
 #include "app/machine_tree.h"
 #include "app/machines.h"
@@ -130,6 +131,7 @@ struct Session {
   app::DxWindow dx;
   app::GraphViewState graphView;
   app::GateWindow gate;
+  app::ShapeWindow shape;
   app::PatternListState patternList;     // the Song screen's pattern list
   char laneName[40] = {0};               // the rename box on the Song screen
   std::string laneNameFor;               // the lane that text belongs to
@@ -1349,6 +1351,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   }
   if (app::drawEnvelopeWindow(session->envelopes, doc, player.engine())) syncData(doc, player.engine());
   app::drawNodeHelp(session->nodeHelp);
+  if (!session->panel.shapeNode.empty()) { app::showShape(session->shape, laneInstrument, session->panel.shapeNode); session->panel.shapeNode.clear(); }
+  if (app::drawShapeWindow(session->shape, doc)) syncData(doc, player.engine());
   if (!session->panel.gateNode.empty()) { app::showGate(session->gate, laneInstrument, session->panel.gateNode); session->panel.gateNode.clear(); }
   if (app::drawGateWindow(session->gate, doc, player.engine())) syncData(doc, player.engine());
   if (!session->panel.dxNode.empty()) { app::showDx(session->dx, laneInstrument, session->panel.dxNode); session->panel.dxNode.clear(); }

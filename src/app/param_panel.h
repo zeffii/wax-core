@@ -25,6 +25,7 @@ struct ParamPanelState {
   std::string instrument;   // the instrument the node choice belongs to
   std::string node;         // the node picked ("" = the first one with parameters)
   std::string drawNode;     // set when the user asked to draw this node's envelopes (the caller opens the window and clears it)
+  std::string shapeNode;    // set when the user asked to draw this node's wave or curve
   std::string gateNode;     // set when the user asked for the step levels of this node (gate, arpeggiator)
   std::string dxNode;       // set when the user asked for the DX loader of this node
   bool dragging = false;    // a drag is in progress: its steps are one undo
