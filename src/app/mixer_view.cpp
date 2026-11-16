@@ -127,7 +127,7 @@ void drawScale(float trackTop, float trackHeight, float scale) {
   for (const int db : kMajorDb) {
     const float y = trackTop + trackHeight * static_cast<float>(1 - posOfDb(db));
     char text[8];
-    std::snprintf(text, sizeof text, db > 0 ? "+%d" : "%d", db);
+    std::snprintf(text, sizeof text, db > 0 ? "+%d" : db == 0 ? " %d" : "%d", db);   // (a space before the 0, so the first digits line up)
     draw->AddText(ImVec2(at.x + 2 * scale, y - ImGui::GetTextLineHeight() * 0.5f), kDimText, text);
   }
 }

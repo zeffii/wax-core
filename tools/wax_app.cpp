@@ -80,6 +80,7 @@ struct DialogAnswer {
 };
 DialogAnswer gAnswer;
 enum class DialogRequest { None, Open, SaveAs, Export, New };
+std::string gOpenRecent;   // a song the File menu's recent list asked to open
 std::string gOpenBackup;   // a snapshot the File menu asked to open (the main loop does it: it replaces the session)
 DialogRequest gRequest = DialogRequest::None;   // set by the keys, carried out by the main loop (it has the window)
 
@@ -370,6 +371,21 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       if (app::textButton("Save as...  Ctrl+Shift+S")) { gRequest = DialogRequest::SaveAs; ImGui::CloseCurrentPopup(); }
       if (app::textButton("Export WAV...")) { gRequest = DialogRequest::Export; ImGui::CloseCurrentPopup(); }
       if (app::textButton("Backups...")) { ImGui::CloseCurrentPopup(); session->backupsOpen = true; }
+      if (!app::settings().recentFiles.empty()) {   // the recent songs; one that has moved shows dim (opening it only warns)
+        ImGui::Separator();
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Recent");
+        for (const std::string& file : app::settings().recentFiles) {
+          std::error_code ignored;
+          const bool there = std::filesystem::exists(std::filesystem::u8path(file), ignored);
+          const std::string name = std::filesystem::u8path(file).filename().generic_string();
+          ImGui::PushID(file.c_str());
+          if (!there) ImGui::PushStyleColor(ImGuiCol_Text, app::kDimText);
+          if (app::textButton((there ? name : name + "  (moved?)").c_str())) { gOpenRecent = file; ImGui::CloseCurrentPopup(); }
+          if (!there) ImGui::PopStyleColor();
+          ImGui::PopID();
+          if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", file.c_str());
+        }
+      }
       ImGui::EndPopup();
     }
     ImGui::SameLine(0, 18 * hs);
@@ -530,6 +546,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       else try {
         saveProject(doc.project(), session->path);
         doc.markSaved();
+        app::rememberRecent(session->path);
         session->editStatus = "saved " + session->path;
       } catch (const std::exception& e) {
         session->editStatus = e.what();
@@ -1585,6 +1602,7 @@ int main(int argc, char** argv) {
       std::string title = "Wax - " + session->project.song.name;
       SDL_SetWindowTitle(window, title.c_str());
       status.clear();
+      app::rememberRecent(path);
     } catch (const std::exception& e) {
       status = std::string("Could not open ") + path + ": " + e.what();
       SDL_SetWindowTitle(window, "Wax");
@@ -1635,6 +1653,16 @@ int main(int argc, char** argv) {
       open(file);
       if (session) { session->path.clear(); SDL_SetWindowTitle(window, ("Wax - " + session->project.song.name + " (backup)").c_str()); }
     }
+    if (!gOpenRecent.empty()) {   // a song from the recent list: if it has moved since it was saved that is a warning, not an error
+      const std::string file = gOpenRecent;
+      gOpenRecent.clear();
+      std::error_code ignored;
+      if (!std::filesystem::exists(std::filesystem::u8path(file), ignored)) {
+        const std::string warning = "Warning: " + file + " is not there any more (moved, renamed or deleted since it was last saved). Use File > Open to find it";
+        if (session) session->editStatus = warning; else status = warning;
+      }
+      else open(file);
+    }
     if (gRequest == DialogRequest::New) {   // start over with an empty song (the old one is replaced: unsaved changes are lost)
       gRequest = DialogRequest::None;
       {
@@ -1673,6 +1701,7 @@ int main(int argc, char** argv) {
             saveProject(session->doc->project(), chosen);
             session->path = chosen;
             session->doc->markSaved();
+            app::rememberRecent(chosen);
             session->editStatus = "saved " + chosen;
           } catch (const std::exception& e) {
             session->editStatus = e.what();

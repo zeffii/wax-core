@@ -3,6 +3,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "imgui.h"
 
@@ -40,6 +41,8 @@ struct Settings {
   // automatic backups (the web's backupOn, backupMinutes, backupKeep)
   bool backupOn = true;
   int backupMinutes = 3, backupKeep = 30;
+  std::vector<std::string> recentFiles;   // the File menu's recent songs, newest first (at most kRecentMax)
+  static constexpr int kRecentMax = 10;
   int arrangementRow = 0;   // the Song screen's row size in ticks (Ctrl+wheel); 0: a bar
 };
 
@@ -47,5 +50,6 @@ Settings& settings();
 void loadSettings();
 void saveSettings();
 void resetSettings();
+void rememberRecent(const std::string& path);   // puts a song at the top of the recent list and saves the settings
 
 }  // namespace wax::app

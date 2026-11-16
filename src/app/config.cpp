@@ -78,6 +78,9 @@ void loadSettings() {
   const std::string hex = data.value("hexMode", s.hexMode);
   if (hex == "both" || hex == "relative" || hex == "absolute") s.hexMode = hex;
   s.sampleAskMB = std::clamp(data.value("sampleAskMB", s.sampleAskMB), 1, 2000);
+  s.recentFiles.clear();
+  if (data.contains("recentFiles") && data["recentFiles"].is_array())
+    for (const Json& f : data["recentFiles"]) if (f.is_string() && (int)s.recentFiles.size() < Settings::kRecentMax) s.recentFiles.push_back(f.get<std::string>());
 }
 
 void saveSettings() {
@@ -87,10 +90,23 @@ void saveSettings() {
   Json data = {{"wireAudio", hexOf(s.wireAudio)}, {"wireControl", hexOf(s.wireControl)}, {"wireStereo", hexOf(s.wireStereo)},
                {"wireParam", hexOf(s.wireParam)}, {"wireDashed", s.wireDashed}, {"playhead", s.playhead}, {"follow", s.follow}, {"arrangementRow", s.arrangementRow}, {"insertCut", s.insertCut}, {"patternAll", s.patternAll}, {"hideEmpty", s.hideEmpty}, {"patternText", s.patternText}, {"notePreview", s.notePreview}, {"tintPatterns", s.tintPatterns},
                {"backupOn", s.backupOn}, {"backupMinutes", s.backupMinutes}, {"backupKeep", s.backupKeep}, {"rowWrap", s.rowWrap}, {"graphPullOut", s.graphPullOut}, {"threads", s.threads}, {"laneWrap", s.laneWrap}, {"sliceSensitivity", s.sliceSensitivity}, {"sliceMinGap", s.sliceMinGap}, {"sliceReplace", s.sliceReplace}, {"sliceWhole", s.sliceWhole},
-               {"waveHideLoop", s.waveHideLoop}, {"waveHideSel", s.waveHideSel}, {"waveHideSus", s.waveHideSus}, {"hexMode", s.hexMode}, {"sampleAskMB", s.sampleAskMB}};
+               {"waveHideLoop", s.waveHideLoop}, {"waveHideSel", s.waveHideSel}, {"waveHideSus", s.waveHideSus}, {"hexMode", s.hexMode}, {"sampleAskMB", s.sampleAskMB}, {"recentFiles", s.recentFiles}};
   std::ofstream(path, std::ios::trunc) << data.dump(1) << "\n";
 }
 
-void resetSettings() { gSettings = Settings(); }
+void resetSettings() {
+  const std::vector<std::string> recent = gSettings.recentFiles;   // (a reset of the settings keeps the history of songs)
+  gSettings = Settings();
+  gSettings.recentFiles = recent;
+}
+
+void rememberRecent(const std::string& path) {
+  if (path.empty()) return;
+  std::vector<std::string>& list = gSettings.recentFiles;
+  list.erase(std::remove(list.begin(), list.end(), path), list.end());
+  list.insert(list.begin(), path);
+  if ((int)list.size() > Settings::kRecentMax) list.resize(Settings::kRecentMax);
+  saveSettings();
+}
 
 }  // namespace wax::app
