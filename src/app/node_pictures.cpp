@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "app/theme.h"
+#include "nodes/kalcore.h"
 #include "nodes/membrane_view.h"
 #include "project/sample_edit.h"
 #include "nodes/spacecore.h"
@@ -506,9 +507,80 @@ void drawGranular(ImDrawList* dl, ImFont* font, const GraphNode& node, const Nod
   track("spread", cy + 28 * scale, spread < 0.01 ? "centre" : std::to_string(static_cast<int>(std::lround(spread * 100))) + "% of the width", 0.5 - spread / 2, 0.5 + spread / 2);
 }
 
+// ---- kaleidoscope: the band the node takes and where its copies go (the spectra are not drawn: they need the live sound) ----
+
+void drawKaleidoscope(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale, ResponseHandles& handles) {
+  constexpr double kFMin = 27.5, kFMax = 14080;
+  const double lo = std::log2(kFMin), hi = std::log2(kFMax);
+  const float pad = 14 * scale, panelH = 78 * scale, x0 = f.x0 + pad, pw = f.w - 2 * pad;
+  const auto X = [&](double octave) { return x0 + static_cast<float>((octave - lo) / (hi - lo)) * pw; };
+  const kal::Band band = kal::bandOf(valueOf(node, type, "low"), valueOf(node, type, "high"));
+  const int mode = static_cast<int>(std::lround(valueOf(node, type, "mode"))), copies = static_cast<int>(std::lround(valueOf(node, type, "copies")));
+  const double rotate = valueOf(node, type, "rotate");
+  const float yIn = f.y0 + 34 * scale, yOut = yIn + panelH + 40 * scale;
+  const auto panel = [&](float y, const char* title) {
+    dl->AddText(font, f.size, ImVec2(x0, y - 15 * scale), textAlpha(160), title);
+    for (int o = static_cast<int>(std::ceil(lo)); o <= hi; o++) dl->AddLine(ImVec2(std::round(X(o)) + 0.5f, y), ImVec2(std::round(X(o)) + 0.5f, y + panelH), textAlpha(30));
+    dl->AddLine(ImVec2(x0, y + panelH + 0.5f), ImVec2(x0 + pw, y + panelH + 0.5f), textAlpha(90));
+    static const std::pair<double, const char*> labels[] = {{55, "55"}, {110, "110"}, {220, "220"}, {440, "440"}, {880, "880"}, {1760, "1.8k"}, {3520, "3.5k"}, {7040, "7k"}, {14080, "14k"}};
+    for (const auto& [hz, text] : labels) {
+      const float x = X(std::log2(hz)), w = ImGui::CalcTextSize(text).x * f.size / ImGui::GetFontSize();
+      dl->AddText(font, f.size * 0.85f, ImVec2(x - w * 0.425f, y + panelH + 3 * scale), textAlpha(120), text);
+    }
+  };
+  panel(yIn, "BAND  (drag its ends, or the band)");
+  const float bx0 = X(band.b0), bx1 = X(band.b0 + band.width);
+  dl->AddRectFilled(ImVec2(bx0, yIn), ImVec2(bx1, yIn + panelH), withAlpha(kPink, 36));
+  for (const float x : {bx0, bx1}) {
+    dl->AddLine(ImVec2(std::round(x) + 0.5f, yIn), ImVec2(std::round(x) + 0.5f, yIn + panelH), kPink, 1.5f);
+    dl->AddRectFilled(ImVec2(std::round(x) - 4 * scale, yIn - 4 * scale), ImVec2(std::round(x) + 4 * scale, yIn + 4 * scale), kPink);
+  }
+  handles.list.push_back({node.id, "@kallow", 0, ImVec2(bx0, yIn), x0, yIn, pw, panelH});
+  handles.list.push_back({node.id, "@kalhigh", 0, ImVec2(bx1, yIn), x0, yIn, pw, panelH});
+  handles.list.push_back({node.id, "@kalmove", 0, ImVec2((bx0 + bx1) / 2, yIn + panelH / 2), x0, yIn, pw, panelH});
+
+  panel(yOut, mode == 0 ? "OUTPUT  (the band arrayed, every second copy mirrored)" : mode == 1 ? "OUTPUT  (the band repeated)" : "OUTPUT  (the band copied to its overtones and undertones)");
+  if (mode == 2) {
+    const double stretch = valueOf(node, type, "stretch"), decay = valueOf(node, type, "decay");
+    const int up = static_cast<int>(std::lround(valueOf(node, type, "overtones"))), down = static_cast<int>(std::lround(valueOf(node, type, "under")));
+    for (int k = -down; k <= up; k++) {
+      const double a = band.b0 + std::log2(kal::overtoneRatio(k, stretch)), b = a + band.width, g = kal::overtoneGain(k, decay);
+      if (b < lo || a > hi) continue;
+      const float xa = std::max(x0, X(a)), xb = std::min(x0 + pw, X(b));
+      if (xb <= xa) continue;
+      dl->AddRectFilled(ImVec2(xa, yOut), ImVec2(xb, yOut + panelH), withAlpha(kPink, static_cast<int>(26 * g + 4)));
+      if (a > lo) dl->AddLine(ImVec2(std::round(xa) + 0.5f, yOut), ImVec2(std::round(xa) + 0.5f, yOut + panelH), withAlpha(kPink, static_cast<int>(50 + 130 * g)));
+      char name[8] = "";
+      if (k == 0) std::snprintf(name, sizeof name, "source"); else if (k == -1) std::snprintf(name, sizeof name, "x1/2"); else if (k > 0 && k < 7) std::snprintf(name, sizeof name, "x%d", k + 1);
+      if (name[0] && a > lo) dl->AddText(font, f.size * 0.9f, ImVec2(xa + 3 * scale, yOut + 3 * scale), kPink, name);
+    }
+  } else {
+    const int first = static_cast<int>(std::floor((lo - band.b0 - rotate * band.width) / band.width)), last = static_cast<int>(std::ceil((hi - band.b0 - rotate * band.width) / band.width));
+    for (int k = first; k <= last; k++) {
+      if (copies > 0 && std::abs(k) > copies) continue;
+      const double a = band.b0 + rotate * band.width + k * band.width, b = a + band.width;
+      const float xa = std::max(x0, X(a)), xb = std::min(x0 + pw, X(b));
+      if (xb <= xa) continue;
+      const bool flipped = mode == 0 && ((k % 2) + 2) % 2 == 1;
+      if (flipped) dl->AddRectFilled(ImVec2(xa, yOut), ImVec2(xb, yOut + panelH), withAlpha(kPink, 24));
+      for (const double o : {a, b}) if (o > lo && o < hi) dl->AddLine(ImVec2(std::round(X(o)) + 0.5f, yOut), ImVec2(std::round(X(o)) + 0.5f, yOut + panelH), withAlpha(kPink, 150));
+      if (xb - xa > 56 * scale) {
+        const char* name = k == 0 ? "source" : flipped ? "< flipped" : "copy";
+        const float w = ImGui::CalcTextSize(name).x * f.size / ImGui::GetFontSize();
+        dl->AddText(font, f.size * 0.9f, ImVec2((xa + xb) / 2 - w / 2, yOut + panelH - 16 * scale), kPink, name);
+      }
+    }
+  }
+  const auto hz = [](double v) { char t[24]; if (v >= 1000) std::snprintf(t, sizeof t, "%.2f kHz", v / 1000); else std::snprintf(t, sizeof t, "%d Hz", static_cast<int>(std::lround(v))); return std::string(t); };
+  char text[160];
+  if (mode == 2) std::snprintf(text, sizeof text, "band %s - %s (%.2f oct)   overtones: %d up, %d down", hz(band.lo).c_str(), hz(band.hi).c_str(), band.width, static_cast<int>(std::lround(valueOf(node, type, "overtones"))), static_cast<int>(std::lround(valueOf(node, type, "under"))));
+  else std::snprintf(text, sizeof text, "band %s - %s (%.2f oct)   copies: %s", hz(band.lo).c_str(), hz(band.hi).c_str(), band.width, copies == 0 ? "fill" : std::to_string(copies).c_str());
+  dl->AddText(font, f.size, ImVec2(f.x0 + 8 * scale, f.y0 + f.h - 16 * scale), textAlpha(190), text);
+}
+
 }  // namespace
 
-bool hasPicture(const std::string& nodeType) { return nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu" || nodeType == "membrane" || nodeType == "granular"; }
+bool hasPicture(const std::string& nodeType) { return nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu" || nodeType == "membrane" || nodeType == "granular" || nodeType == "kaleidoscope"; }
 
 float drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, ImVec2 tileMin, ImVec2 tileMax, ImVec2 areaMin, ImVec2 areaMax, float scale, const PictureTiming& timing, ResponseHandles& handles) {
   gBelow = 0;
@@ -520,6 +592,7 @@ float drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const
   else if (node.type == "membrane") drawMembrane(dl, font, node, type, frameFor(dl, font, node.id + " membrane", 360, 196, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "khufu") drawKhufu(dl, font, node, type, frameFor(dl, font, node.id + " registers", 310, 150, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "rotary") drawRotary(dl, font, node, type, frameFor(dl, font, node.id + " cabinet", 300, 190, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
+  else if (node.type == "kaleidoscope") drawKaleidoscope(dl, font, node, type, frameFor(dl, font, node.id + " band", 460, 270, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   return gBelow;
 }
 
@@ -534,6 +607,16 @@ std::vector<std::pair<std::string, double>> dragPictureHandle(const ResponseHand
   if (handle.param == "@size") {   // the corner: pixels per metre is the plan's width over the room's width
     const double k = handle.gw / std::max(0.1, valueOf(node, type, "width"));
     return {{"width", clampTo("width", std::round((at.x - handle.gx) / k * 2) / 2)}, {"depth", clampTo("depth", std::round((at.y - handle.gy) / k * 2) / 2)}};
+  }
+  if (handle.param.rfind("@kal", 0) == 0) {   // an end of the band, or the band as a whole (its width stays); the picture spans 27.5 Hz to 14 kHz
+    const double lo = std::log2(27.5), hi = std::log2(14080), octave = lo + fx * (hi - lo);
+    const kal::Band band = kal::bandOf(valueOf(node, type, "low"), valueOf(node, type, "high"));
+    double b0 = band.b0, b1 = band.b0 + band.width;
+    const double lowest = std::log2(kal::kLowMin), highest = std::log2(kal::kHighMax);
+    if (handle.param == "@kallow") b0 = std::min(b1 - 0.34, std::max(lowest, octave));
+    else if (handle.param == "@kalhigh") b1 = std::max(b0 + 0.34, std::min(highest, octave));
+    else { const double shift = std::max(lowest - b0, std::min(highest - b1, octave - (b0 + b1) / 2)); b0 += shift; b1 += shift; }
+    return {{"low", clampTo("low", std::round(std::pow(2.0, b0)))}, {"high", clampTo("high", std::round(std::pow(2.0, b1)))}};
   }
   if (handle.param.rfind("@mode", 0) == 0) { pickedModes()[node.id] = handle.param.substr(5); return {}; }
   if (handle.param.rfind("@speed", 0) == 0) return {{"speed", static_cast<double>(handle.param.back() - '0')}};

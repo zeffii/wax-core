@@ -237,3 +237,4 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 - Granular picture: the sample (waveform, position, the spray band, a scan arrow), the grains (shape, density, overlap) and the cloud (pitch, reverse, spread). A node with a picture and envelopes (granular) shows the envelopes under the picture. Still to do among the parameter-only views: kaleidoscope, the drum machines, hat2, sympathy (live), compass pad and wave sequences, pulsar.
 - Double-click on empty graph space opens the add-node menu (as the web app).
 - File > Recent: the last 10 songs (opened or saved), kept in the settings; one that has moved shows dim and opening it only warns in the status bar. Mixer dB scale: a space before the 0 so first digits align.
+- Kaleidoscope picture (band with draggable ends and body; output tiles/overtones; no live spectra). File > Recent is now a submenu.

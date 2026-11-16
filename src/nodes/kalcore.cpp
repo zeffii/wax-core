@@ -7,7 +7,6 @@
 #include "nodes/shared_dsp.h"
 
 namespace wax::kal {
-namespace {
 
 // The multiple of the frequency that copy k of the overtone mode lands on: k = 0 is the source (x1), k = 1 is x2, ...
 // and k = -1 is x1/2, ... `stretch` (0 to 1) moves the multiples off the whole numbers.
@@ -18,6 +17,8 @@ double overtoneRatio(int k, double stretch) {
 
 // How loud copy k of the overtone mode is, 1 for the source.
 double overtoneGain(int k, double decay) { return js::pow(std::abs(k) + 1, -2 * decay); }
+
+namespace {
 
 // A windowed (periodic Hann) sinusoid's spectrum near its frequency: the weight at distance d bins from it, times n.
 double lobe(double d) {

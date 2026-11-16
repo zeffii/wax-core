@@ -371,20 +371,19 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       if (app::textButton("Save as...  Ctrl+Shift+S")) { gRequest = DialogRequest::SaveAs; ImGui::CloseCurrentPopup(); }
       if (app::textButton("Export WAV...")) { gRequest = DialogRequest::Export; ImGui::CloseCurrentPopup(); }
       if (app::textButton("Backups...")) { ImGui::CloseCurrentPopup(); session->backupsOpen = true; }
-      if (!app::settings().recentFiles.empty()) {   // the recent songs; one that has moved shows dim (opening it only warns)
-        ImGui::Separator();
-        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Recent");
+      if (!app::settings().recentFiles.empty() && ImGui::BeginMenu("Recent")) {   // the recent songs, a submenu; one that has moved shows dim (opening it only warns)
         for (const std::string& file : app::settings().recentFiles) {
           std::error_code ignored;
           const bool there = std::filesystem::exists(std::filesystem::u8path(file), ignored);
           const std::string name = std::filesystem::u8path(file).filename().generic_string();
           ImGui::PushID(file.c_str());
           if (!there) ImGui::PushStyleColor(ImGuiCol_Text, app::kDimText);
-          if (app::textButton((there ? name : name + "  (moved?)").c_str())) { gOpenRecent = file; ImGui::CloseCurrentPopup(); }
+          if (ImGui::MenuItem((there ? name : name + "  (moved?)").c_str())) { gOpenRecent = file; ImGui::CloseCurrentPopup(); }
           if (!there) ImGui::PopStyleColor();
-          ImGui::PopID();
           if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", file.c_str());
+          ImGui::PopID();
         }
+        ImGui::EndMenu();
       }
       ImGui::EndPopup();
     }

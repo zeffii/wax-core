@@ -15,6 +15,10 @@ inline constexpr int kTiles = 34;   // tiles either side of the source that are 
 struct Band { double lo, hi, b0, width; };
 Band bandOf(double low, double high);
 
+// The multiple of a tone's frequency that copy k of the overtone mode lands on (k = 0: x1, k = 1: x2, k = -1: x1/2), and the copy's loudness.
+double overtoneRatio(int k, double stretch);
+double overtoneGain(int k, double decay);
+
 struct Settings {
   double low, high;
   int mode;        // 0 mirror, 1 repeat, 2 overtone
