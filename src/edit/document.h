@@ -885,6 +885,22 @@ private:
   std::vector<Placement> replaced_;
 };
 
+// A lane's patterns, placements, mutes and note-offs replaced as a whole: the arrangement edits of seq/sequence_ops.h (clone, slice, merge,
+// resize, move, remove, shift, recolour, mutes) work on a copy of the lane and hand the result here as one undo step.
+class SetLaneSequence final : public Edit {
+public:
+  SetLaneSequence(const Lane& after, std::string label);
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return label_; }
+  std::string lane() const override { return lane_; }
+
+private:
+  struct Sequence { std::vector<Pattern> patterns; std::vector<Placement> placements; std::vector<int> mutes, offs; };
+  std::string lane_, label_;
+  Sequence after_, before_;
+};
+
 // Puts blank text in a row's place and pushes the rows below it down one; the last row falls off the end (it comes back on undo).
 class InsertRow final : public Edit {
 public:

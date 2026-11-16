@@ -166,6 +166,7 @@ add_library(waxcore
   src/nodes/drawings.cpp
   src/edit/sync.cpp
   src/edit/cell_editor.cpp
+  src/edit/sequence_ops.cpp
   src/nodes/sweep.cpp
   src/nodes/exciter.cpp
   src/nodes/cardinal.cpp

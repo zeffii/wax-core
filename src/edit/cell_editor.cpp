@@ -128,6 +128,12 @@ bool CellEditor::placePatternHere(const std::string& patternId) {
   return false;
 }
 
+std::string CellEditor::blankRowText() const {
+  std::string blank;
+  for (std::size_t i = 0; i < columns_.size(); i++) blank += (i ? " " : "") + tokenBlank(columns_[i].token);
+  return blank;
+}
+
 bool CellEditor::createPatternHere() {
   const Project& project = document_.project();
   const Lane* lane = nullptr;

@@ -131,6 +131,7 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
         const std::vector<std::string>& cells = (*lane.rows)[static_cast<std::size_t>(tick)];
         const int laneColumns = static_cast<int>(lane.labels->size());
         const ImU32 patternTint = static_cast<std::size_t>(tick) < lane.tint.size() ? lane.tint[static_cast<std::size_t>(tick)] : 0;
+        const unsigned char marks = static_cast<std::size_t>(tick) < lane.marks.size() ? lane.marks[static_cast<std::size_t>(tick)] : 0;
         const bool cursorLane = static_cast<int>(li) == cursor.lane;
         bool laneStarted = false;
         for (int c = 0; c < laneColumns; c++) {
@@ -152,9 +153,19 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
             if (cursor.scrollTo) ImGui::SetScrollHereY(0.5f);
           }
           const bool filled = c < static_cast<int>(cells.size());
+          if (marks & (PatternLane::kStart | PatternLane::kEnd)) {   // a thin line where a pattern starts (above its first row) and ends (under its last)
+            const ImVec2 at = ImGui::GetCursorScreenPos();
+            const float wide = ImGui::GetContentRegionAvail().x + charWidth, y0 = at.y - ImGui::GetStyle().CellPadding.y;
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            if (marks & PatternLane::kStart) dl->AddLine(ImVec2(at.x - charWidth / 2, y0), ImVec2(at.x - charWidth / 2 + wide, y0), dimAlpha(110));
+            if (marks & PatternLane::kEnd) dl->AddLine(ImVec2(at.x - charWidth / 2, y0 + rowHeight), ImVec2(at.x - charWidth / 2 + wide, y0 + rowHeight), dimAlpha(110));
+          }
+          const bool dimmed = (marks & PatternLane::kDim) != 0;
+          if (dimmed) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(withAlpha(kText, 105)));   // the other patterns step back
           ImGui::PushID(tick * 4096 + firstColumn[li] + c);
           if (ImGui::Selectable(filled ? cells[static_cast<std::size_t>(c)].c_str() : "   ", false, ImGuiSelectableFlags_None)) { result.cellTick = tick; result.cell = c; result.lane = static_cast<int>(li); }
           ImGui::PopID();
+          if (dimmed) ImGui::PopStyleColor();
         }
       }
     }

@@ -30,6 +30,7 @@ public:
 
   // Where the cursor may go. Moving ends a half-typed cell.
   void moveTo(int tick, int cell);
+  std::string blankRowText() const;   // a row of the lane's columns with every cell empty
   bool patternHere() const { return placeAt(tick_).pattern != nullptr; }   // a pattern plays at the cursor's row
   void move(int rows, int cells);
   // Up and Down wrap round the first and last row of the song (off: the cursor stops there).

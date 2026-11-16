@@ -14,6 +14,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <exception>
+#include <functional>
 #include <future>
 #include <fstream>
 #include <map>
@@ -25,6 +26,7 @@
 #include <vector>
 
 #include "app/sequence_view.h"
+#include "edit/sequence_ops.h"
 #include "app/envelope_window.h"
 #include "app/node_help.h"
 #include "app/config.h"
@@ -541,7 +543,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       } else session->edit = !session->edit;
     }
     if (session->screen == Screen::Song && session->edit && !io.KeyCtrl && !io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) session->edit = false;
-    if (session->screen == Screen::Song && !io.KeyCtrl && !io.KeyAlt && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_H, false)) { app::settings().seqNames = !app::settings().seqNames; app::saveSettings(); session->editStatus = app::settings().seqNames ? "Pattern names shown." : "Pattern names hidden."; }
+    if (session->screen == Screen::Song && session->edit && !io.KeyCtrl && !io.KeyAlt && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_H, false)) { app::settings().seqNames = !app::settings().seqNames; app::saveSettings(); session->editStatus = app::settings().seqNames ? "Pattern names shown." : "Pattern names hidden."; }
     if (session->screen == Screen::Song && session->edit && !io.KeyCtrl && !io.KeyAlt) {   // the sequence's cursor: a row is `cell` ticks, the lanes run across
       const int cell = app::sequenceRowTicks(song), rows = std::max(1, (song.length + cell - 1) / cell);
       const auto toRow = [&](int row) { editor.moveTo(std::clamp(row, 0, rows - 1) * cell, editor.cell()); };
@@ -569,7 +571,48 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
           session->wantLane = lane; session->wantTick = tick;
         }
       }
+      // the arrangement's edits at the cursor, each one undo step (the web's sequence keys); the letters are commands here, not notes
+      const std::string laneId = editor.lane();
+      const Lane* current = nullptr;
+      for (const Lane& l : doc.project().lanes) if (l.id == laneId) current = &l;
+      if (current) {
+        const int tick = editor.tick(), rowStart = tick / cell * cell;
+        seq::Context context;
+        context.length = song.length;
+        context.blankRow = editor.blankRowText();
+        const auto change = [&](const char* label, const char* done, const std::function<bool(Lane&)>& edit) {
+          Lane copy = *current;
+          if (!edit(copy)) { session->editStatus = std::string("Cannot ") + label + " here."; return false; }
+          doc.apply(std::make_unique<SetLaneSequence>(copy, label));
+          edited = true;
+          session->editStatus = done;
+          return true;
+        };
+        const auto pressed = [&](ImGuiKey key) { return ImGui::IsKeyPressed(key, true); };
+        if (pressed(ImGuiKey_Delete) || pressed(ImGuiKey_Backspace)) {
+          if (seq::placementAt(*current, tick)) change("remove the pattern", "Removed. The pattern stays in the list.", [&](Lane& l) { return seq::removePlacement(l, tick); });
+          else change("pull up", "Pulled the patterns below up.", [&](Lane& l) { return seq::shiftPlacements(l, context, rowStart, -16) != 0; });   // an empty spot: close the gap, 16 ticks at most
+        }
+        if (pressed(ImGuiKey_Insert)) change("push down", "Pushed the patterns from here down 16 ticks.", [&](Lane& l) { return seq::shiftPlacements(l, context, rowStart, 16) != 0; });
+        if (!io.KeyShift) {
+          if (ImGui::IsKeyPressed(ImGuiKey_I, false)) change("insert a pattern", "Pattern inserted.", [&](Lane& l) { return seq::insertPattern(l, context, rowStart, 16, true); });
+          if (ImGui::IsKeyPressed(ImGuiKey_N, false)) change("clone", "Cloned: this placement now has its own copy.", [&](Lane& l) { return seq::clonePlacement(l, tick); });
+          if (ImGui::IsKeyPressed(ImGuiKey_S, false)) change("slice", "Sliced.", [&](Lane& l) { return seq::slicePlacement(l, tick); });
+          if (ImGui::IsKeyPressed(ImGuiKey_M, false)) change("mute", "Mute marker flipped here.", [&](Lane& l) { return seq::toggleMute(l, context, rowStart); });
+          if (ImGui::IsKeyPressed(ImGuiKey_O, false)) change("mark a note off", "Note-off marker flipped here.", [&](Lane& l) { return seq::toggleOff(l, context, rowStart); });
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_K, false)) change("change the colour", "Pattern colour changed.", [&](Lane& l) { return seq::colourPattern(l, tick, io.KeyShift ? -1 : 1); });   // Shift+K steps back
+        if (pressed(ImGuiKey_Equal) || pressed(ImGuiKey_KeypadAdd)) change("extend", "Extended.", [&](Lane& l) { return seq::resizePlacement(l, context, tick, 16) != 0; });
+        if (pressed(ImGuiKey_Minus) || pressed(ImGuiKey_KeypadSubtract)) change("shrink", "Shrunk.", [&](Lane& l) { return seq::resizePlacement(l, context, tick, -16) != 0; });
+        const struct { ImGuiKey key; int by; } moves[] = {{ImGuiKey_Period, 1}, {ImGuiKey_Comma, -1}};   // . and , move the pattern a row; Shift: sixteen rows
+        for (const auto& m : moves) {
+          if (!pressed(m.key)) continue;
+          const int delta = m.by * cell * (io.KeyShift ? 16 : 1);
+          int movedTo = -1;
+          if (change("move", "Moved.", [&](Lane& l) { const std::optional<int> at = seq::movePlacement(l, context, tick, delta); if (at) movedTo = *at; return at.has_value(); })) editor.moveTo(movedTo, editor.cell());
+        }
     }
+      }
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Z)) { if (io.KeyShift) doc.redo(); else doc.undo(); edited = true; }
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Y)) { doc.redo(); edited = true; }
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_O, false)) gRequest = DialogRequest::Open;
@@ -682,7 +725,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       if (before != editor.tick() * 4096 + editor.cell() || edited) session->scrollToCursor = true;
     }
     const bool hexKeys = typing && editor.onHexCell();   // on a hex cell the letters are digits, not piano keys
-    if (!hexKeys && session->screen != Screen::Sample) {   // (on the Sample screen the keys play the sample)
+    if (!hexKeys && session->screen != Screen::Sample && !(session->screen == Screen::Song && session->edit)) {   // (on the Sample screen the keys play the sample)
       for (int i = 0; i < static_cast<int>(sizeof kPianoKeys / sizeof kPianoKeys[0]); i++) {
         const ImGuiKey key = kPianoKeys[i];
         if (ImGui::IsKeyPressed(key, false) && !io.KeyCtrl && !io.KeyAlt && !io.KeyShift) {   // (Shift+letter is a command, e.g. Shift+I: the machine menu)
@@ -1170,6 +1213,20 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
               for (int t = std::max(0, placement.start); t < end; t++) grid.tint[static_cast<std::size_t>(t)] = colour;
             }
         }
+        {   // where each pattern starts and ends; on the cursor's lane the patterns other than the one under the cursor are dimmed
+          grid.marks.assign(static_cast<std::size_t>(song.length), 0);
+          const Placement* under = shownLane->id == editor.lane() ? seq::placementAt(*shownLane, editor.tick()) : nullptr;
+          for (int t = 0; t < song.length; t++) {
+            const Placement* owner = seq::placementAt(*shownLane, t);
+            if (!owner) continue;
+            const Pattern* pat = seq::patternOf(*shownLane, owner->pattern);
+            const int end = owner->start + std::min(owner->length, pat ? static_cast<int>(pat->rows.size()) : 0);
+            unsigned char& mark = grid.marks[static_cast<std::size_t>(t)];
+            if (t == owner->start) mark |= app::PatternLane::kStart;
+            if (t == end - 1 || t == song.length - 1) mark |= app::PatternLane::kEnd;
+            if (under && owner != under) mark |= app::PatternLane::kDim;
+          }
+        }
         grids.push_back(std::move(grid));
       }
       const Lane& cursorOwner = *shown[static_cast<std::size_t>(cursorLane)];
@@ -1480,7 +1537,22 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     else ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Enter: edit");
     ImGui::SameLine(0, 14 * scale);
     if (session->screen == Screen::Song) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "%s", app::describeSongCursor(doc.project(), selectedLane, editor.tick()).c_str());
-    else ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "%s  tick %d  octave %d", selectedLane.c_str(), editor.tick(), octave);
+    else {
+      std::string where;   // which pattern the cursor is in, and which placement of it ("01 pat01 - 2nd of 3 in this lane - row 3/16")
+      for (const Lane& l : doc.project().lanes) {
+        if (l.id != editor.lane()) continue;
+        const Placement* under = seq::placementAt(l, editor.tick());
+        const Pattern* pat = under ? seq::patternOf(l, under->pattern) : nullptr;
+        if (!pat) { where = "  no pattern"; break; }
+        int nth = 0, total = 0;
+        for (const Placement& p : l.placements) if (p.pattern == under->pattern) { total++; if (p.start <= under->start) nth++; }
+        char text[160];
+        std::snprintf(text, sizeof text, "  %02X \"%s\" \xc2\xb7 %d of %d in this lane \xc2\xb7 row %d/%d", pat->index, pat->name.c_str(), nth, total, editor.tick() - under->start + 1, std::min(under->length, static_cast<int>(pat->rows.size())));
+        where = text;
+        break;
+      }
+      ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "%s  tick %d  octave %d%s", selectedLane.c_str(), editor.tick(), octave, where.c_str());
+    }
     ImGui::SameLine(0, 14 * scale);
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "undo: %s  redo: %s", doc.canUndo() ? doc.undoLabel().c_str() : "-", doc.canRedo() ? doc.redoLabel().c_str() : "-");
     if (!session->editStatus.empty()) {

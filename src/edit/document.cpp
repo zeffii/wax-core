@@ -320,6 +320,28 @@ void ClonePattern::revert(Project& project) {
   list.erase(std::remove_if(list.begin(), list.end(), [&](const Pattern& p) { return p.id == copy_; }), list.end());
 }
 
+SetLaneSequence::SetLaneSequence(const Lane& after, std::string label) : lane_(after.id), label_(std::move(label)) {
+  after_ = {after.patterns, after.placements, after.mutes, after.offs};
+}
+
+void SetLaneSequence::apply(Project& project) {
+  for (Lane& lane : project.lanes) {
+    if (lane.id != lane_) continue;
+    before_ = {lane.patterns, lane.placements, lane.mutes, lane.offs};
+    lane.patterns = after_.patterns; lane.placements = after_.placements; lane.mutes = after_.mutes; lane.offs = after_.offs;
+    return;
+  }
+  throw std::out_of_range("no lane " + lane_);
+}
+
+void SetLaneSequence::revert(Project& project) {
+  for (Lane& lane : project.lanes) {
+    if (lane.id != lane_) continue;
+    lane.patterns = before_.patterns; lane.placements = before_.placements; lane.mutes = before_.mutes; lane.offs = before_.offs;
+    return;
+  }
+}
+
 void PlacePattern::apply(Project& project) {
   for (Lane& lane : project.lanes) {
     if (lane.id != lane_) continue;

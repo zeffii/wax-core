@@ -19,6 +19,9 @@ struct PatternLane {
   const std::vector<std::vector<std::string>>* rows = nullptr;
   const std::vector<std::string>* labels = nullptr;
   std::vector<unsigned int> tint;   // per tick, an ImU32 colour (0: none); empty: no tint
+  // per tick: where patterns start and end, and which rows belong to a pattern other than the one under the cursor; empty: none
+  static constexpr unsigned char kStart = 1, kEnd = 2, kDim = 4;
+  std::vector<unsigned char> marks;
 };
 
 struct CursorView {

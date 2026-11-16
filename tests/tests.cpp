@@ -32,6 +32,7 @@
 #include "project/onsets.h"
 #include "project/spectrogram.h"
 #include "project/save.h"
+#include "edit/sequence_ops.h"
 
 namespace {
 
@@ -1506,6 +1507,45 @@ void testExposePort() {
 }
 
 // Hiding or showing a parameter column moves the cells of the patterns with it (and undo puts them back), so the lane stays readable.
+void testSequenceOps() {
+  using namespace wax;
+  using namespace wax::seq;
+  Lane lane;
+  lane.id = "l";
+  Pattern a;
+  a.id = "a"; a.index = 0; a.name = "pat00";
+  for (int i = 0; i < 16; i++) a.rows.push_back("x" + std::to_string(i));
+  lane.patterns.push_back(a);
+  lane.placements.push_back({"a", 32, 16});
+  Context context;
+  context.length = 256;
+  context.blankRow = "-";
+  check(!insertPattern(lane, context, 40, 16, false) && insertPattern(lane, context, 40, 16, true), "sequence: insert refuses ground a pattern plays on, unless overlaid");
+  check(!clonePlacement(lane, 100) && clonePlacement(lane, 32) && lane.patterns.size() == 3 && patternOf(lane, placementAt(lane, 32)->pattern)->name == "pat00 copy", "sequence: clone gives the placement its own pattern");
+  Lane sliced = lane;
+  check(slicePlacement(sliced, 36) && sliced.placements.size() == lane.placements.size() + 1, "sequence: slice makes two halves");
+  const Placement* first = placementAt(sliced, 32);
+  check(first && first->length == 4 && patternOf(sliced, first->pattern)->rows.size() == 4, "sequence: the first half is 4 rows");
+  check(resizePlacement(lane, context, 32, 8) == 24 && patternOf(lane, placementAt(lane, 32)->pattern)->rows.size() == 24, "sequence: growing adds empty rows");
+  check(!movePlacement(lane, context, 32, 8).has_value(), "sequence: a move onto another start is refused");
+  check(movePlacement(lane, context, 32, -16) == 16, "sequence: move");
+  Lane shifting;
+  shifting.id = "s"; shifting.patterns.push_back(a);
+  shifting.placements = {{"a", 16, 16}, {"a", 64, 16}};
+  check(shiftPlacements(shifting, context, 40, -100) == -24 && shifting.placements[1].start == 40, "sequence: pulling up stops at the cursor row");
+  check(shiftPlacements(shifting, context, 32, 16) == 16 && shifting.placements[1].start == 56, "sequence: pushing down");
+  Lane merged;
+  merged.id = "m"; merged.patterns.push_back(a);
+  merged.placements = {{"a", 0, 16}};
+  check(mergeRange(merged, context, 8, 24, true) && merged.placements.size() == 2, "sequence: merge cuts the head and makes one pattern");
+  const Placement* made = placementAt(merged, 8);
+  check(made && made->length == 16 && patternOf(merged, made->pattern)->rows[0] == "x8" && patternOf(merged, made->pattern)->rows[8] == "-", "sequence: merged rows");
+  Lane colours;
+  colours.id = "c"; colours.patterns.push_back(a); colours.placements = {{"a", 0, 16}};
+  check(colourPattern(colours, 0, 1) && colours.patterns[0].color == 0 && colourPattern(colours, 0, -1) && colours.patterns[0].color.is_null(), "sequence: colour steps through the presets and back to automatic");
+  check(toggleMute(colours, context, 32) && colours.mutes.size() == 1 && toggleMute(colours, context, 32) && colours.mutes.empty(), "sequence: mute flips");
+}
+
 void testExposeMovesCells() {
   wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/cloves.wax"));
   const wax::Instrument& first = doc.project().instruments[1];   // clang: notes, then shown parameters, then a command column
@@ -1623,6 +1663,7 @@ int main(int argc, char** argv) {
   testGraphSaved();
   testExposePort();
   testExposeMovesCells();
+  testSequenceOps();
   testAddNode();
   testUnits();
   testRewire();
