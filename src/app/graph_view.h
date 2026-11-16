@@ -9,6 +9,7 @@
 #include "imgui.h"
 
 #include "app/insert_menu.h"
+#include "app/node_response.h"
 #include "edit/document.h"
 
 namespace wax::app {
@@ -41,6 +42,10 @@ struct GraphViewState {
   InsertMenuState wireMenu;      // the same menu again, for a node to put into the wire that was right-clicked
   std::string menuWireFrom, menuWireTo;   // (that wire: output address, input address)
   std::string replacing;     // the node the replace menu is for
+  ResponseHandles response;  // what an equaliser's response picture (last frame) lets the mouse take hold of
+  int responseDrag = -1;     // the handle being dragged (its index in `response.list`), or -1
+  bool responseFresh = false;   // the drag has not changed anything yet (its first change starts the undo step)
+  bool paramEdited = false;  // a parameter was set by dragging in a picture: the caller runs syncParams (and clears this)
   std::string deleteNode;    // set by the right-click menu; the caller never needs to clear it
 };
 

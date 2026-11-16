@@ -1,5 +1,6 @@
 #include "app/graph_view.h"
 #include "app/node_envelope.h"
+#include "app/node_response.h"
 
 #include <cstdio>
 #include <algorithm>
@@ -392,7 +393,25 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     const auto t = tiles.find(nodeOfAddress(address));
     return t == tiles.end() ? ImVec2(0, 0) : portPos(t->second, output, indexOf(output ? t->second.type->outputs : t->second.inputs, portOfAddress(address)), scale);
   };
-  const bool idle = state.wiring.empty() && state.wiringIn.empty() && !state.rewire.active;
+  // A handle of an equaliser's response picture: pressed, it is dragged (one undo step) and the click goes no further.
+  bool onHandle = false;
+  if (state.responseDrag >= 0 && state.responseDrag < static_cast<int>(state.response.list.size())) {
+    const ResponseHandles::Handle& handle = state.response.list[static_cast<std::size_t>(state.responseDrag)];
+    const auto found = tiles.find(handle.node);
+    if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && found != tiles.end()) {
+      onHandle = true;
+      for (const auto& [name, value] : dragResponse(state.response, handle, *found->second.node, *found->second.type, io.MousePos)) {
+        if (value != found->second.node->param(name, value + 1)) { doc.apply(std::make_unique<SetParam>(instrumentId, handle.node, name, value), !state.responseFresh); state.responseFresh = false; state.paramEdited = true; }
+      }
+    } else state.responseDrag = -1;
+  } else if (windowHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+    float best = 10 * scale;
+    for (std::size_t i = 0; i < state.response.list.size(); i++) {
+      const ImVec2 d(state.response.list[i].pos.x - io.MousePos.x, state.response.list[i].pos.y - io.MousePos.y);
+      if (std::sqrt(d.x * d.x + d.y * d.y) < best) { best = std::sqrt(d.x * d.x + d.y * d.y); state.responseDrag = static_cast<int>(i); state.responseFresh = true; onHandle = true; }
+    }
+  }
+  const bool idle = state.wiring.empty() && state.wiringIn.empty() && !state.rewire.active && !onHandle;
   if (idle && windowHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
     state.message.clear();
     if (!hover.node.empty()) {
@@ -500,7 +519,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       bool allKept = true;
       for (const std::string& id : ids) {
         const GraphNode* node = tiles.at(id).node;
-        if (!hasEnvelopes(node->type)) continue;
+        if (!hasEnvelopes(node->type) && !hasResponse(node->type)) continue;
         pictured.push_back(id);
         if (!node->keepView) allKept = false;
       }
@@ -683,9 +702,12 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     } else if (!ImGui::IsPopupOpen("replacenode")) state.replacing.clear();
   }
   // the pictures beside a node (its envelopes): for the picked node, and for every node told to keep them
+  state.response.list.clear();
   for (const GraphNode& n : graph.nodes) {
     const auto found = tiles.find(n.id);
-    if (found == tiles.end() || !hasEnvelopes(n.type) || !(n.keepView || n.id == picked)) continue;
+    if (found == tiles.end() || !(n.keepView || n.id == picked)) continue;
+    if (hasResponse(n.type)) drawNodeResponse(dl, font, n, *found->second.type, found->second.min, found->second.max, dl->GetClipRectMin(), dl->GetClipRectMax(), scale, state.response);
+    if (!hasEnvelopes(n.type)) continue;
     drawNodeEnvelopes(dl, font, n, *found->second.type, found->second.min, found->second.max, dl->GetClipRectMin(), dl->GetClipRectMax(), scale);
   }
   {   // the line under the graph: a refused wire, else what the mouse is over
