@@ -255,3 +255,6 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 
 - Vector window (src/app/vector_window.cpp): compass pad + wave sequences, path and lanes editable, opened from the param panel ("edit pad and waves"). Pulsar and pulse-train tiles draw five periods of the train with masked periods faint (node_pictures.cpp).
 - Instrument graph extras: live spectra in the kaleidoscope picture (core/probe.h: the node publishes while its picture is watched); clicking a drawing's title in the drum2/hat2 pictures opens the drawings window; genexpr code window (app/genexpr_window: templates from tools/gen-genexpr-templates.mjs, compiler diagnostics with line/column via checkGenExpr; no syntax colouring or line gutter yet); pinned parameter windows are remembered in the config (pinnedMachines). Not ported: pop-out OS windows (the SDL renderer backend has no multi-viewport). Text: ProggyVector through FreeType (fetched by CMake when not installed).
+
+## Retrofit todo (decisions to settle in both apps)
+- Enter (or Ctrl+Enter) on the Song screen where no pattern is under the cursor: native creates a new pattern there and solo-edits it; the web app says "No pattern here." Decide which one both apps do, then make them match (the web's solo-edit key code is in src/seq/seqview.js, `key === 'enter'`).
