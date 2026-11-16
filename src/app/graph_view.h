@@ -3,6 +3,8 @@
 // are processors, the circle is the voice stage and the speaker is the output.
 #pragma once
 
+#include <functional>
+#include <memory>
 #include <set>
 #include <string>
 #include <vector>
@@ -11,11 +13,13 @@
 
 #include "app/insert_menu.h"
 #include "app/node_response.h"
+#include "core/probe.h"
 #include "edit/document.h"
 
 namespace wax::app {
 
 struct GraphViewState {
+  std::function<std::shared_ptr<SpectrumProbe>(const std::string& instrument, const std::string& node)> probeOf;   // set by the host: the live pictures
   std::string noteEditing;               // the note whose text is being typed
   std::vector<char> noteBuffer = std::vector<char>(8192, 0);   // ...and the text so far
   std::string focusNote;                 // a note just made: it takes the keyboard

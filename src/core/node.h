@@ -14,6 +14,7 @@
 #include <nlohmann/json.hpp>
 
 #include "core/params.h"
+#include "core/probe.h"
 
 namespace wax {
 
@@ -122,6 +123,8 @@ struct NodeContext {
   std::function<std::optional<StereoView>()> tap;
   // Where the tap node sends what it records. Empty when nothing listens.
   std::function<void(const TakeMessage&)> emit;
+  // Where a node with a live picture publishes it (shared with the window); null when the node has none.
+  std::shared_ptr<SpectrumProbe> probe;
 };
 
 // One running copy of a node. All memory is taken in the constructor: process() never allocates.

@@ -179,6 +179,7 @@ std::unique_ptr<GraphRuntime::RunNode> GraphRuntime::makeNode(const CompiledNode
     std::lock_guard<std::mutex> lock(takeMutex_);
     takes_.push_back({instrument, nodeId, message});
   };
+  if (compiled.type == "kaleidoscope") context.probe = probe(instrument, compiled.id);
   context.nextInstance = [this](const std::string& kind) { return ++instancesMade_[kind]; };
   if (!compiled.source.empty()) {
     const std::string source = compiled.source;
@@ -710,6 +711,13 @@ std::vector<TakeEvent> GraphRuntime::drainTakes() {
   std::vector<TakeEvent> out;
   out.swap(takes_);
   return out;
+}
+
+std::shared_ptr<SpectrumProbe> GraphRuntime::probe(const std::string& instrument, const std::string& nodeId) {
+  std::lock_guard<std::mutex> lock(probeMutex_);
+  auto& slot = probes_[instrument + "/" + nodeId];
+  if (!slot) slot = std::make_shared<SpectrumProbe>();
+  return slot;
 }
 
 void GraphRuntime::sendSample(const std::string& instrument, const std::string& nodeId, std::shared_ptr<const SampleMessage> message) {

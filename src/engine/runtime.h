@@ -86,6 +86,9 @@ public:
   // What the tap nodes have recorded since the last call, in order (see engine/takes.h for turning it into samples).
   std::vector<TakeEvent> drainTakes();
 
+  // The live picture of a node (made on the first ask by either thread).
+  std::shared_ptr<SpectrumProbe> probe(const std::string& instrument, const std::string& nodeId);
+
   // How many threads render the instruments of a block (the calling thread counts). 1: all on this one. The sound is the
   // same whatever the number: an instrument waits for the ones it hears through a sidechain, and the mix is added up in order.
   void setThreads(int threads);
@@ -170,6 +173,8 @@ private:
   std::unique_ptr<Plan> plan_;                                   // the order made into tasks for the pool (built with order_)
   std::map<std::string, std::set<std::string>> deps_;             // for each instrument, the ones it hears that run before it (built with order_)
   std::unique_ptr<TaskPool> pool_;
+  std::mutex probeMutex_;
+  std::map<std::string, std::shared_ptr<SpectrumProbe>> probes_;   // by "instrument/node"
   std::mutex takeMutex_;
   std::vector<TakeEvent> takes_;                                  // what the tap nodes have sent, until the host drains it
   std::mutex mixMutex_;                                           // the added-together sound of a meta machine is made once per block, by whoever asks first

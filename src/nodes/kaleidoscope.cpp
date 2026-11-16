@@ -27,7 +27,7 @@ struct Channel {
 class Kaleidoscope final : public Node {
 public:
   explicit Kaleidoscope(const NodeContext& context)
-      : sampleRate_(context.sampleRate), re_(kStftMaxSize), im_(kStftMaxSize), reW_(kStftMaxSize), imW_(kStftMaxSize) {}
+      : probe_(context.probe), sampleRate_(context.sampleRate), re_(kStftMaxSize), im_(kStftMaxSize), reW_(kStftMaxSize), imW_(kStftMaxSize), reD_(kStftMaxSize), imD_(kStftMaxSize) {}
 
   void process(const float* const* inputs, float* const* outputs, int count, const float* params, const int* slots) override {
     const int want = stftSizeOf(params[slots[kSize]]);
@@ -50,6 +50,8 @@ public:
     settings.under = jsRoundInt(params[slots[kUnder]]);
     const double mix = params[slots[kMix]];
     const int half = n_ >> 1;
+    const bool reporting = probe_ && probe_->watched();
+    const int half0 = n_ >> 1;
     for (int c = 0; c < 2; c++) {
       Channel& s = *channels_[static_cast<std::size_t>(c)];
       const float* x = inputs[c];
@@ -58,6 +60,11 @@ public:
         if (s.a.push(x[i])) {
           s.a.fill(re_.data(), im_.data());
           s.k.run(re_.data(), im_.data(), reW_.data(), imW_.data(), settings);
+          if (c == 0 && reporting && ++frames_ % kReportEvery == 0) {   // the dry frame and the arrayed one, for the panel
+            std::copy(re_.begin(), re_.begin() + half0 + 1, reD_.begin());
+            std::copy(im_.begin(), im_.begin() + half0 + 1, imD_.begin());
+            report();
+          }
           for (int k = 0; k <= half; k++) {
             const std::size_t j = static_cast<std::size_t>(k);
             re_[j] += (reW_[j] - re_[j]) * mix;
@@ -72,10 +79,20 @@ public:
   }
 
 private:
+  static constexpr int kPoints = 200, kReportEvery = 4;   // values in the picture; frames between two pictures
+  void report() {
+    std::vector<float> input(kPoints), output(kPoints);
+    kal::pictureOf(reD_.data(), imD_.data(), n_, sampleRate_, stftPeakOf(n_), input);
+    kal::pictureOf(reW_.data(), imW_.data(), n_, sampleRate_, stftPeakOf(n_), output);
+    probe_->publish(input, output);
+  }
+
+  std::shared_ptr<SpectrumProbe> probe_;
+  int frames_ = 0;
   double sampleRate_;
   int n_ = 0;
   std::array<std::unique_ptr<Channel>, 2> channels_;
-  std::vector<double> re_, im_, reW_, imW_;
+  std::vector<double> re_, im_, reW_, imW_, reD_, imD_;
 };
 
 }  // namespace

@@ -4,6 +4,8 @@
 // Port of the playing part of webtracker src/audio/kalcore.js (the panel's half, pictureOf, is for the window).
 #pragma once
 
+#include <cmath>
+#include <algorithm>
 #include <array>
 #include <vector>
 
@@ -46,5 +48,27 @@ private:
   std::vector<double> mag_, ph_;
   int frame_ = 0;
 };
+
+// The spectrum of a frame as `out.size()` values from 0 to 1 along the panel's log axis (27.5 Hz to 14 kHz): the loudest bin under each
+// point, in dB with a sine of amplitude 1 at the top and -80 dB at the bottom. re, im: bins 0 to n/2. Port of kalcore.js pictureOf.
+inline void pictureOf(const double* re, const double* im, int n, double sampleRate, double peak, std::vector<float>& out) {
+  constexpr double kFMin = 27.5, kFMax = 14080;
+  const int half = n >> 1, points = static_cast<int>(out.size());
+  const double perBin = sampleRate / n, lo = std::log2(kFMin), hi = std::log2(kFMax);
+  const auto power = [&](int i) { return re[i] * re[i] + im[i] * im[i]; };
+  for (int p = 0; p < points; p++) {
+    const double a = std::pow(2, lo + (hi - lo) * p / points) / perBin, b = std::pow(2, lo + (hi - lo) * (p + 1) / points) / perBin;
+    double m = 0;
+    if (b - a < 1) {   // finer than a bin: blend the two bins the point sits between
+      const double c = (a + b) / 2;
+      const int i = std::max(1, std::min(half - 1, static_cast<int>(std::floor(c))));
+      const double f = c - i, m0 = power(i), m1 = power(i + 1);
+      m = m0 + (m1 - m0) * f;
+    } else {
+      for (int i = static_cast<int>(std::floor(a)); i <= std::min(half, static_cast<int>(std::floor(b))); i++) m = std::max(m, power(i));
+    }
+    out[static_cast<std::size_t>(p)] = m > 0 ? static_cast<float>(std::max(0.0, std::min(1.0, (10 * std::log10(m / (peak * peak)) + 80) / 80))) : 0.f;
+  }
+}
 
 }  // namespace wax::kal

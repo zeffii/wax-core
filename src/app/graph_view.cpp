@@ -864,7 +864,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
   }
   // the pictures beside a node (its envelopes): for the picked node, and for every node told to keep them
   state.response.list.clear();
-  const PictureTiming timing{60000.0 / (std::max(1.0, doc.project().song.bpm) * std::max(1, doc.project().song.ticksPerBeat)), std::max(1, doc.project().song.ticksPerBeat), &doc.project(), instrumentId, doc.revision()};
+  const PictureTiming timing{60000.0 / (std::max(1.0, doc.project().song.bpm) * std::max(1, doc.project().song.ticksPerBeat)), std::max(1, doc.project().song.ticksPerBeat), &doc.project(), instrumentId, doc.revision(), state.probeOf};
   for (const GraphNode& n : graph.nodes) {
     const auto found = tiles.find(n.id);
     if (found == tiles.end() || !(n.keepView || n.id == picked)) continue;

@@ -516,7 +516,7 @@ void drawGranular(ImDrawList* dl, ImFont* font, const GraphNode& node, const Nod
 
 // ---- kaleidoscope: the band the node takes and where its copies go (the spectra are not drawn: they need the live sound) ----
 
-void drawKaleidoscope(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale, ResponseHandles& handles) {
+void drawKaleidoscope(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale, ResponseHandles& handles, const PictureTiming& timing) {
   constexpr double kFMin = 27.5, kFMax = 14080;
   const double lo = std::log2(kFMin), hi = std::log2(kFMax);
   const float pad = 14 * scale, panelH = 78 * scale, x0 = f.x0 + pad, pw = f.w - 2 * pad;
@@ -536,6 +536,22 @@ void drawKaleidoscope(ImDrawList* dl, ImFont* font, const GraphNode& node, const
     }
   };
   panel(yIn, "BAND  (drag its ends, or the band)");
+  // The spectra the node hears and makes, live while this picture is on screen.
+  std::vector<float> heard, made;
+  if (const auto probe = timing.probeOf ? timing.probeOf(timing.instrument, node.id) : nullptr) {
+    probe->watch();
+    probe->read(heard, made);
+  }
+  const auto spectrum = [&](const std::vector<float>& values, float y, ImU32 colour) {
+    ImVec2 last{};
+    for (std::size_t i = 0; i < values.size(); i++) {
+      const ImVec2 at(x0 + pw * (static_cast<float>(i) + 0.5f) / static_cast<float>(values.size()), y + panelH * (1 - values[i]));
+      if (i) dl->AddLine(last, at, colour, 1.2f * scale);
+      last = at;
+    }
+  };
+  if (heard.empty()) dl->AddText(font, f.size * 0.9f, ImVec2(x0 + pw / 2 - 110 * scale, yIn + panelH / 2 - 6 * scale), textAlpha(110), "play something through it to see the spectrum");
+  spectrum(heard, yIn, textAlpha(170));
   const float bx0 = X(band.b0), bx1 = X(band.b0 + band.width);
   dl->AddRectFilled(ImVec2(bx0, yIn), ImVec2(bx1, yIn + panelH), withAlpha(kPink, 36));
   for (const float x : {bx0, bx1}) {
@@ -546,6 +562,7 @@ void drawKaleidoscope(ImDrawList* dl, ImFont* font, const GraphNode& node, const
   handles.list.push_back({node.id, "@kalhigh", 0, ImVec2(bx1, yIn), x0, yIn, pw, panelH});
   handles.list.push_back({node.id, "@kalmove", 0, ImVec2((bx0 + bx1) / 2, yIn + panelH / 2), x0, yIn, pw, panelH});
 
+  spectrum(made, yOut, kOrange);
   panel(yOut, mode == 0 ? "OUTPUT  (the band arrayed, every second copy mirrored)" : mode == 1 ? "OUTPUT  (the band repeated)" : "OUTPUT  (the band copied to its overtones and undertones)");
   if (mode == 2) {
     const double stretch = valueOf(node, type, "stretch"), decay = valueOf(node, type, "decay");
@@ -830,7 +847,7 @@ float drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const
   else if (node.type == "membrane") drawMembrane(dl, font, node, type, frameFor(dl, font, node.id + " membrane", 360, 196, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "khufu") drawKhufu(dl, font, node, type, frameFor(dl, font, node.id + " registers", 310, 150, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "rotary") drawRotary(dl, font, node, type, frameFor(dl, font, node.id + " cabinet", 300, 190, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
-  else if (node.type == "kaleidoscope") drawKaleidoscope(dl, font, node, type, frameFor(dl, font, node.id + " band", 460, 270, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
+  else if (node.type == "kaleidoscope") drawKaleidoscope(dl, font, node, type, frameFor(dl, font, node.id + " band", 460, 270, tileMin, tileMax, areaMin, areaMax, scale), scale, handles, timing);
   else if (node.type == "drumsynth") drawDrum(dl, font, node, type, frameFor(dl, font, node.id + " hit", 360, 372, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "drumsynth2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", 360, 22 + 3 * 56 + 84, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "pulsar" || node.type == "pulsetrain") drawPulsarTrain(dl, font, node, type, frameFor(dl, font, node.id + " pulse train", 360, 130, tileMin, tileMax, areaMin, areaMax, scale), scale);

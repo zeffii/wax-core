@@ -3,6 +3,8 @@
 // mono comb they make (haas). Shown for the picked node, or for nodes told to keep their pictures (Alt+V), like the envelopes.
 #pragma once
 
+#include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -21,6 +23,8 @@ struct PictureTiming {
   const Project* project = nullptr;   // for the pictures that show a sample of the song
   std::string instrument;
   int revision = 0;                   // of the document: a sample is read again when it changes
+  // The live picture of a node of this instrument (the spectra of the kaleidoscope); empty when nothing is playing.
+  std::function<std::shared_ptr<SpectrumProbe>(const std::string& instrument, const std::string& node)> probeOf;
 };
 
 bool hasPicture(const std::string& nodeType);

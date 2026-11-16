@@ -39,6 +39,7 @@
 #include "app/chord_window.h"
 #include "app/wavetable_window.h"
 #include "app/gate_window.h"
+#include "app/fonts.h"
 #include "app/vector_window.h"
 #include "app/shape_window.h"
 #include "app/graph_view.h"
@@ -1303,6 +1304,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     ImGui::BeginChild("instmain", ImVec2(0, 0), false);
     if (session->panel.instrument != laneInstrument) { session->panel.instrument = laneInstrument; session->panel.node.clear(); }
     session->graphView.dockMin = session->panel.dock.min; session->graphView.dockMax = session->panel.dock.max;
+    session->graphView.probeOf = [&](const std::string& instrument, const std::string& node) { return session->player->engine().runtime().probe(instrument, node); };
     app::drawGraphView(session->graphView, doc, laneInstrument, session->panel.node, 0);
     const ImVec2 graphMin = ImGui::GetWindowPos(), graphMax(graphMin.x + ImGui::GetWindowWidth(), graphMin.y + ImGui::GetWindowHeight());
     ImGui::EndChild();
@@ -1691,6 +1693,7 @@ int main(int argc, char** argv) {
   ImGui::GetIO().IniFilename = nullptr;
   float scale = SDL_GetWindowDisplayScale(window);
   if (scale <= 0) scale = 1;
+  app::loadFonts();
   app::applyTheme(scale);
   loadTheme();
   app::loadSettings();
