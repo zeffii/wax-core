@@ -28,6 +28,11 @@ public:
   int cell() const { return cell_; }
   int digitsTyped() const { return typed_; }
 
+  // Solo-edit: the cursor, selections and pastes stay on the rows lo to hi-1 (one pattern), and no pattern can be made or placed. clearSolo() ends it.
+  void setSolo(int lo, int hi) { soloLo_ = std::max(0, lo); soloHi_ = std::max(soloLo_ + 1, hi); moveTo(tick_, cell_); }
+  void clearSolo() { soloLo_ = soloHi_ = -1; }
+  bool solo() const { return soloHi_ > 0; }
+
   // Where the cursor may go. Moving ends a half-typed cell.
   void moveTo(int tick, int cell);
   std::string blankRowText() const;   // a row of the lane's columns with every cell empty
@@ -89,6 +94,9 @@ private:
   std::vector<Column> columns_;
   int tick_ = 0, cell_ = 0, typed_ = 0, step_ = 1;
   bool selecting_ = false, wrapRows_ = false;
+  int soloLo_ = -1, soloHi_ = -1;   // the rows of the solo-edited pattern (hi is one past its last); -1: not solo-editing
+  int firstTick() const;   // the first and last row the cursor may be on
+  int lastTick() const;
   int anchorTick_ = 0, anchorCell_ = 0;
   std::vector<std::vector<std::string>> clipboard_;   // rows of cell texts
 

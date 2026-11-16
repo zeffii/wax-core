@@ -20,13 +20,14 @@ struct PatternLane {
   const std::vector<std::string>* labels = nullptr;
   std::vector<unsigned int> tint;   // per tick, an ImU32 colour (0: none); empty: no tint
   // per tick: where patterns start and end, and which rows belong to a pattern other than the one under the cursor; empty: none
-  static constexpr unsigned char kStart = 1, kEnd = 2, kDim = 4;
+  static constexpr unsigned char kStart = 1, kEnd = 2, kDim = 4, kLocked = 8;   // kLocked: solo-edit keeps the row out of reach: greyed, hatched, no cells to click
   std::vector<unsigned char> marks;
 };
 
 struct CursorView {
   int lane = 0;                          // which of the lanes shown holds the cursor
 
+  int rowFirst = 0, rowEnd = -1;         // only the rows rowFirst..rowEnd-1 are drawn, numbered from rowFirst (solo-edit on its own); rowEnd -1: all
   bool hideEmpty = false;                // columns with nothing in them anywhere are left out (the cursor's column stays)
   bool show = false;
   int tick = -1, cell = -1;

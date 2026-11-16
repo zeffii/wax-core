@@ -23,6 +23,7 @@ struct Settings {
   bool notePreview = kNotePreviewDefault;   // a note typed into the grid sounds as it goes in
   float patternText = 1.0f;    // the Pattern grid's text size, as a multiple of the normal size
   bool seqNames = false;       // the Song screen's pattern cells show the pattern's name after its number (off: just the two-digit number; H toggles)
+  bool soloHatch = false;      // solo-edit shows the whole song with the rest hatched and locked (off: the pattern on its own, rows from 0)
   bool hideEmpty = false;      // the Pattern screen leaves out columns with nothing in them
   bool seqOverview = true;     // the Song screen's strip at the right edge showing the whole song scaled to fit
   bool minimapOn = false;      // each cell of the Song screen shows a small picture of its pattern

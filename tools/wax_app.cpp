@@ -153,6 +153,7 @@ struct Session {
   bool pickedTab = false;   // the first lane that is not the master is shown at first
   std::unique_ptr<Document> doc;         // the song as edited: every change goes through it, so it can be undone
   std::unique_ptr<CellEditor> editor;
+  struct SoloEdit { bool on = false; int lo = 0, hi = 0; std::string lane; } solo;   // Ctrl+Enter in the sequence: one pattern edited on its own
   bool edit = false;                     // Enter: the keyboard types into cells
   bool backupsOpen = false;              // the Backups list is showing
   int backupRevision = 0;                // the revision of `doc` the last snapshot (or the opening) holds
@@ -579,12 +580,30 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       else player.ring().push({LiveCommand::Play, 0, 1});
     }
     if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) {
-      if (session->screen == Screen::Song && session->edit) {   // in the sequence, Enter goes into the pattern under the cursor (a new one where none is)
+      if (ctrl && !io.KeyShift && !io.KeyAlt) {   // Ctrl+Enter in the sequence: open the pattern under the cursor on its own (solo-edit)
+        if (session->screen == Screen::Song) {
+          const Lane* soloLane = nullptr;
+          for (const Lane& l : doc.project().lanes) if (l.id == editor.lane()) soloLane = &l;
+          const Placement* at = soloLane ? seq::placementAt(*soloLane, editor.tick()) : nullptr;
+          const Pattern* pattern = at ? seq::patternOf(*soloLane, at->pattern) : nullptr;
+          if (!at || !pattern) session->editStatus = "No pattern here.";
+          else {
+            const int lo = at->start, hi = std::min(song.length, at->start + std::min(at->length, static_cast<int>(pattern->rows.size())));
+            session->solo = {true, lo, hi, soloLane->id};
+            editor.setSolo(lo, hi);
+            selectedLane = soloLane->id; session->wantLane = selectedLane; session->wantTick = std::clamp(editor.tick(), lo, hi - 1);
+            session->screen = Screen::Pattern;
+            session->edit = true;
+            session->editStatus = "Solo-edit: only this pattern can be changed. Tab: whole song or just the pattern. Esc leaves.";
+          }
+        }
+      } else if (session->screen == Screen::Song && session->edit) {   // in the sequence, Enter goes into the pattern under the cursor (a new one where none is)
         if (!editor.patternHere()) edited |= editor.createPatternHere();
         if (editor.patternHere()) { selectedLane = editor.lane(); session->wantLane = selectedLane; session->wantTick = editor.tick(); session->screen = Screen::Pattern; }
         else session->editStatus = "No pattern here, and one cannot start here.";
       } else session->edit = !session->edit;
     }
+    if (session->solo.on && session->screen != Screen::Pattern) { session->solo = {}; editor.clearSolo(); }   // (leaving the Pattern screen ends solo-edit)
     app::SongKeysEnv songEnv{doc, editor, player.engine(), selectedLane, session->editStatus, session->wantLane, session->wantTick, edited, session->edit};
     if (session->edit && session->screen == Screen::Song) app::songCursorKeys(session->song, songEnv);   // the Song screen cursor, selection and edits
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Z)) { if (io.KeyShift) doc.redo(); else doc.undo(); edited = true; }
@@ -673,7 +692,16 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) step(1, 0);
       if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) step(0, -1);
       if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) step(0, 1);
-      if (ImGui::IsKeyPressed(ImGuiKey_Escape)) editor.clearSelection();
+      if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {   // Esc: drops a selection first; with none, leaves solo-edit
+        if (editor.selection().active || !session->solo.on) editor.clearSelection();
+        else { session->solo = {}; editor.clearSolo(); session->editStatus = "Solo-edit ended."; }
+      }
+      if (session->solo.on && ImGui::IsKeyPressed(ImGuiKey_Tab, false)) {   // Tab: the pattern on its own, or the whole song with the rest locked
+        app::settings().soloHatch = !app::settings().soloHatch;
+        app::saveSettings();
+        session->scrollToCursor = true;
+        session->editStatus = app::settings().soloHatch ? "Solo-edit: the song, with the rest locked." : "Solo-edit: the pattern on its own.";
+      }
       const int bar = std::max(1, song.ticksPerBeat) * std::max(1, song.beatsPerBar);
       if (ImGui::IsKeyPressed(ImGuiKey_PageUp)) editor.move(-bar, 0);
       if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) editor.move(bar, 0);
@@ -875,6 +903,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         ImGui::SetNextItemWidth(120 * ImGui::GetStyle().FontScaleDpi);
         if (ImGui::SliderFloat("Text size", &app::settings().patternText, 0.6f, 2.0f, "%.2fx")) app::saveSettings();
         if (ImGui::Checkbox("Hide empty columns", &app::settings().hideEmpty)) app::saveSettings();
+        if (ImGui::Checkbox("Solo-edit shows the song", &app::settings().soloHatch)) app::saveSettings();   // (the rest hatched and locked; off: the pattern alone)
         if (ImGui::Checkbox("Follow the playing row", &follow)) { app::settings().follow = follow; app::saveSettings(); }
       }
       if (session->screen == Screen::Song) {
@@ -1236,6 +1265,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
             if (t == end - 1 || t == song.length - 1) mark |= app::PatternLane::kEnd;
             if (under && owner != under) mark |= app::PatternLane::kDim;
           }
+          if (session->solo.on && app::settings().soloHatch)   // solo-edit with the song shown: everything but the pattern is out of reach
+            for (int t = 0; t < song.length; t++) if (shownLane->id != session->solo.lane || t < session->solo.lo || t >= session->solo.hi) grid.marks[static_cast<std::size_t>(t)] |= app::PatternLane::kLocked;
         }
         grids.push_back(std::move(grid));
       }
@@ -1244,6 +1275,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       cursor.lane = cursorLane;
       cursor.show = session->edit;
       cursor.hideEmpty = app::settings().hideEmpty;
+      if (session->solo.on && !app::settings().soloHatch) { cursor.rowFirst = session->solo.lo; cursor.rowEnd = session->solo.hi; }   // the pattern on its own
       cursor.tick = editor.tick();
       cursor.cell = editor.cell();
       cursor.scrollTo = session->scrollToCursor;
@@ -1259,14 +1291,20 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       if (result.clickedTick >= 0) playFromRequest = result.clickedTick;
       if (result.cell >= 0 && result.lane >= 0) {
         const Lane& clicked = *shown[static_cast<std::size_t>(result.lane)];
+        if (session->solo.on && clicked.id != editor.lane()) return;   // (solo-edit keeps to its lane)
         if (clicked.id != editor.lane()) { selectedLane = clicked.id; editor.setLane(clicked.id, session->player->engine().laneColumns(clicked.id)); }
         editor.moveTo(result.cellTick, result.cell);
+        session->edit = true;   // a click puts the caret there, ready to type
       }
     };
     if (app::settings().patternAll) {
       std::vector<const Lane*> shown;
       int cursorLane = 0;
-      for (const Lane& lane : doc.project().lanes) { if (lane.id == selectedLane) cursorLane = static_cast<int>(shown.size()); shown.push_back(&lane); }
+      for (const Lane& lane : doc.project().lanes) {
+        if (session->solo.on && !app::settings().soloHatch && lane.id != session->solo.lane) continue;   // (the pattern on its own: one lane)
+        if (lane.id == selectedLane) cursorLane = static_cast<int>(shown.size());
+        shown.push_back(&lane);
+      }
       if (!shown.empty()) {
         if (!session->wantLane.empty()) {   // a lane asked for (a click in the Song screen)
           for (std::size_t i = 0; i < shown.size(); i++) if (shown[i]->id == session->wantLane) cursorLane = static_cast<int>(i);
@@ -1284,6 +1322,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       }
     } else if (ImGui::BeginTabBar("lanes")) {
       for (const Lane& lane : doc.project().lanes) {
+        if (session->solo.on && lane.id != session->solo.lane) continue;   // (solo-edit: its lane only)
         const std::string label = lane.id + (lane.instrument == lane.id ? "" : "  " + lane.instrument);
         ImGuiTabItemFlags tabFlags = ImGuiTabItemFlags_None;
         if (!session->pickedTab && lane.id != kMaster) { tabFlags |= ImGuiTabItemFlags_SetSelected; session->pickedTab = true; }

@@ -396,6 +396,42 @@ void testLiveCellText() {
   std::printf("ok: live cell text\n");
 }
 
+void testSoloEdit() {
+  wax::Project project;
+  project.song.length = 16;
+  wax::Lane lane;
+  lane.id = "L1";
+  wax::Pattern pattern;
+  pattern.id = "p01";
+  pattern.rows = {"... .. .... ......", "... .. .... ......", "... .. .... ......", "... .. .... ......"};
+  lane.patterns.push_back(pattern);
+  lane.placements.push_back({"p01", 4, 4});
+  project.lanes.push_back(lane);
+  wax::Document doc(project);
+  wax::CellEditor editor(doc);
+  std::vector<wax::Column> columns(1);
+  columns[0].kind = wax::ColumnKind::Note;  columns[0].token = wax::Token::Note;
+  editor.setLane("L1", columns);
+  editor.setSolo(4, 8);
+  editor.moveTo(0, 0);
+  check(editor.tick() == 4, "solo-edit: the cursor cannot go above the pattern");
+  editor.moveTo(12, 0);
+  check(editor.tick() == 7, "solo-edit: or below it");
+  editor.move(1, 0);
+  check(editor.tick() == 7, "solo-edit: moving down stops at the last row");
+  editor.setWrapRows(true);
+  editor.move(1, 0);
+  check(editor.tick() == 4, "solo-edit: with wrapping the cursor wraps within the pattern");
+  editor.selectAll();
+  const wax::CellEditor::Selection all = editor.selection();
+  check(all.tick0 == 4 && all.tick1 == 7, "solo-edit: select all takes the pattern's rows only");
+  check(!editor.createPatternHere() && !editor.placePatternHere("p01"), "solo-edit: no pattern can be made or placed");
+  editor.clearSolo();
+  editor.moveTo(0, 0);
+  check(editor.tick() == 0, "solo-edit ended: the cursor goes anywhere again");
+  std::printf("ok: solo-edit\n");
+}
+
 void testCellEditor() {
   wax::Project project;
   project.song.length = 8;
@@ -1758,6 +1794,7 @@ int main(int argc, char** argv) {
   testSpline();
   testLevels();
   testGenExprCheck();
+  testSoloEdit();
   testSetParam();
   testSave();
   testNewPattern();

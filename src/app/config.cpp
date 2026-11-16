@@ -56,6 +56,7 @@ void loadSettings() {
   s.insertCut = data.value("insertCut", s.insertCut);
   s.patternAll = data.value("patternAll", s.patternAll);
   s.hideEmpty = data.value("hideEmpty", s.hideEmpty);
+  s.soloHatch = data.value("soloHatch", s.soloHatch);
   s.seqNames = data.value("seqNames", s.seqNames);
   s.patternText = std::clamp(data.value("patternText", s.patternText), 0.6f, 2.0f);
   s.notePreview = data.value("notePreview", s.notePreview);
@@ -95,7 +96,7 @@ void saveSettings() {
   if (path.empty()) return;
   const Settings& s = gSettings;
   Json data = {{"wireAudio", hexOf(s.wireAudio)}, {"wireControl", hexOf(s.wireControl)}, {"wireStereo", hexOf(s.wireStereo)},
-               {"wireParam", hexOf(s.wireParam)}, {"wireDashed", s.wireDashed}, {"follow", s.follow}, {"arrangementRow", s.arrangementRow}, {"insertCut", s.insertCut}, {"patternAll", s.patternAll}, {"hideEmpty", s.hideEmpty}, {"seqNames", s.seqNames}, {"patternText", s.patternText}, {"notePreview", s.notePreview}, {"tintPatterns", s.tintPatterns}, {"seqOverview", s.seqOverview}, {"minimapOn", s.minimapOn}, {"minimapLengths", s.minimapLengths}, {"minimapCaps", s.minimapCaps}, {"minimapParams", s.minimapParams}, {"pinnedMachines", s.pinnedMachines},
+               {"wireParam", hexOf(s.wireParam)}, {"wireDashed", s.wireDashed}, {"follow", s.follow}, {"arrangementRow", s.arrangementRow}, {"insertCut", s.insertCut}, {"patternAll", s.patternAll}, {"hideEmpty", s.hideEmpty}, {"soloHatch", s.soloHatch}, {"seqNames", s.seqNames}, {"patternText", s.patternText}, {"notePreview", s.notePreview}, {"tintPatterns", s.tintPatterns}, {"seqOverview", s.seqOverview}, {"minimapOn", s.minimapOn}, {"minimapLengths", s.minimapLengths}, {"minimapCaps", s.minimapCaps}, {"minimapParams", s.minimapParams}, {"pinnedMachines", s.pinnedMachines},
                {"backupOn", s.backupOn}, {"backupMinutes", s.backupMinutes}, {"backupKeep", s.backupKeep}, {"rowWrap", s.rowWrap}, {"graphPullOut", s.graphPullOut}, {"threads", s.threads}, {"laneWrap", s.laneWrap}, {"sliceSensitivity", s.sliceSensitivity}, {"sliceMinGap", s.sliceMinGap}, {"sliceReplace", s.sliceReplace}, {"sliceWhole", s.sliceWhole},
                {"waveHideLoop", s.waveHideLoop}, {"waveHideSel", s.waveHideSel}, {"waveHideSus", s.waveHideSus}, {"hexMode", s.hexMode}, {"sampleAskMB", s.sampleAskMB}, {"recentFiles", s.recentFiles}};
   std::ofstream(path, std::ios::trunc) << data.dump(1) << "\n";

@@ -100,21 +100,23 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
   // measured from the rows drawn last frame, because the follow scroll and the playhead move by whole rows and drift if the pitch is wrong.
   static float measuredPitch = 0;
   const float rowPitch = measuredPitch > 1 ? measuredPitch : rowHeight;
-  if (follow && playTick >= 0) {
+  const int firstRow = std::max(0, cursor.rowFirst), endRow = cursor.rowEnd < 0 ? static_cast<int>(rows.size()) : std::min(static_cast<int>(rows.size()), cursor.rowEnd);
+  if (follow && playTick >= firstRow && playTick < endRow) {
     const float visible = ImGui::GetWindowHeight() - rowHeight * 2;
-    ImGui::SetScrollY(std::max(0.0f, (static_cast<float>(playTick) + cursor.playFrac) * rowPitch - visible * 0.4f));
+    ImGui::SetScrollY(std::max(0.0f, (static_cast<float>(playTick - firstRow) + cursor.playFrac) * rowPitch - visible * 0.4f));
   }
 
   const int beat = std::max(1, ticksPerBeat), bar = beat * std::max(1, beatsPerBar);
   ImGuiListClipper clipper;
   float playY = -1;   // screen y of the playing row's top, when it was drawn
   int firstTick = -1, lastTick = -1; float firstY = 0, lastY = 0;   // the first and last rows drawn, to measure the pitch
-  clipper.Begin(static_cast<int>(rows.size()));
-  if (cursor.show && cursor.scrollTo && cursor.tick >= 0) clipper.IncludeItemByIndex(cursor.tick);
+  clipper.Begin(std::max(0, endRow - firstRow));
+  if (cursor.show && cursor.scrollTo && cursor.tick >= firstRow && cursor.tick < endRow) clipper.IncludeItemByIndex(cursor.tick - firstRow);
   while (clipper.Step()) {
-    for (int tick = clipper.DisplayStart; tick < clipper.DisplayEnd; tick++) {
+    for (int tick = firstRow + clipper.DisplayStart; tick < firstRow + clipper.DisplayEnd; tick++) {
+      const int shown = tick - firstRow;   // the number the row is shown with
       ImGui::TableNextRow();
-      const ImU32 tint = tick % bar == 0 ? kBarRow : tick % beat == 0 ? kBeatRow : 0;
+      const ImU32 tint = shown % bar == 0 ? kBarRow : shown % beat == 0 ? kBeatRow : 0;
       if (tint) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, tint);
       ImGui::TableSetColumnIndex(0);
       if (tick == playTick) playY = ImGui::GetCursorScreenPos().y - 1;
@@ -130,8 +132,8 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
         if (tick == cursor.loopEnd - 1) dl->AddRectFilled(ImVec2(at.x - 3, at.y + rowH - 3), ImVec2(at.x + 8, at.y + rowH - 1), mark);
       }
       char number[16];
-      std::snprintf(number, sizeof number, "%03d", tick);
-      ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(tick % beat == 0 ? kWarm : kDimText));
+      std::snprintf(number, sizeof number, "%03d", shown);
+      ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(shown % beat == 0 ? kWarm : kDimText));
       if (ImGui::Selectable(number, false, ImGuiSelectableFlags_None)) result.clickedTick = tick;
       ImGui::PopStyleColor();
       for (std::size_t li = 0; li < lanes.size(); li++) {
@@ -170,6 +172,19 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
           }
           const bool dimmed = (marks & PatternLane::kDim) != 0;
           if (dimmed) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(withAlpha(kText, 105)));   // the other patterns step back
+          if (marks & PatternLane::kLocked) {   // solo-edit: out of reach: faint, hatched, nothing to click
+            const ImVec2 at = ImGui::GetCursorScreenPos();
+            const float w = ImGui::CalcTextSize("0").x * static_cast<float>(std::max<std::size_t>(3, filled ? cells[static_cast<std::size_t>(c)].size() : 3)), h = rowHeight - ImGui::GetStyle().ItemSpacing.y;
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            dl->PushClipRect(at, ImVec2(at.x + w, at.y + h), true);
+            for (float x = -h; x < w; x += 5.0f) dl->AddLine(ImVec2(at.x + x, at.y + h), ImVec2(at.x + x + h, at.y), textAlpha(28));
+            dl->PopClipRect();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(textAlpha(55)));
+            ImGui::TextUnformatted(filled ? cells[static_cast<std::size_t>(c)].c_str() : "   ");
+            ImGui::PopStyleColor();
+            if (dimmed) ImGui::PopStyleColor();
+            continue;
+          }
           ImGui::PushID(tick * 4096 + firstColumn[li] + c);
           if (ImGui::Selectable(filled ? cells[static_cast<std::size_t>(c)].c_str() : "   ", false, ImGuiSelectableFlags_None)) { result.cellTick = tick; result.cell = c; result.lane = static_cast<int>(li); }
           ImGui::PopID();

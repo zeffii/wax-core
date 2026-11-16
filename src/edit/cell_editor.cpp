@@ -60,10 +60,12 @@ void CellEditor::setLane(const std::string& laneId, const std::vector<Column>& c
   cell_ = std::min(cell_, std::max(0, static_cast<int>(columns_.size()) - 1));
 }
 
+int CellEditor::firstTick() const { return solo() ? soloLo_ : 0; }
+int CellEditor::lastTick() const { return solo() ? std::min(soloHi_, std::max(1, document_.project().song.length)) - 1 : std::max(1, document_.project().song.length) - 1; }
+
 void CellEditor::moveTo(int tick, int cell) {
   selecting_ = false;
-  const int length = std::max(1, document_.project().song.length);
-  tick_ = std::clamp(tick, 0, length - 1);
+  tick_ = std::clamp(tick, firstTick(), std::max(firstTick(), lastTick()));
   cell_ = std::clamp(cell, 0, std::max(0, static_cast<int>(columns_.size()) - 1));
   typed_ = 0;
 }
@@ -80,8 +82,8 @@ void CellEditor::move(int rows, int cells) {
   }
   int tick = tick_ + rows;
   if (wrapRows_) {
-    const int length = std::max(1, document_.project().song.length);
-    tick = ((tick % length) + length) % length;
+    const int length = std::max(1, lastTick() - firstTick() + 1);
+    tick = firstTick() + (((tick - firstTick()) % length) + length) % length;
   }
   moveTo(tick, cell);
 }
@@ -114,6 +116,7 @@ CellEditor::Place CellEditor::placeAt(int tick) const {
 bool CellEditor::onPattern() const { return place().pattern != nullptr; }
 
 bool CellEditor::placePatternHere(const std::string& patternId) {
+  if (solo()) return false;
   const Project& project = document_.project();
   for (const Lane& lane : project.lanes) {
     if (lane.id != lane_) continue;
@@ -135,6 +138,7 @@ std::string CellEditor::blankRowText() const {
 }
 
 bool CellEditor::createPatternHere() {
+  if (solo()) return false;
   const Project& project = document_.project();
   const Lane* lane = nullptr;
   for (const Lane& l : project.lanes) if (l.id == lane_) lane = &l;
@@ -323,9 +327,8 @@ void CellEditor::extend(int rows, int cells) {
 }
 
 void CellEditor::selectAll() {
-  const int length = std::max(1, document_.project().song.length);
-  anchorTick_ = 0; anchorCell_ = 0;
-  tick_ = length - 1;
+  anchorTick_ = firstTick(); anchorCell_ = 0;
+  tick_ = lastTick();
   cell_ = std::max(0, static_cast<int>(columns_.size()) - 1);
   selecting_ = true;
 }
@@ -371,6 +374,7 @@ bool CellEditor::cut() {
 bool CellEditor::paste() {
   std::vector<std::unique_ptr<Edit>> parts;
   for (std::size_t i = 0; i < clipboard_.size(); i++) {
+    if (solo() && tick_ + static_cast<int>(i) > lastTick()) break;   // (nothing outside the pattern is pasted into)
     const Place at = placeAt(tick_ + static_cast<int>(i));
     if (!at.pattern) continue;
     std::string row = at.pattern->rows[static_cast<std::size_t>(at.row)];
