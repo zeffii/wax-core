@@ -22,7 +22,7 @@ const GraphNode* findNode(const Project& project, const std::string& instrumentI
   return nullptr;
 }
 
-bool isWave(const std::string& type) { return type == "osc"; }
+bool isWave(const std::string& type) { return type == "osc" || type == "fmsynth"; }
 
 std::vector<double> sineWave() {
   std::vector<double> w(kWavePoints);
@@ -236,7 +236,7 @@ bool drawSpectrum(ShapeWindow& window, Document& doc, const GraphNode& node) {
 
 }  // namespace
 
-bool hasShape(const std::string& nodeType) { return isWave(nodeType) || nodeType == "waveshaper" || nodeType == "addsynth" || nodeType == "shiva"; }
+bool hasShape(const std::string& nodeType) { return isWave(nodeType) || nodeType == "waveshaper" || nodeType == "addsynth" || nodeType == "shiva" || nodeType == "fmsynth"; }
 
 void showShape(ShapeWindow& window, const std::string& instrument, const std::string& node) {
   window.open = true; window.instrument = instrument; window.node = node; window.dragging = false; window.lastIndex = -1;
@@ -248,8 +248,8 @@ bool drawShapeWindow(ShapeWindow& window, Document& doc) {
   if (!node || !hasShape(node->type)) { window.open = false; return false; }
   if (node->type == "addsynth") return drawSpectrum(window, doc, *node);
   if (node->type == "shiva") return drawTaps(window, doc, *node);
-  const bool wave = isWave(node->type);
-  const char* key = wave ? "wave" : "curve";
+  const bool wave = isWave(node->type), fm = node->type == "fmsynth";   // (the FM synth keeps four waves, one for each operator, in data.waves)
+  const char* key = fm ? "waves" : wave ? "wave" : "curve";
   const int count = wave ? kWavePoints : kCurvePoints;
   const float scale = ImGui::GetStyle().FontScaleDpi;
   ImGui::SetNextWindowSize(ImVec2((wave ? 420.0f : 300.0f) * scale, (wave ? 250.0f : 360.0f) * scale), ImGuiCond_FirstUseEver);
@@ -257,11 +257,37 @@ bool drawShapeWindow(ShapeWindow& window, Document& doc) {
   const std::string title = std::string(wave ? "Wave  " : "Curve  ") + window.instrument + "." + window.node + "###shape";
   bool changed = false;
   if (ImGui::Begin(title.c_str(), &window.open, ImGuiWindowFlags_NoSavedSettings)) {
-    std::vector<double> points = pointsOf(*node, key, count, wave, wave ? sineWave() : softCurve());
+    if (fm) {   // which operator's wave
+      for (int k = 0; k < 4; k++) {
+        if (textButton(("op " + std::to_string(k + 1)).c_str(), window.op == k)) { window.op = k; window.dragging = false; window.lastIndex = -1; }
+        ImGui::SameLine(0, 14 * scale);
+      }
+      ImGui::NewLine();
+    }
+    const auto operatorWave = [&](int k) {
+      std::vector<double> given;
+      if (node->data.is_object() && node->data.contains("waves") && node->data["waves"].is_array() && static_cast<std::size_t>(k) < node->data["waves"].size() && node->data["waves"][static_cast<std::size_t>(k)].is_array())
+        for (const auto& v : node->data["waves"][static_cast<std::size_t>(k)]) given.push_back(v.is_number() ? v.get<double>() : 0.0);
+      if (given.size() < 2) return sineWave();
+      std::vector<double> out(kWavePoints);
+      for (int i = 0; i < kWavePoints; i++) {
+        const double x = static_cast<double>(i) / kWavePoints * static_cast<double>(given.size());
+        const std::size_t a = static_cast<std::size_t>(std::floor(x)), b = (a + 1) % given.size();
+        out[static_cast<std::size_t>(i)] = std::clamp(given[a % given.size()] * (1 - (x - std::floor(x))) + given[b] * (x - std::floor(x)), -1.0, 1.0);
+      }
+      return out;
+    };
+    std::vector<double> points = fm ? operatorWave(window.op) : pointsOf(*node, key, count, wave, wave ? sineWave() : softCurve());
     const auto emit = [&](const std::vector<double>& values, bool fold) {
       Json out = Json::array();
-      for (const double v : values) out.push_back(std::round(v * 10000) / 10000);
-      doc.apply(std::make_unique<SetNodeData>(window.instrument, window.node, key, out, wave ? "wave" : "curve"), fold);
+      if (fm) {
+        for (int k = 0; k < 4; k++) {
+          Json one = Json::array();
+          for (const double v : k == window.op ? values : operatorWave(k)) one.push_back(std::round(v * 10000) / 10000);
+          out.push_back(one);
+        }
+      } else for (const double v : values) out.push_back(std::round(v * 10000) / 10000);
+      doc.apply(std::make_unique<SetNodeData>(window.instrument, window.node, key, out, fm ? "waves" : wave ? "wave" : "curve"), fold);
       changed = true;
     };
 
