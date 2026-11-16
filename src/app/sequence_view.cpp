@@ -282,8 +282,8 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
     }
     draw->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.85f, ImVec2(left + 4 * scale, headTop + 3 * scale), lane.id == selectedLane ? kAccent : kDimText, lane.id.c_str());   // a small face, so names fit the lane
     draw->PopClipRect();
-    // a lane that does not sound steps back: a little where another lane is soloed, a tenth where it is muted; the whole column, head included
-    const int stepBack = lane.silenced ? 26 : lane.soloMuted ? 80 : 0;
+    // a lane that does not sound steps back, whether it is muted or another lane is soloed (the same amount); the whole column, head included
+    const int stepBack = lane.silenced || lane.soloMuted ? 80 : 0;
     if (stepBack > 0) draw->AddRectFilled(ImVec2(left, headTop), ImVec2(left + w, origin.y + headHeight + rowHeight * static_cast<float>(rows)), withAlpha(ImGui::GetColorU32(ImGuiCol_ChildBg), stepBack));
     left += w;
   }
