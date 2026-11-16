@@ -61,6 +61,10 @@ std::string AudioOut::deviceName() const { return impl_->device.playback.name; }
 std::string AudioOut::backendName() const { return ma_get_backend_name(impl_->context.backend); }
 double AudioOut::sampleRate() const { return impl_->device.sampleRate; }
 int AudioOut::bufferFrames() const { return static_cast<int>(impl_->device.playback.internalPeriodSizeInFrames); }
+double AudioOut::latencySeconds() const {
+  const auto& d = impl_->device;
+  return static_cast<double>(d.playback.internalPeriodSizeInFrames) * std::max<ma_uint32>(1, d.playback.internalPeriods) / std::max<ma_uint32>(1, d.sampleRate);
+}
 double AudioOut::load() const { return impl_->load.load(std::memory_order_relaxed); }
 long AudioOut::lateBuffers() const { return impl_->late.load(std::memory_order_relaxed); }
 

@@ -20,6 +20,7 @@ public:
   std::string deviceName() const;
   std::string backendName() const;
   double sampleRate() const;   // what the device really runs at
+  double latencySeconds() const;   // how long a sound handed to the device takes to be heard (its buffers, queued)
   int bufferFrames() const;    // the size of one callback, as the device was given it (0 asked: the device's own choice)
   // How busy the callback is: the share of the time a buffer lasts that filling it took (the worst of the recent ones),
   // and how many buffers took longer than they last (each one is a click).

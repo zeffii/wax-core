@@ -37,7 +37,6 @@ struct CursorView {
   bool loopOn = false;
   int loopStart = 0, loopEnd = 0;
   std::string info;                      // the line under the grid (what the column under the caret is); empty: no line
-  const char* playhead = "line";           // marker, line or band (the Config setting)
   float playFrac = 0;                    // how far through the playing row the song is (0..1): the playhead line glides through the row
 };
 

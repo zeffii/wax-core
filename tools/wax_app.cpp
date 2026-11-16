@@ -115,6 +115,25 @@ static std::filesystem::path pathFromUtf8(const std::string& text) { return std:
 // The x of the thin line to the right of the rail (the rail is 40 units wide and starts at `left`).
 static float railLineX(float left, float scale) { return std::floor(left + 40 * scale + ImGui::GetStyle().ItemSpacing.x / 2) + 0.5f; }
 
+// Where the song is as it is HEARD. The audio thread reports a tick when it has rendered it, which is the device's buffer ahead of the
+// speakers, so the display looks the tick up as it was one latency ago (and glides through the row from the moment that tick began).
+struct AudibleClock {
+  struct Stamp { double time; int tick; };
+  std::vector<Stamp> history;
+  int tick = 0;
+  float frac = 0;   // how far through the audible row (0..1)
+  void update(bool playing, int reported, double now, double latency, double tickSeconds) {
+    if (!playing) { history.clear(); tick = reported; frac = 0; return; }
+    if (history.empty() || history.back().tick != reported) history.push_back({now, reported});
+    const double heard = now - latency;
+    std::size_t at = 0;
+    for (std::size_t i = 0; i < history.size(); i++) if (history[i].time <= heard) at = i;
+    history.erase(history.begin(), history.begin() + static_cast<std::ptrdiff_t>(at));   // (older stamps are never asked for again)
+    tick = history.front().tick;
+    frac = static_cast<float>(std::clamp((heard - history.front().time) / tickSeconds, 0.0, 1.0));
+  }
+};
+
 struct Session {
   Project project;
   std::unique_ptr<Player> player;
@@ -177,6 +196,7 @@ struct Session {
   std::string wantLane;                  // a lane the arrangement asked for; its tab opens next frame
   int wantTick = -1;                     // and the cursor goes here
   app::SongEdit song;                    // the Song screen's keyboard state: the selected block, the copied block, the waypoint
+  AudibleClock heard;                    // where the song is as it is heard (the display follows this, not the audio thread's tick)
   std::string path;                      // the file this song was opened from, where Ctrl+S saves it
 
   int audioBuffer = 0;                   // the sound card buffer asked for (0: the card's own)
@@ -459,7 +479,9 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     }
   }
   ImGui::SameLine(0, 24 * ImGui::GetStyle().FontScaleDpi);
-  const int tick = player.tick();
+  const double tickSeconds = 60.0 / (std::max(1.0, song.bpm) * std::max(1, song.ticksPerBeat));
+  session->heard.update(playing, player.tick(), ImGui::GetTime(), session->audio ? session->audio->latencySeconds() : 0.0, tickSeconds);
+  const int tick = playing ? session->heard.tick : player.tick();
   const int perBeat = std::max(1, song.ticksPerBeat), perBar = perBeat * std::max(1, song.beatsPerBar);
   {   // the project name: it is the file name when you save
     if (!session->nameFocused) std::snprintf(session->projectName, sizeof session->projectName, "%s", song.name.c_str());
@@ -1206,15 +1228,9 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       cursor.tick = editor.tick();
       cursor.cell = editor.cell();
       cursor.scrollTo = session->scrollToCursor;
-      cursor.playhead = app::settings().playhead.c_str();
       const CellEditor::Selection sel = editor.selection();
       { const LoopRange lr = loopOf(song); cursor.loop = song.raw.is_object() && song.raw.contains("loop") && song.raw["loop"].is_object(); cursor.loopOn = lr.on; cursor.loopStart = lr.start; cursor.loopEnd = lr.end; }
-      {   // how far through the playing row we are: the time since the tick changed over one tick's length
-        static int lastTick = -1; static double changedAt = 0;
-        if (tick != lastTick) { lastTick = tick; changedAt = ImGui::GetTime(); }
-        const double tickSeconds = 60.0 / (std::max(1.0, song.bpm) * std::max(1, song.ticksPerBeat));
-        cursor.playFrac = playing ? static_cast<float>(std::clamp((ImGui::GetTime() - changedAt) / tickSeconds, 0.0, 1.0)) : 0.0f;
-      }
+      cursor.playFrac = playing ? session->heard.frac : 0.0f;
       cursor.info = app::describeColumn(doc.project(), cursorOwner, session->player->engine().laneColumns(cursorOwner.id), session->rows[cursorOwner.id], editor.tick(), editor.cell());
       cursor.selected = sel.active; cursor.tick0 = sel.tick0; cursor.tick1 = sel.tick1; cursor.cell0 = sel.cell0; cursor.cell1 = sel.cell1;
       session->scrollToCursor = false;
@@ -1365,16 +1381,6 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   }
     group("Playing", "How the screens behave while the song runs.");
     if (ImGui::Checkbox("Follow mode (the grids scroll with the playing row)", &follow)) { cfg.follow = follow; changed = true; }
-    {
-      static const struct { const char* id; const char* label; } looks[] = {{"marker", "a > in the tick column and a tinted row"}, {"line", "a thin line gliding through the playing row"}, {"band", "the tinted row alone"}};
-      const char* shown = looks[1].label;
-      for (const auto& look : looks) if (cfg.playhead == look.id) shown = look.label;
-      ImGui::SetNextItemWidth(430 * scale);
-      if (ImGui::BeginCombo("Playhead", shown)) {
-        for (const auto& look : looks) if (ImGui::Selectable(look.label, cfg.playhead == look.id)) { cfg.playhead = look.id; changed = true; }
-        ImGui::EndCombo();
-      }
-    }
     group("Graph", "Wire colours by kind of signal, and dashed control wires.");
     colour("Wire colour: audio", cfg.wireAudio);
     colour("Wire colour: control", cfg.wireControl);

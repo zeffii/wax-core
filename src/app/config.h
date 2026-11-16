@@ -16,9 +16,6 @@ struct Settings {
   ImU32 wireStereo = IM_COL32(0xb1, 0x77, 0xc5, 255);
   ImU32 wireParam = IM_COL32(0xf4, 0x85, 0x7b, 255);
   bool wireDashed = true;
-  // how the playing row is shown in the pattern editor: "marker" (a > by the tick and a tinted row), "line" (a thin line gliding through the
-  // row, with the tint) or "band" (the tinted row alone)
-  std::string playhead = "line";
   bool follow = true;   // the grids scroll with the playing row
   bool insertCut = false;   // Insert silence cuts a pattern that runs across the cursor row (off: it stays whole)
   bool patternAll = false;     // the Pattern screen shows every lane side by side (off: one lane, picked by its tab)

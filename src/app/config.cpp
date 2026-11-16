@@ -51,8 +51,6 @@ void loadSettings() {
   s.wireStereo = colourOf(data.value("wireStereo", Json()), s.wireStereo);
   s.wireParam = colourOf(data.value("wireParam", Json()), s.wireParam);
   s.wireDashed = data.value("wireDashed", s.wireDashed);
-  const std::string playhead = data.value("playhead", s.playhead);
-  if (playhead == "marker" || playhead == "line" || playhead == "band") s.playhead = playhead;
   s.follow = data.value("follow", s.follow);
   s.arrangementRow = data.value("arrangementRow", s.arrangementRow);
   s.insertCut = data.value("insertCut", s.insertCut);
@@ -89,7 +87,7 @@ void saveSettings() {
   if (path.empty()) return;
   const Settings& s = gSettings;
   Json data = {{"wireAudio", hexOf(s.wireAudio)}, {"wireControl", hexOf(s.wireControl)}, {"wireStereo", hexOf(s.wireStereo)},
-               {"wireParam", hexOf(s.wireParam)}, {"wireDashed", s.wireDashed}, {"playhead", s.playhead}, {"follow", s.follow}, {"arrangementRow", s.arrangementRow}, {"insertCut", s.insertCut}, {"patternAll", s.patternAll}, {"hideEmpty", s.hideEmpty}, {"seqNames", s.seqNames}, {"patternText", s.patternText}, {"notePreview", s.notePreview}, {"tintPatterns", s.tintPatterns},
+               {"wireParam", hexOf(s.wireParam)}, {"wireDashed", s.wireDashed}, {"follow", s.follow}, {"arrangementRow", s.arrangementRow}, {"insertCut", s.insertCut}, {"patternAll", s.patternAll}, {"hideEmpty", s.hideEmpty}, {"seqNames", s.seqNames}, {"patternText", s.patternText}, {"notePreview", s.notePreview}, {"tintPatterns", s.tintPatterns},
                {"backupOn", s.backupOn}, {"backupMinutes", s.backupMinutes}, {"backupKeep", s.backupKeep}, {"rowWrap", s.rowWrap}, {"graphPullOut", s.graphPullOut}, {"threads", s.threads}, {"laneWrap", s.laneWrap}, {"sliceSensitivity", s.sliceSensitivity}, {"sliceMinGap", s.sliceMinGap}, {"sliceReplace", s.sliceReplace}, {"sliceWhole", s.sliceWhole},
                {"waveHideLoop", s.waveHideLoop}, {"waveHideSel", s.waveHideSel}, {"waveHideSus", s.waveHideSus}, {"hexMode", s.hexMode}, {"sampleAskMB", s.sampleAskMB}, {"recentFiles", s.recentFiles}};
   std::ofstream(path, std::ios::trunc) << data.dump(1) << "\n";

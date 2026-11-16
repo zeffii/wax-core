@@ -109,7 +109,7 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
   while (clipper.Step()) {
     for (int tick = clipper.DisplayStart; tick < clipper.DisplayEnd; tick++) {
       ImGui::TableNextRow();
-      const ImU32 tint = tick == playTick ? kPlayRow : tick % bar == 0 ? kBarRow : tick % beat == 0 ? kBeatRow : 0;
+      const ImU32 tint = tick % bar == 0 ? kBarRow : tick % beat == 0 ? kBeatRow : 0;
       if (tint) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, tint);
       ImGui::TableSetColumnIndex(0);
       if (tick == playTick) playY = ImGui::GetCursorScreenPos().y - 1;
@@ -124,7 +124,6 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
       }
       char number[16];
       std::snprintf(number, sizeof number, "%03d", tick);
-      if (tick == playTick && std::string(cursor.playhead) == "marker") number[0] = '>';   // (the marker: a > in the first place of the tick)
       ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(tick % beat == 0 ? kWarm : kDimText));
       if (ImGui::Selectable(number, false, ImGuiSelectableFlags_None)) result.clickedTick = tick;
       ImGui::PopStyleColor();
@@ -172,13 +171,13 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
       }
     }
   }
-  if (playY >= 0 && std::string(cursor.playhead) == "line") {   // the playhead: a thin line across the table, moving down through the row as the song plays
+  if (playY >= 0) {   // the playhead: a thin red line across the table, moving down through the row as the song plays
     const float y = playY + cursor.playFrac * rowHeight;
     const ImVec2 from = ImGui::GetWindowPos();
     ImDrawList* draw = ImGui::GetWindowDrawList();
     const float headerBottom = from.y + rowHeight * 1.5f;   // keep the line out from under the column headings
     draw->PushClipRect(ImVec2(from.x, headerBottom), ImVec2(from.x + ImGui::GetWindowWidth(), from.y + ImGui::GetWindowHeight()), false);
-    draw->AddLine(ImVec2(from.x, y), ImVec2(from.x + ImGui::GetWindowWidth(), y), kAccent, 1.5f);
+    draw->AddLine(ImVec2(from.x, y), ImVec2(from.x + ImGui::GetWindowWidth(), y), IM_COL32(230, 60, 60, 255), 1.0f);
     draw->PopClipRect();
   }
   ImGui::PopStyleColor(3);
