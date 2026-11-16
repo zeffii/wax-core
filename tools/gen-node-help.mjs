@@ -12,14 +12,18 @@ const { hintFor } = await load('src/graph/hints.js');
 const types = Array.isArray(NODE_TYPES) ? NODE_TYPES : Object.values(NODE_TYPES);
 
 // A C++ string literal: printable ASCII as it is, everything else as octal escapes of its UTF-8 bytes (octal stops after three digits, so the
-// next character can never be taken into the escape).
+// next character can never be taken into the escape). A digit straight after an escape starts a new piece of the literal ("" joins them),
+// which keeps MSVC from warning that a decimal digit ends an octal escape (C4125).
 const lit = text => {
-  let out = '"';
+  let out = '"', afterEscape = false;
   for (const byte of Buffer.from(String(text), 'utf8')) {
     const ch = String.fromCharCode(byte);
+    const plain = byte >= 32 && byte < 127 && ch !== '"' && ch !== '\\';
+    if (afterEscape && plain && ch >= '0' && ch <= '9') out += '""';
     if (ch === '"' || ch === '\\') out += `\\${ch}`;
     else if (byte >= 32 && byte < 127) out += ch;
     else out += `\\${byte.toString(8).padStart(3, '0')}`;
+    afterEscape = !plain && !(byte >= 32 && byte < 127);
   }
   return `${out}"`;
 };
