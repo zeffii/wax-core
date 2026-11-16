@@ -214,3 +214,5 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 - Tap view for the delay ("edit taps", `drawTaps` in shape_window.cpp): level stems and pan dots, click empty space to add (up to 16), drag to move, double-click to remove/centre, presets even/ping-pong/accel/random/default; the comb response curve of the web's view is not drawn.
 
 - FM synth: "draw wave" has op 1-4 tabs (data.waves, one 128-point wave per operator), in the same window as the oscillator's wave.
+
+- Chord node: "edit chords" opens the 256-slot window (pages 0x-Fx, a box per slot with the notes it makes, unreadable names marked); data.chords, one undo step per slot.
