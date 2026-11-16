@@ -143,7 +143,7 @@ struct Session {
   std::string laneNameFor;               // the lane that text belongs to
   int silenceTicks = 128;                // the length of silence Insert puts in
   bool wantTree = false;                 // open the machine tree (Shift+I, or the Instrument screen's add button)
-  bool showKeys = true;                  // the shortcut sheet beside the Pattern grid
+  bool showKeys = false;                  // the shortcut sheet beside the Pattern grid
   std::future<std::string> exporting;     // a render to a WAV file in the background: its answer is the message to show
   std::vector<char> infoText = std::vector<char>(65536, 0);   // the Info screen's text while it is being edited (up to 64 KB)
   bool infoFocused = false;
