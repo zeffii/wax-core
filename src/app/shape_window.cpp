@@ -57,9 +57,73 @@ std::vector<double> pointsOf(const GraphNode& node, const char* key, int count, 
 
 struct Preset { const char* name; std::function<std::vector<double>()> make; };
 
+// The additive synth's levels: one bar per partial (32), the fundamental on the left, each from 0 to 1 (data.spectrum).
+bool drawSpectrum(ShapeWindow& window, Document& doc, const GraphNode& node) {
+  constexpr int kHarmonics = 32;
+  const float scale = ImGui::GetStyle().FontScaleDpi;
+  ImGui::SetNextWindowSize(ImVec2(520 * scale, 220 * scale), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowPos(ImVec2(240 * scale, 120 * scale), ImGuiCond_FirstUseEver);
+  const std::string title = "Spectrum  " + window.instrument + "." + window.node + "###shape";
+  bool changed = false;
+  if (ImGui::Begin(title.c_str(), &window.open, ImGuiWindowFlags_NoSavedSettings)) {
+    std::vector<double> bars;   // as stored (a shorter list repeats its last value), else a saw
+    if (node.data.is_object() && node.data.contains("spectrum") && node.data["spectrum"].is_array())
+      for (const auto& v : node.data["spectrum"]) bars.push_back(v.is_number() ? std::clamp(v.get<double>(), 0.0, 1.0) : 0.0);
+    if (bars.empty()) for (int i = 0; i < kHarmonics; i++) bars.push_back(1.0 / (i + 1));
+    while (static_cast<int>(bars.size()) < kHarmonics) bars.push_back(bars.back());
+    bars.resize(kHarmonics);
+    const auto emit = [&](const std::vector<double>& values, bool fold) {
+      Json out = Json::array();
+      for (const double v : values) out.push_back(std::round(v * 1000) / 1000);
+      doc.apply(std::make_unique<SetNodeData>(window.instrument, window.node, "spectrum", out, "spectrum"), fold);
+      changed = true;
+    };
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 size(ImGui::GetContentRegionAvail().x, std::max(60.0f * scale, ImGui::GetContentRegionAvail().y - 40 * scale));
+    const ImVec2 min = ImGui::GetCursorScreenPos(), max(min.x + size.x, min.y + size.y);
+    ImGui::InvisibleButton("bars", size);
+    const float barW = size.x / kHarmonics;
+    if (ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+      const ImVec2 mouse = ImGui::GetIO().MousePos;
+      const int index = std::clamp(static_cast<int>(std::floor((mouse.x - min.x) / barW)), 0, kHarmonics - 1);
+      const double v = std::clamp(1.0 - static_cast<double>((mouse.y - min.y) / (size.y - 2)), 0.0, 1.0);
+      if (window.lastIndex < 0) bars[static_cast<std::size_t>(index)] = v;
+      else {   // the bars passed over since the last mouse event
+        const int step = index >= window.lastIndex ? 1 : -1, span = std::max(1, std::abs(index - window.lastIndex));
+        for (int j = window.lastIndex, s = 0; s <= span; j += step, s++) bars[static_cast<std::size_t>(j)] = window.lastValue + (v - window.lastValue) * s / span;
+      }
+      window.lastIndex = index; window.lastValue = v;
+      emit(bars, window.dragging);
+      window.dragging = true;
+    } else { window.dragging = false; window.lastIndex = -1; }
+    for (int i = 0; i < kHarmonics; i++) {
+      const float x = min.x + static_cast<float>(i) * barW, top = max.y - static_cast<float>(bars[static_cast<std::size_t>(i)]) * (size.y - 2);
+      dl->AddRectFilled(ImVec2(x + 1, min.y), ImVec2(x + barW - 1, max.y), IM_COL32(128, 128, 128, 30));
+      dl->AddRectFilled(ImVec2(x + 1, top), ImVec2(x + barW - 1, max.y), IM_COL32(235, 150, 60, 255));
+    }
+    struct Preset { const char* name; double (*level)(int); };
+    const Preset presets[] = {
+      {"saw", [](int n) { return 1.0 / n; }}, {"square", [](int n) { return n % 2 ? 1.0 / n : 0.0; }}, {"triangle", [](int n) { return n % 2 ? 1.0 / (n * n) : 0.0; }},
+      {"organ", [](int n) { static const int at[] = {1, 2, 3, 4, 6, 8}; static const double v[] = {1, 0.8, 0.6, 0.5, 0.35, 0.3}; for (int k = 0; k < 6; k++) if (at[k] == n) return v[k]; return 0.0; }},
+      {"hollow", [](int n) { return n % 2 ? std::exp(-(n - 1) / 6.0) : 0.0; }}, {"formant", [](int n) { return 0.12 / n + std::exp(-std::pow((n - 7) / 1.8, 2)); }},
+      {"sine", [](int n) { return n == 1 ? 1.0 : 0.0; }}};
+    for (const Preset& preset : presets) {
+      if (textButton(preset.name)) {
+        std::vector<double> values(kHarmonics);
+        for (int i = 0; i < kHarmonics; i++) values[static_cast<std::size_t>(i)] = std::clamp(preset.level(i + 1), 0.0, 1.0);
+        emit(values, false);
+      }
+      ImGui::SameLine(0, 14 * scale);
+    }
+    ImGui::NewLine();
+  }
+  ImGui::End();
+  return changed;
+}
+
 }  // namespace
 
-bool hasShape(const std::string& nodeType) { return isWave(nodeType) || nodeType == "waveshaper"; }
+bool hasShape(const std::string& nodeType) { return isWave(nodeType) || nodeType == "waveshaper" || nodeType == "addsynth"; }
 
 void showShape(ShapeWindow& window, const std::string& instrument, const std::string& node) {
   window.open = true; window.instrument = instrument; window.node = node; window.dragging = false; window.lastIndex = -1;
@@ -69,6 +133,7 @@ bool drawShapeWindow(ShapeWindow& window, Document& doc) {
   if (!window.open) return false;
   const GraphNode* node = findNode(doc.project(), window.instrument, window.node);
   if (!node || !hasShape(node->type)) { window.open = false; return false; }
+  if (node->type == "addsynth") return drawSpectrum(window, doc, *node);
   const bool wave = isWave(node->type);
   const char* key = wave ? "wave" : "curve";
   const int count = wave ? kWavePoints : kCurvePoints;
