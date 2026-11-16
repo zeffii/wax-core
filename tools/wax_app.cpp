@@ -1280,7 +1280,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
             if (!owner) continue;
             const Pattern* pat = seq::patternOf(*shownLane, owner->pattern);
             unsigned char& mark = grid.marks[static_cast<std::size_t>(t)];
-            if (t == owner->start) { mark |= app::PatternLane::kStart; if (pat) grid.edge[static_cast<std::size_t>(t)] = app::patternColour(*pat, 230); }
+            if (t == owner->start) { mark |= app::PatternLane::kStart; if (pat) grid.edge[static_cast<std::size_t>(t)] = app::patternColour(*pat, 95); }
             if (under && owner != under) mark |= app::PatternLane::kDim;
           }
           if (session->solo.on && app::settings().soloHatch)   // solo-edit with the song shown: everything but the pattern is out of reach
