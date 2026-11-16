@@ -18,6 +18,7 @@
 #include <fstream>
 #include <map>
 #include <sstream>
+#include <thread>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -88,7 +89,7 @@ void SDLCALL dialogDone(void* userdata, const char* const* files, int) {
 struct Options {
   std::string path, screenshot, press, clicks, envelope, dxnode, screen, theme;   // clicks: "x,y;x,y" mouse clicks, one every 6 frames; envelope: "instrument.node" opens its envelope window   // press: keys to press one after another (for checking the window without a keyboard)
   double rate = 48000;
-  int threads = 1, midiPort = 0, frames = 3, playFrom = -1, buffer = 0;
+  int threads = 0, midiPort = 0, frames = 3, playFrom = -1, buffer = 0;
   bool useNull = false;
   bool splashForced = false;
   bool splash = true;   // the Wax logo for a moment at start (not when taking a screenshot, unless --splash is given)
@@ -155,11 +156,12 @@ struct Session {
   int wantTick = -1;                     // and the cursor goes here
   std::string path;                      // the file this song was opened from, where Ctrl+S saves it
 
+  int audioBuffer = 0;                   // the sound card buffer asked for (0: the card's own)
   Session(const std::string& filePath, const Options& options) : Session(loadProject(filePath), filePath, options) {}
   Session(Project loaded, const std::string& filePath, const Options& options) : project(std::move(loaded)), path(filePath) {
     for (const Instrument& inst : project.instruments) if (inst.id != kMaster && !inst.isMeta) playable.push_back(inst.id);
     keyjazzInstrument = playable.empty() ? std::string() : playable.front();
-    player = std::make_unique<Player>(project, options.rate, options.threads, keyjazzInstrument, true);
+    player = std::make_unique<Player>(project, options.rate, options.threads > 0 ? options.threads : app::settings().threads, keyjazzInstrument, true);
     doc = std::make_unique<Document>(project);
     editor = std::make_unique<CellEditor>(*doc);
     try {
@@ -182,9 +184,18 @@ struct Session {
   void openAudio(const Options& options, int bufferFrames) {
     audio.reset();
     player->ring().push({LiveCommand::AllOff, 0, 0});
+    audioBuffer = bufferFrames;
     audio = std::make_unique<AudioOut>(*player, options.rate, options.useNull, bufferFrames);
     audioName = audio->deviceName() + " (" + audio->backendName() + ")";
     audio->start();
+  }
+  // Gives the engine another number of render threads: the sound card's callback is stopped while the pool is rebuilt, then started again.
+  void setThreads(const Options& options, int threads) {
+    audio.reset();
+    player->ring().push({LiveCommand::AllOff, 0, 0});
+    player->engine().runtime().setThreads(threads);
+    try { openAudio(options, audioBuffer); }
+    catch (const std::exception& e) { audioName = std::string("no sound: ") + e.what(); }
   }
   ~Session() {
     if (midi) midi->closePort();   // the callback must not outlive the player
@@ -1229,6 +1240,20 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       ImGui::EndCombo();
     }
   }
+    group("Engine", "How many cores render the sound. The sound is the same on any number.");
+  if (session->audio) {
+    const int available = std::max(1u, std::thread::hardware_concurrency());
+    const int inUse = session->player->engine().runtime().threads();
+    const ImVec4 dim = ImGui::ColorConvertU32ToFloat4(app::kDimText);
+    ImGui::TextColored(dim, "cores available: %d   in use: %d", available, inUse);
+    ImGui::SetNextItemWidth(220 * scale);
+    ImGui::SliderInt("Render threads", &cfg.threads, 1, available);
+    if (ImGui::IsItemDeactivatedAfterEdit()) {   // (applied when let go: it restarts the sound for a moment)
+      changed = true;
+      if (cfg.threads != inUse) session->setThreads(options, cfg.threads);
+    }
+    ImGui::TextColored(dim, "it may not be in your best interest to use all cores");
+  }
     group("Playing", "How the screens behave while the song runs.");
     if (ImGui::Checkbox("Follow mode (the grids scroll with the playing row)", &follow)) { cfg.follow = follow; changed = true; }
     {
@@ -1499,15 +1524,18 @@ int main(int argc, char** argv) {
 
   std::unique_ptr<Session> session;
   std::string status;
+  const auto showScreenOption = [&] {   // --screen: the screen a headless run starts on
+    if (options.screen == "song") session->screen = Screen::Song;
+    else if (options.screen == "instrument") session->screen = Screen::Instrument;
+    else if (options.screen == "sample") session->screen = Screen::Sample;
+    else if (options.screen == "info") session->screen = Screen::Info;
+    else if (options.screen == "config") session->screen = Screen::Config;
+  };
   const auto open = [&](const std::string& path) {
     session.reset();   // the old sound stops before the new song is built
     try {
       session = std::make_unique<Session>(path, options);
-      if (options.screen == "song") session->screen = Screen::Song;
-      else if (options.screen == "instrument") session->screen = Screen::Instrument;
-      else if (options.screen == "sample") session->screen = Screen::Sample;
-      else if (options.screen == "info") session->screen = Screen::Info;
-      else if (options.screen == "config") session->screen = Screen::Config;
+      showScreenOption();
       std::string title = "Wax - " + session->project.song.name;
       SDL_SetWindowTitle(window, title.c_str());
       status.clear();
@@ -1518,7 +1546,7 @@ int main(int argc, char** argv) {
   };
   if (!options.path.empty()) open(options.path);
   else {   // no file given: a new, empty song (File > Open, or a file dropped on the window, replaces it)
-    try { session = std::make_unique<Session>(blankProject(), std::string(), options); SDL_SetWindowTitle(window, "Wax - untitled"); }
+    try { session = std::make_unique<Session>(blankProject(), std::string(), options); SDL_SetWindowTitle(window, "Wax - untitled"); showScreenOption(); }
     catch (const std::exception& e) { status = std::string("Could not start a new song: ") + e.what(); }
   }
 
