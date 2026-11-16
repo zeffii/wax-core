@@ -34,6 +34,7 @@ GraphNode readNode(const Json& n) {
   node.id = n.at("id").get<std::string>();
   node.type = n.at("type").get<std::string>();
   if (node.type == "busin") node.type = "bus-in";   // build 748 called it busin
+  if (node.type == "note") node.type = "msg";       // the message node was first called note
   node.params = n.value("params", Json::object());
   node.ports = n.value("ports", std::vector<std::string>());
   node.stereo = n.value("stereo", false);

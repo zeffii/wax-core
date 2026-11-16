@@ -43,11 +43,11 @@ void registerTempo(NodeRegistry& registry) {
   groups.create = [](const NodeContext&) { return std::make_unique<Tempo>(); };
   registry.add(std::move(groups));
 
-  // A note left on the graph for whoever opens the instrument next: text only (its data is { text, open }), no ports, no sound.
-  NodeType note;
-  note.type = "note";
-  note.create = [](const NodeContext&) { return std::make_unique<Tempo>(); };
-  registry.add(std::move(note));
+  // A message left on the graph for whoever opens the instrument next: text only (its data is { text, open }), no ports, no sound.
+  NodeType msg;
+  msg.type = "msg";
+  msg.create = [](const NodeContext&) { return std::make_unique<Tempo>(); };
+  registry.add(std::move(msg));
 }
 
 }  // namespace wax

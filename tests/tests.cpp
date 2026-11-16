@@ -1572,18 +1572,27 @@ void testSequenceOps() {
   const PlaceResult back = placeClip(pair, sigs, clip, 0, 100, context);
   check(back.placed == 2 && pair[0].patterns.size() == 1, "block: pasted into its own lane it is the same pattern");
   check(placeClip(pair, {"x", "other"}, clip, 1, 0, context).skipped == 2, "block: a lane with other columns takes nothing");
-  {   // a note left on a graph survives saving and loading, text and fold state
+  {   // a message left on a graph survives saving and loading, text and fold state
     Document noted(loadProject(std::string(WAX_TEST_SONGS) + "/cloves.wax"));
     const std::string instrument = noted.project().instruments.front().id;
-    noted.apply(std::make_unique<AddNode>(instrument, "note", "note", 40, 40));
-    noted.apply(std::make_unique<SetNodeData>(instrument, "note", "text", Json("keep the gain low"), "note"));
-    noted.apply(std::make_unique<SetNodeData>(instrument, "note", "open", Json(false), "fold note"));
+    noted.apply(std::make_unique<AddNode>(instrument, "msg", "msg", 40, 40));
+    noted.apply(std::make_unique<SetNodeData>(instrument, "msg", "text", Json("keep the gain low"), "message"));
+    noted.apply(std::make_unique<SetNodeData>(instrument, "msg", "open", Json(false), "fold message"));
     const std::string file = (std::filesystem::temp_directory_path() / "wax-note-test.wax").string();
     saveProject(noted.project(), file);
     const Project again = loadProject(file);
     bool kept = false;
-    for (const GraphNode& n : again.instruments.front().graph.nodes) if (n.type == "note") kept = n.data.value("text", std::string()) == "keep the gain low" && !n.data.value("open", true);
-    check(kept, "note: saved and loaded again with its text and fold state");
+    for (const GraphNode& n : again.instruments.front().graph.nodes) if (n.type == "msg") kept = n.data.value("text", std::string()) == "keep the gain low" && !n.data.value("open", true);
+    check(kept, "msg: saved and loaded again with its text and fold state");
+    {   // a message saved under its first name, note, loads as msg
+      Json saved; { std::ifstream in(file); in >> saved; }
+      for (auto& [id, instrument] : saved["instruments"].items())
+        for (Json& n : instrument["graph"]["nodes"]) if (n.value("type", "") == "msg") n["type"] = "note";
+      { std::ofstream out(file); out << saved.dump(); }
+      bool migrated = false;
+      for (const GraphNode& n : loadProject(file).instruments.front().graph.nodes) if (n.type == "msg") migrated = true;
+      check(migrated, "msg: a file with the first name, note, loads as msg");
+    }
     std::filesystem::remove(file);
   }
   Project soloing;

@@ -41,7 +41,6 @@ std::vector<int> hotkeys(const std::vector<Row>& rows) {
 std::vector<Row> buildTree(const std::set<std::string>& available) {
   std::map<std::string, std::vector<std::string>> byCategory;
   for (const MenuType& t : kMenuTypes) if (available.count(t.type)) byCategory[t.category].push_back(t.type);
-  if (available.count("note")) byCategory["Control"].push_back("note");   // (a note on the graph is not in the generated table; it is listed after the groups)
   std::vector<std::string> names;
   for (const char* c : kMenuOrder) if (byCategory.count(c)) names.push_back(c);
   for (const auto& [c, list] : byCategory) if (std::find(names.begin(), names.end(), c) == names.end()) names.push_back(c);

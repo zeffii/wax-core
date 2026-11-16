@@ -96,14 +96,19 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
   ImGui::TableHeadersRow();
 
   const float rowHeight = ImGui::GetTextLineHeightWithSpacing();
+  // How far apart the rows really are on screen (a table row is its text plus the cell padding, which is not what the line height says):
+  // measured from the rows drawn last frame, because the follow scroll and the playhead move by whole rows and drift if the pitch is wrong.
+  static float measuredPitch = 0;
+  const float rowPitch = measuredPitch > 1 ? measuredPitch : rowHeight;
   if (follow && playTick >= 0) {
     const float visible = ImGui::GetWindowHeight() - rowHeight * 2;
-    ImGui::SetScrollY(std::max(0.0f, (static_cast<float>(playTick) + cursor.playFrac) * rowHeight - visible * 0.4f));
+    ImGui::SetScrollY(std::max(0.0f, (static_cast<float>(playTick) + cursor.playFrac) * rowPitch - visible * 0.4f));
   }
 
   const int beat = std::max(1, ticksPerBeat), bar = beat * std::max(1, beatsPerBar);
   ImGuiListClipper clipper;
   float playY = -1;   // screen y of the playing row's top, when it was drawn
+  int firstTick = -1, lastTick = -1; float firstY = 0, lastY = 0;   // the first and last rows drawn, to measure the pitch
   clipper.Begin(static_cast<int>(rows.size()));
   if (cursor.show && cursor.scrollTo && cursor.tick >= 0) clipper.IncludeItemByIndex(cursor.tick);
   while (clipper.Step()) {
@@ -113,6 +118,8 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
       if (tint) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, tint);
       ImGui::TableSetColumnIndex(0);
       if (tick == playTick) playY = ImGui::GetCursorScreenPos().y - 1;
+      if (firstTick < 0) { firstTick = tick; firstY = ImGui::GetCursorScreenPos().y; }
+      lastTick = tick; lastY = ImGui::GetCursorScreenPos().y;
       if (cursor.loop && tick >= cursor.loopStart && tick < cursor.loopEnd) {   // the loop: a bar down the row-number column, ends marked
         const ImVec2 at = ImGui::GetCursorScreenPos();
         const float rowH = ImGui::GetTextLineHeightWithSpacing();
@@ -171,8 +178,9 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
       }
     }
   }
+  if (lastTick > firstTick) measuredPitch = (lastY - firstY) / static_cast<float>(lastTick - firstTick);
   if (playY >= 0) {   // the playhead: a thin red line across the table, moving down through the row as the song plays
-    const float y = playY + cursor.playFrac * rowHeight;
+    const float y = playY + cursor.playFrac * rowPitch;
     const ImVec2 from = ImGui::GetWindowPos();
     ImDrawList* draw = ImGui::GetWindowDrawList();
     const float headerBottom = from.y + rowHeight * 1.5f;   // keep the line out from under the column headings
