@@ -107,12 +107,26 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
     if (y < scrollY + headHeight || y > scrollY + viewHeight - 2 * rowHeight) ImGui::SetScrollY(std::max(0.0f, y - viewHeight * 0.4f));
   }
 
+  // the overview strip at the right edge (when the whole song is not on show already): its place, so clicks there do not reach the sheet
+  const float stripPad = 4 * scale;
+  const int lanesShown = static_cast<int>(std::count_if(project.lanes.begin(), project.lanes.end(), [](const Lane& l) { return !l.placements.empty(); }));
+  const float stripW = static_cast<float>(lanesShown) * 8 * scale + 8 * scale;
+  const float bodyHeight = viewHeight - headHeight;
+  const bool fitsOnScreen = bodyHeight >= rowHeight * static_cast<float>(rows);
+  const bool hasStrip = !fitsOnScreen && lanesShown > 0 && bodyHeight > 40 * scale;
+  const float scrollbarW = ImGui::GetScrollMaxY() > 0 ? ImGui::GetStyle().ScrollbarSize : 0;
+  const ImVec2 windowPos = ImGui::GetWindowPos();
+  const ImVec2 stripMin(windowPos.x + ImGui::GetWindowWidth() - scrollbarW - stripW - stripPad, windowPos.y + headHeight);
+  const ImVec2 stripMax(stripMin.x + stripW, stripMin.y + std::max(0.0f, bodyHeight - stripPad));
+  const ImVec2 mousePos = ImGui::GetIO().MousePos;
+  const bool overStrip = hasStrip && mousePos.x >= stripMin.x && mousePos.x < stripMax.x && mousePos.y >= stripMin.y && mousePos.y < stripMax.y;
+
   // the click target covers the whole sheet
   ImGui::SetCursorScreenPos(origin);
   ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
   ImGui::InvisibleButton("##sheet", ImVec2(totalWidth, headHeight + rowHeight * static_cast<float>(rows)));
   ImGui::PopItemFlag();
-  if (ImGui::IsItemClicked()) {
+  if (ImGui::IsItemClicked() && !overStrip) {
     const ImVec2 mouse = ImGui::GetIO().MousePos;
     const float y = mouse.y - origin.y - headHeight;
     float x = mouse.x - origin.x - gutter;
@@ -204,6 +218,38 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
     left += w;
   }
   draw->AddLine(ImVec2(origin.x, headTop + headHeight - 1), ImVec2(origin.x + totalWidth, headTop + headHeight - 1), kLine);
+
+  if (hasStrip) {   // the overview: the whole song in a thin strip, patterns in their colours; click or drag to scroll there
+    const int len = std::max(1, project.song.length);
+    const float inner = 2 * scale, height = std::max(1.0f, stripMax.y - stripMin.y - 2 * inner);
+    const auto yOf = [&](int tick) { return stripMin.y + inner + static_cast<float>(std::clamp(tick, 0, len)) / static_cast<float>(len) * height; };
+    draw->PushClipRect(windowPos, ImVec2(windowPos.x + ImGui::GetWindowWidth(), windowPos.y + viewHeight), false);
+    draw->AddRectFilled(stripMin, stripMax, lineAlpha(40));
+    if (loop.start < loop.end && loop.on) draw->AddRectFilled(ImVec2(stripMin.x, yOf(loop.start)), ImVec2(stripMax.x, yOf(loop.end)), withAlpha(kWarm, 40));
+    float x = stripMin.x + 4 * scale;
+    for (const Lane& lane : project.lanes) {
+      if (lane.placements.empty()) continue;
+      for (const Placement& placement : lane.placements) {
+        const Pattern* pattern = patternOf(lane, placement.pattern);
+        if (!pattern) continue;
+        const int end = placement.start + std::min(placement.length, static_cast<int>(pattern->rows.size()));
+        draw->AddRectFilled(ImVec2(x, yOf(placement.start)), ImVec2(x + 6 * scale, std::max(yOf(placement.start) + 1.5f, yOf(end) - 1)), patternColour(*pattern, lane.id == selectedLane ? 230 : 150));
+      }
+      x += 8 * scale;
+    }
+    const int firstTick = static_cast<int>(scrollY / rowHeight) * cell, lastTick = static_cast<int>((scrollY + bodyHeight) / rowHeight) * cell;
+    draw->AddRectFilled(ImVec2(stripMin.x, yOf(firstTick)), ImVec2(stripMax.x, std::max(yOf(firstTick) + 3, yOf(lastTick))), IM_COL32(255, 255, 255, 36));   // the part on show
+    if (cursorTick >= 0) draw->AddRectFilled(ImVec2(stripMin.x, yOf(cursorTick)), ImVec2(stripMax.x, yOf(cursorTick) + 2), kAccent);
+    if (playTick >= 0) draw->AddLine(ImVec2(stripMin.x, yOf(playTick)), ImVec2(stripMax.x, yOf(playTick)), kText);
+    draw->PopClipRect();
+    static bool dragging = false;
+    if (overStrip && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) dragging = true;
+    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) dragging = false;
+    if (dragging) {   // the box centres on the pointer
+      const float share = std::clamp((mousePos.y - stripMin.y - inner) / height, 0.0f, 1.0f);
+      ImGui::SetScrollY(std::max(0.0f, share * static_cast<float>(len) / static_cast<float>(cell) * rowHeight - bodyHeight / 2));
+    }
+  }
 
   ImGui::EndChild();
   return result;

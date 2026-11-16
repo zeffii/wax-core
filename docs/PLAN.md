@@ -164,6 +164,7 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 instrument, lane duplicate/clone.
 
 - Song screen lane tools: rename, move earlier/later, duplicate, remove, remove with machine (undoable, saved). Still missing: pattern colour (done), (loop markers now drawn on the Song screen).
+- Song screen: an overview strip at the right edge when the song is taller than the view (patterns in their colours, loop band, the part on show, cursor and playhead; click or drag to scroll). Still missing: the lane curves (automation) drawn over the lanes.
 - Song screen: insert silence (whole song, patterns crossing the row stay whole; the web's 'cut' option not ported).
 
 - Pattern screen: "Pattern view" options in the browser (also Hide empty columns, Follow the playing row, Note preview, Text size; still missing: Pattern window, Pattern roll): all lanes side by side (lane names over their columns, click a cell to move the cursor into any lane) or one lane per tab; patterns tinted by colour.
