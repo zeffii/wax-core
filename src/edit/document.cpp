@@ -828,6 +828,20 @@ void SetPort::revert(Project& project) {
   instrument.graph.connections = connectionsBefore_;
 }
 
+void SetKeepView::apply(Project& project) {
+  before_.clear();
+  for (GraphNode& node : instrumentNamed(project, instrument_).graph.nodes) {
+    if (std::find(nodes_.begin(), nodes_.end(), node.id) == nodes_.end()) continue;
+    before_.emplace_back(node.id, node.keepView);
+    node.keepView = on_;
+  }
+}
+
+void SetKeepView::revert(Project& project) {
+  for (GraphNode& node : instrumentNamed(project, instrument_).graph.nodes)
+    for (const auto& [id, was] : before_) if (id == node.id) node.keepView = was;
+}
+
 void MoveInstrument::apply(Project& project) {
   from_ = to_ = -1;
   for (std::size_t i = 0; i < project.instruments.size(); i++) if (project.instruments[i].id == instrument_) from_ = static_cast<int>(i);

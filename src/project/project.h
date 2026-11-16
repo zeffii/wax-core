@@ -33,6 +33,7 @@ struct GraphNode {
   std::string source;                // sidechain, listen: the instrument it hears
   Json parts;                        // sidechain on a meta machine: which of its machines (null: all)
   double x = 0, y = 0;               // where the node's tile sits in the graph view (web pixels)
+  bool keepView = false;             // its pictures (the envelopes) stay beside it when it is not picked (Alt+V)
   bool placed = false;               // the file gave a position (else the view lays the node out)
   Json data;                         // what a node carries besides parameters (a drawn wave, a chord list, ...), or null
 

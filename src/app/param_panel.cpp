@@ -240,14 +240,15 @@ bool drawExposedDock(ParamPanelState& state, Document& doc, const Engine& engine
   const NodeRegistry& types = builtinNodes();
 
   const float width = kNormalWidth * 1.1f * scale;
-  if (!state.exposedPlaced) {
-    ImGui::SetNextWindowPos(ImVec2(areaMin.x + 12 * scale, areaMin.y + 12 * scale), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(width, std::min(areaMax.y - areaMin.y - 24 * scale, 300 * scale)), ImGuiCond_Always);
-  }
+  // as high as its rows (the window is not drawn over what lies under it otherwise); at the graph's left corner, where the user may move it
+  const float rowHeight = (ImGui::GetTextLineHeight() + 3 * scale) * 0.85f + 0.5f;
+  const float height = ImGui::GetFrameHeight() + 2 * ImGui::GetStyle().WindowPadding.y + 4 * scale + rowHeight * static_cast<float>(instrument->exposed.size());
+  if (!state.exposedPlaced) ImGui::SetNextWindowPos(ImVec2(areaMin.x + 12 * scale, areaMin.y + 12 * scale), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(width, std::min(height, areaMax.y - areaMin.y - 24 * scale)), ImGuiCond_Always);
   ImGui::PushStyleColor(ImGuiCol_TitleBg, colour(kAccent));
   ImGui::PushStyleColor(ImGuiCol_TitleBgActive, colour(kAccent));
   ImGui::PushStyleColor(ImGuiCol_Text, colour(kHiFg));
-  const bool visible = ImGui::Begin("exposed###exposed", nullptr, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings);
+  const bool visible = ImGui::Begin("exposed###exposed", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings);
   ImGui::PopStyleColor(3);
   state.exposedPlaced = true;
   bool changed = false;

@@ -123,6 +123,7 @@ std::string serializeProject(const Project& project) {
       }
       if (!edited.source.empty()) node["source"] = edited.source;
       if (!edited.parts.is_null()) node["parts"] = edited.parts;
+      if (edited.keepView) node["keepView"] = true; else node.erase("keepView");
       if (edited.placed) { node["x"] = edited.x; node["y"] = edited.y; }
       if (edited.data.is_object() && !(node.contains("data") && node["data"] == edited.data)) node["data"] = edited.data;
       nodes.push_back(std::move(node));

@@ -264,6 +264,21 @@ private:
   std::vector<Connection> connectionsBefore_;
 };
 
+// Nodes told to keep their pictures beside them (Alt+V) or not to. Only the view changes: the sound's graph is left alone.
+class SetKeepView final : public Edit {
+public:
+  SetKeepView(std::string instrument, std::vector<std::string> nodes, bool on) : instrument_(std::move(instrument)), nodes_(std::move(nodes)), on_(on) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return on_ ? "Keep pictures" : "Stop keeping pictures"; }
+
+private:
+  std::string instrument_;
+  std::vector<std::string> nodes_;
+  bool on_;
+  std::vector<std::pair<std::string, bool>> before_;
+};
+
 // An instrument one place earlier (direction -1) or later (+1) in the list. The master stays first.
 class MoveInstrument final : public Edit {
 public:

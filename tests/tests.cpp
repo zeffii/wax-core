@@ -1077,6 +1077,10 @@ void testWireEdits() {
     check(nodesAfter == nodesBefore + 1, "a duplicate adds a node");
     doc.undo();
     check(wax::serializeProject(doc.project()) == inserted, "undo of the duplicate takes the copy away");
+    doc.apply(std::make_unique<wax::SetKeepView>(id, std::vector<std::string>{"zq"}, true));
+    check(wax::serializeProject(doc.project()).find("keepView") != std::string::npos, "a node that keeps its pictures is saved so");
+    doc.undo();
+    check(wax::serializeProject(doc.project()) == inserted, "undo of keeping the pictures");
     doc.undo();
   }
   std::printf("ok: wire edits\n");

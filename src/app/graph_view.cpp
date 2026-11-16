@@ -1,5 +1,7 @@
 #include "app/graph_view.h"
+#include "app/node_envelope.h"
 
+#include <cstdio>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -493,6 +495,20 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     ids.erase(std::remove_if(ids.begin(), ids.end(), [&](const std::string& id) { const auto t = tiles.find(id); return t == tiles.end() || t->second.node->type == "out"; }), ids.end());
     const bool remove = ImGui::IsKeyPressed(ImGuiKey_Delete, false) || ImGui::IsKeyPressed(ImGuiKey_Backspace, false) || (io.KeyCtrl && !io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_X, false));
     const bool join = io.KeyAlt && !io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_R, false);
+    if (io.KeyAlt && !io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V, false)) {   // Alt+V: the pictures stay beside the node(s) (again: they show only while picked)
+      std::vector<std::string> pictured;
+      bool allKept = true;
+      for (const std::string& id : ids) {
+        const GraphNode* node = tiles.at(id).node;
+        if (!hasEnvelopes(node->type)) continue;
+        pictured.push_back(id);
+        if (!node->keepView) allKept = false;
+      }
+      if (!pictured.empty()) {
+        doc.apply(std::make_unique<SetKeepView>(instrumentId, pictured, !allKept));
+        state.message = allKept ? "Its picture shows only while it is picked" : "Its picture stays on when it is not picked (Alt+V again to stop)";
+      }
+    }
     if ((remove || join) && !ids.empty()) {
       std::vector<std::unique_ptr<Edit>> edits;
       for (const std::string& id : ids) {
@@ -665,6 +681,12 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       if (state.message.empty()) { picked = made->newId(); state.message = state.replacing + " is now a " + name + (made->newId() != state.replacing ? " (" + made->newId() + ")" : std::string()) + "."; }
       state.replacing.clear();
     } else if (!ImGui::IsPopupOpen("replacenode")) state.replacing.clear();
+  }
+  // the pictures beside a node (its envelopes): for the picked node, and for every node told to keep them
+  for (const GraphNode& n : graph.nodes) {
+    const auto found = tiles.find(n.id);
+    if (found == tiles.end() || !hasEnvelopes(n.type) || !(n.keepView || n.id == picked)) continue;
+    drawNodeEnvelopes(dl, font, n, *found->second.type, found->second.min, found->second.max, dl->GetClipRectMin(), dl->GetClipRectMax(), scale);
   }
   {   // the line under the graph: a refused wire, else what the mouse is over
     const std::string& text = !state.message.empty() ? state.message : hoverText;
