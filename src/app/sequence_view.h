@@ -13,6 +13,7 @@ namespace wax::app {
 struct SequenceClick {
   std::string lane;   // the lane clicked ("" when none)
   int tick = -1;      // the tick at the start of the row clicked
+  int playFrom = -1;  // a click in the tick column: play from this tick
   CurveEditRequest curve;   // a change to a lane's curves asked for (see curve_view.h)
 };
 
@@ -23,6 +24,9 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
 // What the cursor is on, for the status line: the lane, the row, the tick and the pattern there ("lane 2/9 oberheim · row 9/96 · tick 144 ·
 // 00 "pat00" used 8x in this lane").
 std::string describeSongCursor(const Project& project, const std::string& laneId, int tick);
+
+// The size of a row in ticks (the zoom the user set, a bar when that does not suit the song).
+int sequenceRowTicks(const Song& song);
 
 // The width the view wants for the song's lanes (the caller may give it less).
 float sequenceWidth(const Project& project);

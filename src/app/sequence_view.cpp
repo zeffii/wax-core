@@ -52,6 +52,8 @@ int rowTicks(const Song& song) {
 
 }  // namespace
 
+int sequenceRowTicks(const Song& song) { return rowTicks(song); }
+
 std::string describeSongCursor(const Project& project, const std::string& laneId, int tick) {
   const int cell = rowTicks(project.song);
   const int rows = std::max(1, (project.song.length + cell - 1) / cell);
@@ -109,6 +111,16 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
     if (y < scrollY + headHeight || y > scrollY + viewHeight - 2 * rowHeight) ImGui::SetScrollY(std::max(0.0f, y - viewHeight * 0.4f));
   }
 
+  {   // a cursor moved by the keys stays in sight
+    static int lastCursor = -1;
+    if (cursorTick >= 0 && cursorTick != lastCursor) {
+      const float y = headHeight + static_cast<float>(cursorTick / cell) * rowHeight;
+      if (y < scrollY + headHeight) ImGui::SetScrollY(std::max(0.0f, y - headHeight));
+      else if (y + rowHeight > scrollY + viewHeight) ImGui::SetScrollY(y + rowHeight - viewHeight);
+    }
+    lastCursor = cursorTick;
+  }
+
   // the overview strip at the right edge (when the whole song is not on show already): its place, so clicks there do not reach the sheet
   const float stripPad = 4 * scale;
   const int lanesShown = static_cast<int>(std::count_if(project.lanes.begin(), project.lanes.end(), [](const Lane& l) { return !l.placements.empty(); }));
@@ -144,7 +156,8 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
     const ImVec2 mouse = ImGui::GetIO().MousePos;
     const float y = mouse.y - origin.y - headHeight;
     float x = mouse.x - origin.x - gutter;
-    if (y >= 0) {
+    if (y >= 0 && x < 0) result.playFrom = std::clamp(static_cast<int>(y / rowHeight), 0, rows - 1) * cell;   // the tick column: play from there
+    else if (y >= 0) {
       for (const Lane& lane : project.lanes) {
         const float w = laneWidth(lane, scale);
         if (x >= 0 && x < w) {
@@ -206,7 +219,8 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
         draw->AddLine(ImVec2(left + 2 * scale, y), ImVec2(left + w - 2 * scale, y), blockEdge);
         if (const Pattern* pattern = patternOf(lane, shown->pattern)) {
           char label[48];
-          std::snprintf(label, sizeof label, "%02X %s", pattern->index, pattern->name.c_str());
+          if (settings().seqNames) std::snprintf(label, sizeof label, "%02X %s", pattern->index, pattern->name.c_str());
+          else std::snprintf(label, sizeof label, "%02X", pattern->index);   // (the hex number alone; the status bar still has the name)
           draw->PushClipRect(ImVec2(left, y), ImVec2(left + w - 2 * scale, y + rowHeight), true);
           draw->AddText(ImVec2(left + 5 * scale, y + scale), kText, label);
           draw->PopClipRect();

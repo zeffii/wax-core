@@ -25,6 +25,7 @@ struct Settings {
   static constexpr bool kNotePreviewDefault = true;   // never off by default
   bool notePreview = kNotePreviewDefault;   // a note typed into the grid sounds as it goes in
   float patternText = 1.0f;    // the Pattern grid's text size, as a multiple of the normal size
+  bool seqNames = false;       // the Song screen's pattern cells show the pattern's name after its number (off: just the two-digit number; H toggles)
   bool hideEmpty = false;      // the Pattern screen leaves out columns with nothing in them
   bool tintPatterns = true;    // the Pattern screen tints each pattern's rows with the pattern's colour
   // editing (the web's rowWrap and laneWrap): Up/Down wrap round the first and last row; Left/Right go past the last column to the next lane

@@ -30,6 +30,7 @@ public:
 
   // Where the cursor may go. Moving ends a half-typed cell.
   void moveTo(int tick, int cell);
+  bool patternHere() const { return placeAt(tick_).pattern != nullptr; }   // a pattern plays at the cursor's row
   void move(int rows, int cells);
   // Up and Down wrap round the first and last row of the song (off: the cursor stops there).
   void setWrapRows(bool on) { wrapRows_ = on; }

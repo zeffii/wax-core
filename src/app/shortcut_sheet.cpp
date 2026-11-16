@@ -52,4 +52,25 @@ const std::vector<Shortcut>& patternShortcuts() {
   return list;
 }
 
+const std::vector<Shortcut>& songShortcuts() {
+  static const std::vector<Shortcut> list = {
+      {"Enter", "switch editing on; with it on, Enter opens the pattern under the cursor in the Pattern screen (a new one when none is there)"},
+      {"Esc", "switch editing off"},
+      {"Click", "click a cell to put the cursor there; click a tick number to play from that row"},
+      {"Up / Down", "move a row (Ctrl+wheel sets how many ticks a row is)"},
+      {"Left / Right, Tab", "move to the previous or next lane"},
+      {"PgUp / PgDn", "sixteen rows up or down"},
+      {"Home / End", "the first or last row"},
+      {"Space", "place the outlined pattern from the list here and move on to where it ends"},
+      {"Ctrl+Up / Down", "step through the pattern list"},
+      {"H", "show or hide the pattern names in the cells (the number stays; the status bar has the name)"},
+      {"Ctrl+Z, Ctrl+Y", "undo, redo"},
+      {"F5, F8", "play from the start (or the loop); stop"},
+      {"F9", "follow the song: the sequence scrolls with the playing row"},
+      {"F1, F2, F3", "Song, Pattern and Instrument screens"},
+      {"Ctrl+O, S, Shift+S", "open, save, save as"},
+  };
+  return list;
+}
+
 }  // namespace wax::app

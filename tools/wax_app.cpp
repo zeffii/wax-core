@@ -533,7 +533,43 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       if (playing) player.ring().push({LiveCommand::Stop, 0, 1});
       else player.ring().push({LiveCommand::Play, 0, 1});
     }
-    if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) session->edit = !session->edit;
+    if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) {
+      if (session->screen == Screen::Song && session->edit) {   // in the sequence, Enter goes into the pattern under the cursor (a new one where none is)
+        if (!editor.patternHere()) edited |= editor.createPatternHere();
+        if (editor.patternHere()) { selectedLane = editor.lane(); session->wantLane = selectedLane; session->wantTick = editor.tick(); session->screen = Screen::Pattern; }
+        else session->editStatus = "No pattern here, and one cannot start here.";
+      } else session->edit = !session->edit;
+    }
+    if (session->screen == Screen::Song && session->edit && !io.KeyCtrl && !io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) session->edit = false;
+    if (session->screen == Screen::Song && !io.KeyCtrl && !io.KeyAlt && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_H, false)) { app::settings().seqNames = !app::settings().seqNames; app::saveSettings(); session->editStatus = app::settings().seqNames ? "Pattern names shown." : "Pattern names hidden."; }
+    if (session->screen == Screen::Song && session->edit && !io.KeyCtrl && !io.KeyAlt) {   // the sequence's cursor: a row is `cell` ticks, the lanes run across
+      const int cell = app::sequenceRowTicks(song), rows = std::max(1, (song.length + cell - 1) / cell);
+      const auto toRow = [&](int row) { editor.moveTo(std::clamp(row, 0, rows - 1) * cell, editor.cell()); };
+      const int row = editor.tick() / cell;
+      if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) toRow(row - 1);
+      if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) toRow(row + 1);
+      if (ImGui::IsKeyPressed(ImGuiKey_PageUp)) toRow(row - 16);
+      if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) toRow(row + 16);
+      if (ImGui::IsKeyPressed(ImGuiKey_Home, false)) toRow(0);
+      if (ImGui::IsKeyPressed(ImGuiKey_End, false)) toRow(rows - 1);
+      int lanes = 0;
+      if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) lanes = -1;
+      if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) lanes = 1;
+      if (ImGui::IsKeyPressed(ImGuiKey_Tab)) lanes = io.KeyShift ? -1 : 1;
+      if (lanes != 0 && !doc.project().lanes.empty()) {
+        const std::vector<Lane>& all = doc.project().lanes;
+        const auto at = std::find_if(all.begin(), all.end(), [&](const Lane& l) { return l.id == editor.lane(); });
+        const std::ptrdiff_t next = std::clamp<std::ptrdiff_t>((at - all.begin()) + lanes, 0, static_cast<std::ptrdiff_t>(all.size()) - 1);
+        const std::string lane = all[static_cast<std::size_t>(next)].id;
+        if (lane != editor.lane()) {
+          const int tick = editor.tick();
+          selectedLane = lane;
+          editor.setLane(lane, player.engine().laneColumns(lane));
+          editor.moveTo(tick, 0);
+          session->wantLane = lane; session->wantTick = tick;
+        }
+      }
+    }
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Z)) { if (io.KeyShift) doc.redo(); else doc.undo(); edited = true; }
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Y)) { doc.redo(); edited = true; }
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_O, false)) gRequest = DialogRequest::Open;
@@ -583,7 +619,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       }
       if (ImGui::IsKeyPressed(ImGuiKey_A, false)) editor.selectAll();
     }
-    const bool typing = session->edit && !ctrl && !io.KeyAlt && !session->envelopes.wantsKeys();
+    const bool typing = session->edit && !ctrl && !io.KeyAlt && !session->envelopes.wantsKeys() && session->screen != Screen::Song;   // (the sequence has its own keys, above)
     if (typing) {
       const int before = editor.tick() * 4096 + editor.cell();
       editor.setWrapRows(app::settings().rowWrap);
@@ -704,7 +740,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     // the other domain, at the bottom of the rail (above the mixer when it shows): the shortcut sheet and the settings
     const float iconStep = 24 * scale + ImGui::GetStyle().ItemSpacing.y;
     ImGui::SetCursorPosY(std::max(ImGui::GetCursorPosY(), ImGui::GetWindowHeight() - 2 * iconStep));
-    if (app::iconButton("keys-toggle", "Shortcuts: the keys of the Pattern screen, beside the grid", session->showKeys, 24)) session->showKeys = !session->showKeys;
+    if (app::iconButton("keys-toggle", "Shortcuts: the keys of this screen, beside it", session->showKeys, 24)) session->showKeys = !session->showKeys;
     if (app::iconButton("config", "Config (F11)", session->screen == Screen::Config, 24)) session->screen = Screen::Config;
     (void)entries;
   }
@@ -810,6 +846,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         if (ImGui::Checkbox("Follow the playing row", &follow)) { app::settings().follow = follow; app::saveSettings(); }
       }
       if (session->screen == Screen::Song) {
+    if (ImGui::Checkbox("Show pattern names (H)", &app::settings().seqNames)) app::saveSettings();
     {   // the lane under the cursor: rename, move, duplicate, remove (the web's lane tools)
       const Lane* current = nullptr;
       for (const Lane& l : doc.project().lanes) if (l.id == selectedLane) current = &l;
@@ -1095,7 +1132,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   std::string laneInstrument;
   for (const Lane& lane : doc.project().lanes) if (lane.id == selectedLane) laneInstrument = lane.instrument;
   if (session->screen == Screen::Song) {
-    ImGui::BeginChild("seqmain", ImVec2(0, 0), false, ImGuiWindowFlags_NoNav);
+    const float songSheetW = session->showKeys ? 270 * scale : 0;
+    ImGui::BeginChild("seqmain", ImVec2(-songSheetW, 0), false, ImGuiWindowFlags_NoNav);
     const app::CurveView::Targets curveTargetsOf = [&](const Lane& lane) { return curveTargets(player.engine().laneColumns(lane.id), lane.instrument, player.engine().registry()); };
     const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, session->edit ? editor.tick() : -1, follow && playing && !session->edit, session->curveView, curveTargetsOf);
     if (hit.curve.any) {   // a curve edited: one undo step per gesture, the lane rebuilt in the engine
@@ -1103,8 +1141,14 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       const std::vector<std::string> problems = syncLanes(doc, player.engine());
       session->editStatus = problems.empty() ? std::string() : problems.front();
     }
-    if (!hit.lane.empty()) { session->wantLane = hit.lane; session->wantTick = hit.tick; selectedLane = hit.lane; }
+    if (hit.playFrom >= 0) { playFromRequest = hit.playFrom; session->pausedAt = -1; }   // a tick number clicked: play from there
+    if (!hit.lane.empty()) {
+      session->wantLane = hit.lane; session->wantTick = hit.tick; selectedLane = hit.lane;
+      editor.setLane(hit.lane, player.engine().laneColumns(hit.lane));   // (the keys carry on from the click)
+      editor.moveTo(hit.tick, 0);
+    }
     ImGui::EndChild();
+    if (session->showKeys) { ImGui::SameLine(0, 8 * scale); app::drawShortcutSheet("songkeys", app::songShortcuts(), 0, 0); }
   } else if (session->screen == Screen::Pattern) {
     const float sheetW = session->showKeys ? 270 * scale : 0;
     ImGui::BeginChild("patmain", ImVec2(-sheetW, 0), false, ImGuiWindowFlags_NoNav);
@@ -1312,6 +1356,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     colour("Wire colour: parameter", cfg.wireParam);
     if (ImGui::Checkbox("Control wires are dashed", &cfg.wireDashed)) changed = true;
     group("Editing", "How the cursor moves.");
+    if (ImGui::Checkbox("Sequence editor: show pattern names (off: just the two-digit number; H toggles)", &cfg.seqNames)) changed = true;
     if (ImGui::Checkbox("Up and Down wrap round the first and last row", &cfg.rowWrap)) changed = true;
     if (ImGui::Checkbox("Graph: dragging a node far out of its chain takes it out", &cfg.graphPullOut)) changed = true;
     if (ImGui::Checkbox("Left and Right wrap round the first and last lane (All lanes view)", &cfg.laneWrap)) changed = true;

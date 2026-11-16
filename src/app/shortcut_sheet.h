@@ -16,4 +16,7 @@ void drawShortcutSheet(const char* id, const std::vector<Shortcut>& entries, flo
 // The Pattern screen's keys (only those the native app has).
 const std::vector<Shortcut>& patternShortcuts();
 
+// The Song screen's keys (the sequence).
+const std::vector<Shortcut>& songShortcuts();
+
 }  // namespace wax::app
