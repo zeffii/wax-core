@@ -833,13 +833,13 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
             try {
               if (app::textButton("Save")) {
                 int id = 0;
-                setPresets(presetsWithAdded(*current, session->presetName, capturePreset(*current, liveValue), id), "Save preset");
+                setPresets(presetsWithAdded(*current, session->presetName, capturePreset(*current, liveValue), id, capturePresetData(*current)), "Save preset");
                 session->selectedPreset = id;
               }
               ImGui::SameLine(0, 8 * scale);
               if (app::textButton("Overwrite")) {
                 if (session->selectedPreset < 0) session->editStatus = "Click a preset to select it first.";
-                else setPresets(presetsWithValues(*current, session->selectedPreset, capturePreset(*current, liveValue)), "Overwrite preset");
+                else setPresets(presetsWithValues(*current, session->selectedPreset, capturePreset(*current, liveValue), capturePresetData(*current)), "Overwrite preset");
               }
               if (app::textButton("Rename")) {
                 if (session->selectedPreset < 0) session->editStatus = "Click a preset to select it first.";

@@ -1040,6 +1040,18 @@ void testPresets() {
   check(doc.project().instruments[1].raw["presets"].size() == 1, "a preset is removed, the other keeps its number");
   doc.undo();
   check(doc.project().instruments[1].raw["presets"].size() == 2, "remove undone");
+  // a preset can carry drawings: recalling puts them on their node, undo takes them off
+  const std::string drawnNode = firstKey.substr(0, dot);
+  wax::Json drawn = wax::Json::object();
+  drawn[drawnNode] = wax::Json{{"wave", wax::Json::array({1, 2, 3})}};
+  int c = -1;
+  doc.apply(std::make_unique<wax::SetPresets>(id, wax::presetsWithAdded(doc.project().instruments[1], "drawn", values, c, drawn), "Save preset"));
+  doc.apply(std::make_unique<wax::RecallPreset>(id, c), false);
+  const auto dataOf = [&]() { for (const wax::GraphNode& n : doc.project().instruments[1].graph.nodes) if (n.id == drawnNode) return n.data; return wax::Json(); };
+  check(dataOf().is_object() && dataOf().value("wave", wax::Json::array()).size() == 3, "recall sets the drawings");
+  check(wax::capturePresetData(doc.project().instruments[1]).contains(drawnNode), "the drawings are captured again");
+  doc.undo();
+  check(!dataOf().is_object() || !dataOf().contains("wave"), "undo takes the drawings off again");
   std::printf("ok: presets\n");
 }
 

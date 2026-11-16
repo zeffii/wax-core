@@ -28,6 +28,8 @@ public:
   virtual std::string graphInstrument() const { return {}; }   // the instrument whose wiring this changes ("" when none)
   virtual bool songLoop() const { return false; }              // true when this changes the song's loop
   virtual std::string dataNode() const { return {}; }      // "instrument\x1fnode" whose data (drawings) this changes ("" when none)
+  // Every node whose data this changes (a recalled preset can carry the drawings of several); by default just dataNode().
+  virtual std::vector<std::string> dataNodes() const { return dataNode().empty() ? std::vector<std::string>() : std::vector<std::string>{dataNode()}; }
   // Typing in one cell is many edits; the next one may fold into this one so a single undo takes back the whole entry.
   // Return true when `next` has been absorbed (and keeps what this edit needs to revert it).
   virtual bool absorb(const Edit& next) { (void)next; return false; }
@@ -161,7 +163,8 @@ private:
   Instrument removed_;
 };
 
-// A preset recalled: every parameter it holds is set on the instrument's nodes (parameters whose node is gone are skipped).
+// A preset recalled: every parameter it holds is set on the instrument's nodes (parameters whose node is gone are skipped), and the
+// drawings it carries (envelope curves, drawn waves) replace those of the nodes they belong to.
 class RecallPreset final : public Edit {
 public:
   RecallPreset(std::string instrument, int preset) : instrument_(std::move(instrument)), preset_(preset) {}
@@ -169,13 +172,16 @@ public:
   void revert(Project& project) override;
   std::string label() const override { return "Recall preset"; }
   std::vector<std::string> paramAddresses() const override { return addresses_; }
+  std::vector<std::string> dataNodes() const override { return dataNodes_; }
 
 private:
   struct Before { std::string node, param; bool had; Json value; };
+  struct BeforeData { std::string node; Json data; };   // a node's drawings before the preset gave it its own
   std::string instrument_;
   int preset_;
   std::vector<Before> before_;
-  std::vector<std::string> addresses_;
+  std::vector<BeforeData> beforeData_;
+  std::vector<std::string> addresses_, dataNodes_;
 };
 
 // The list of presets an instrument keeps (see edit/presets.h) replaced as a whole: saving, overwriting, renaming and removing one are

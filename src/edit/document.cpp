@@ -527,7 +527,7 @@ void RecallPreset::apply(Project& project) {
   const Json presets = instrument.raw.value("presets", Json::array());
   for (const Json& p : presets) if (p.value("id", -1) == preset_) found = &p;
   if (!found) throw std::out_of_range("no preset " + std::to_string(preset_));
-  before_.clear(); addresses_.clear();
+  before_.clear(); beforeData_.clear(); addresses_.clear(); dataNodes_.clear();
   const Json held = found->value("values", Json::object());
   for (const auto& [key, value] : held.items()) {
     if (!value.is_number()) continue;
@@ -543,6 +543,15 @@ void RecallPreset::apply(Project& project) {
       addresses_.push_back(instrument_ + "." + key);
     }
   }
+  const Json drawn = found->value("data", Json::object());   // { node: its data }
+  if (drawn.is_object())
+    for (const auto& [nodeId, data] : drawn.items())
+      for (GraphNode& node : instrument.graph.nodes) {
+        if (node.id != nodeId) continue;
+        beforeData_.push_back({nodeId, node.data});
+        node.data = data;
+        dataNodes_.push_back(instrument_ + "\x1f" + nodeId);
+      }
 }
 
 void RecallPreset::revert(Project& project) {
@@ -552,6 +561,8 @@ void RecallPreset::revert(Project& project) {
       if (node.id != b.node) continue;
       if (b.had) node.params[b.param] = b.value; else node.params.erase(b.param);
     }
+  for (const BeforeData& b : beforeData_)
+    for (GraphNode& node : instrument.graph.nodes) if (node.id == b.node) node.data = b.data;
 }
 
 void SetPresets::apply(Project& project) {
@@ -889,7 +900,7 @@ void Document::touched(const Edit& edit) {
   if (!edit.otherLane().empty()) changed_.insert(edit.otherLane());
   if (edit.allLanes()) for (const Lane& l : project_.lanes) changed_.insert(l.id);
   for (const std::string& address : edit.paramAddresses()) changedParams_.insert(address);
-  if (!edit.dataNode().empty()) changedData_.insert(edit.dataNode());
+  for (const std::string& node : edit.dataNodes()) changedData_.insert(node);
   if (edit.songLoop()) loopChanged_ = true;
   if (!edit.graphInstrument().empty()) changedGraphs_.insert(edit.graphInstrument());
 }
