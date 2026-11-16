@@ -70,9 +70,38 @@ float wantedHeight(float contentHeight, int rows, float areaHeight, float scale)
 // The window's content height, for the next frame (call just before End).
 float measuredContent() { return ImGui::GetCursorPosY() + ImGui::GetStyle().WindowPadding.y; }
 
+// The keys of a panel, while the mouse is over it and no text box has the keyboard (the piano keys still play): Up/Down choose a row, Home/End
+// the first and last, PageUp/PageDown jump eight, Left/Right change the chosen row (Shift: more, Ctrl: less), Enter opens its menu. Alt is the
+// graph's (Alt+arrows pick a node).
+struct RowKeys {
+  int dir = 0;          // Left/Right: -1, +1
+  float amount = 1;     // how many steps (5 with Shift, 0.2 with Ctrl)
+  bool toEnd = false, toStart = false, menu = false;
+};
+
+RowKeys panelKeys(int& cursor, int rows) {
+  RowKeys keys;
+  const ImGuiIO& io = ImGui::GetIO();
+  const bool active = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows) && !io.WantTextInput && !io.KeyAlt && !ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId);
+  cursor = std::clamp(cursor, 0, std::max(0, rows - 1));
+  if (!active) return keys;
+  const auto pressed = [](ImGuiKey key) { return ImGui::IsKeyPressed(key, true); };
+  if (pressed(ImGuiKey_DownArrow)) cursor = std::min(rows - 1, cursor + 1);
+  if (pressed(ImGuiKey_UpArrow)) cursor = std::max(0, cursor - 1);
+  if (pressed(ImGuiKey_PageDown)) cursor = std::min(rows - 1, cursor + 8);
+  if (pressed(ImGuiKey_PageUp)) cursor = std::max(0, cursor - 8);
+  if (pressed(ImGuiKey_LeftArrow)) keys.dir = -1;
+  if (pressed(ImGuiKey_RightArrow)) keys.dir = 1;
+  keys.amount = io.KeyShift ? 5.0f : io.KeyCtrl ? 0.2f : 1.0f;
+  keys.toStart = ImGui::IsKeyPressed(ImGuiKey_Home, false);
+  keys.toEnd = ImGui::IsKeyPressed(ImGuiKey_End, false);
+  keys.menu = ImGui::IsKeyPressed(ImGuiKey_Enter, false);
+  return keys;
+}
+
 // One row of a panel at the cursor: the parameter's name (or `label`), then its bar. `wired`: a wire drives it. Returns true when the value changed.
 bool drawRow(ParamPanelState& state, Document& doc, const Engine& engine, const Instrument* instrument, const std::string& instrumentId,
-             const GraphNode* picked, const ParamSpec& spec, const std::string& label, bool dim, float total, float nameW) {
+             const GraphNode* picked, const ParamSpec& spec, const std::string& label, bool dim, float total, float nameW, const RowKeys* keys = nullptr, bool marked = false) {
   const float scale = ImGui::GetStyle().FontScaleDpi;
   const float rowH = ImGui::GetTextLineHeight() + 3 * scale;
   ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -119,9 +148,16 @@ bool drawRow(ParamPanelState& state, Document& doc, const Engine& engine, const 
       const float x = (ImGui::GetIO().MousePos.x - barMin.x) / std::max(1.0f, barMax.x - barMin.x);
       next = fromPos(spec, x);
       set = std::fabs(next - value) > 1e-12;
-    } else if (hovered && ImGui::GetIO().MouseWheel != 0) {
-      next = fromPos(spec, toPos(spec, value) + (ImGui::GetIO().MouseWheel > 0 ? 0.01 : -0.01));
-      if (spec.isInt && next == std::round(value)) next = value + (ImGui::GetIO().MouseWheel > 0 ? 1 : -1);
+    } else if ((hovered && ImGui::GetIO().MouseWheel != 0) || (keys && (keys->dir != 0 || keys->toStart || keys->toEnd))) {   // the wheel, or the keys on the chosen row
+      const bool keyed = keys && (keys->dir != 0 || keys->toStart || keys->toEnd) && !(hovered && ImGui::GetIO().MouseWheel != 0);
+      const int way = keyed ? keys->dir : ImGui::GetIO().MouseWheel > 0 ? 1 : -1;
+      const double step = 0.01 * (keyed ? keys->amount : 1.0);
+      if (keyed && keys->toStart) next = spec.min;
+      else if (keyed && keys->toEnd) next = spec.max;
+      else {
+        next = fromPos(spec, toPos(spec, value) + way * step);
+        if (spec.isInt && next == std::round(value)) next = value + way;
+      }
       next = std::clamp(next, spec.min, spec.max);
       set = next != value;
     }
@@ -147,6 +183,8 @@ bool drawRow(ParamPanelState& state, Document& doc, const Engine& engine, const 
       dl->AddText(ImVec2(barMax.x - ImGui::CalcTextSize(tag.c_str()).x - 4 * scale, p.y + 1.5f * scale), kAccent, tag.c_str());
     }
 
+    if (keys && keys->menu) ImGui::OpenPopup("rowmenu");   // Enter on the chosen row
+    if (marked) dl->AddRectFilled(ImVec2(p.x, p.y + 1), ImVec2(p.x + 2 * scale, p.y + rowH - 1), kAccent);   // the row the keys act on
     if (ImGui::BeginPopupContextItem("rowmenu")) {
       static char text[64];
       if (ImGui::IsWindowAppearing()) {
@@ -264,10 +302,14 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
   float nameW = 0;   // as wide as the longest name (and its port dot), not a share of the panel
   for (const ParamSpec& spec : type->params) if (spec.name != "bypass") nameW = std::max(nameW, ImGui::CalcTextSize(spec.name.c_str()).x);
   nameW = std::min(nameW + 14 * scale, total * 0.5f);
-  ImDrawList* dl = ImGui::GetWindowDrawList();
+  int shownRows = 0;
+  for (const ParamSpec& spec : type->params) if (spec.name != "bypass") shownRows++;
+  const RowKeys keys = panelKeys(state.paramCursor, shownRows);
+  int index = 0;
   for (const ParamSpec& spec : type->params) {
     if (spec.name == "bypass") continue;
-    if (drawRow(state, doc, engine, instrument, instrumentId, picked, spec, spec.name, wired.count(spec.name) > 0, total, nameW)) changed = true;
+    const bool chosen = index++ == state.paramCursor;
+    if (drawRow(state, doc, engine, instrument, instrumentId, picked, spec, spec.name, wired.count(spec.name) > 0, total, nameW, chosen ? &keys : nullptr, chosen)) changed = true;
   }
   ImGui::PopFont();
   state.paramContent = measuredContent();
@@ -309,7 +351,10 @@ bool drawExposedDock(ParamPanelState& state, Document& doc, const Engine& engine
     float nameW = 0;   // as wide as the longest label (and its port dot), not a share of the panel
     for (const Exposed& e : instrument->exposed) nameW = std::max(nameW, ImGui::CalcTextSize((e.label.empty() ? e.param : e.label).c_str()).x);
     nameW = std::min(nameW + 14 * scale, total * 0.5f);
+    const RowKeys keys = panelKeys(state.exposedCursor, static_cast<int>(instrument->exposed.size()));
+    int index = -1;
     for (const Exposed& e : instrument->exposed) {   // a row for each column the machine's patterns have
+      index++;
       const GraphNode* node = nullptr;
       for (const GraphNode& n : instrument->graph.nodes) if (n.id == e.node) node = &n;
       const NodeType* type = node ? types.find(node->type) : nullptr;
@@ -319,7 +364,7 @@ bool drawExposedDock(ParamPanelState& state, Document& doc, const Engine& engine
         const std::string wiredTo = node->id + ".@" + spec.name;
         bool wired = false;
         for (const Connection& c : instrument->graph.connections) if (c.to == wiredTo) wired = true;
-        if (drawRow(state, doc, engine, instrument, instrumentId, node, spec, e.label.empty() ? spec.name : e.label, wired, total, nameW)) changed = true;
+        if (drawRow(state, doc, engine, instrument, instrumentId, node, spec, e.label.empty() ? spec.name : e.label, wired, total, nameW, index == state.exposedCursor ? &keys : nullptr, index == state.exposedCursor)) changed = true;
       }
     }
     ImGui::PopFont();

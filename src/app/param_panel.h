@@ -21,6 +21,7 @@ struct ParamPanelState {
   bool placed = false;      // the window has been put at the graph's corner once; after that it stays where the user left it
   bool exposedPlaced = false;   // the exposed dock has been put at the graph's left once
   ImVec2 exposedMin{0, 0}, exposedMax{0, 0};   // the exposed dock as drawn last (zero size: none), for the graph to keep clear of
+  int paramCursor = 0, exposedCursor = 0;   // the row the keys act on in each panel
   float paramContent = 0, exposedContent = 0;   // what the panels' rows needed in height last frame (they are as high as that)
   bool open = true;         // the window is shown (the close button hides it; the Instrument screen's tab brings it back)
 };
