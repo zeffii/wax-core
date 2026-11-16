@@ -1,7 +1,9 @@
 #include "app/sequence_view.h"
 #include "seq/loop.h"
+#include "seq/automation.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <vector>
 
@@ -196,6 +198,35 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
           draw->PushClipRect(ImVec2(left, y), ImVec2(left + w - 2 * scale, y + rowHeight), true);
           draw->AddText(ImVec2(left + 5 * scale, y + scale), kText, label);
           draw->PopClipRect();
+        }
+      }
+    }
+    {   // the lane's shown curve: a hairline down the lane (time down, the value across), its anchors as dots
+      const Json curves = lane.raw.is_object() ? lane.raw.value("curves", Json::array()) : Json::array();
+      if (curves.is_array() && !curves.empty()) {
+        const int pick = std::min(static_cast<int>(curves.size()) - 1, std::max(0, lane.raw.value("shown", 0)));
+        const Json& curve = curves[static_cast<std::size_t>(pick)];
+        const float pad = 5 * scale, span = std::max(1.0f, w - 2 * pad);
+        const float top = origin.y + headHeight;
+        const int ticks0 = first * cell, ticks1 = std::min(project.song.length, (last + 1) * cell);
+        const int samples = std::max(2, (last - first + 1) * 4);
+        const std::vector<double> values = sampleCurve(curve, ticks0, ticks1, samples);
+        const ImU32 ink = withAlpha(selected ? kAccent : kText, selected ? 230 : 150);
+        ImVec2 before;
+        bool drawing = false;
+        for (int i = 0; i < samples; i++) {
+          const double v = values[static_cast<std::size_t>(i)];
+          if (std::isnan(v)) { drawing = false; continue; }
+          const double tick = ticks0 + static_cast<double>(ticks1 - ticks0) * i / (samples - 1);
+          const ImVec2 at(left + pad + static_cast<float>(v) * span, top + static_cast<float>(tick / cell) * rowHeight);
+          if (drawing) draw->AddLine(before, at, ink, 1.2f * scale);
+          before = at;
+          drawing = true;
+        }
+        for (const Json& point : curve.value("pts", Json::array())) {
+          const double tick = point.value("t", 0.0);
+          if (tick < ticks0 || tick > ticks1) continue;
+          draw->AddCircleFilled(ImVec2(left + pad + static_cast<float>(point.value("v", 0.0)) * span, top + static_cast<float>(tick / cell) * rowHeight), 2.5f * scale, ink);
         }
       }
     }

@@ -34,4 +34,8 @@ struct AutoCurve {
 std::vector<AutoCurve> buildAutomation(const Json& curves, const std::vector<Column>& columns, const std::string& instrument,
                                        const ParamRegistry& registry, int songLength);
 
+// A curve as it is drawn: its value (0..1) at `count` evenly spaced ticks from `from` to `to`, NaN where the curve is not (before its first
+// anchor, in a gap, after its last, or when it is switched off). `curve` is one entry of the lane's `curves` list as written.
+std::vector<double> sampleCurve(const Json& curve, double from, double to, int count);
+
 }  // namespace wax

@@ -63,7 +63,24 @@ struct Target {
   bool amp;
 };
 
+Curve readCurve(const Json& c) {
+  Curve curve;
+  curve.on = !(c.contains("on") && c["on"].is_boolean() && !c["on"].get<bool>());
+  for (const Json& p : c.value("pts", Json::array())) curve.pts.push_back({p.value("t", 0.0), p.value("v", 0.0)});
+  for (const Json& k : c.value("kinds", Json::array())) curve.kinds.push_back(k.is_string() && !k.get<std::string>().empty() ? k.get<std::string>()[0] : 'c');
+  return curve;
+}
+
 }  // namespace
+
+std::vector<double> sampleCurve(const Json& c, double from, double to, int count) {
+  std::vector<double> out(static_cast<std::size_t>(std::max(0, count)), kNaN);
+  if (!c.is_object() || count < 2) return out;
+  const Curve curve = readCurve(c);
+  if (!curve.on) return out;
+  for (int i = 0; i < count; i++) out[static_cast<std::size_t>(i)] = valueAt(curve, from + (to - from) * i / (count - 1));
+  return out;
+}
 
 std::vector<AutoCurve> buildAutomation(const Json& curves, const std::vector<Column>& columns, const std::string& instrument,
                                        const ParamRegistry& registry, int songLength) {
@@ -85,10 +102,7 @@ std::vector<AutoCurve> buildAutomation(const Json& curves, const std::vector<Col
     const std::string id = c.value("target", "");
     const auto t = std::find_if(targets.begin(), targets.end(), [&](const Target& x) { return x.id == id; });
     if (t == targets.end()) continue;
-    Curve curve;
-    curve.on = !(c.contains("on") && c["on"].is_boolean() && !c["on"].get<bool>());
-    for (const Json& p : c.value("pts", Json::array())) curve.pts.push_back({p.value("t", 0.0), p.value("v", 0.0)});
-    for (const Json& k : c.value("kinds", Json::array())) curve.kinds.push_back(k.is_string() && !k.get<std::string>().empty() ? k.get<std::string>()[0] : 'c');
+    const Curve curve = readCurve(c);
     AutoCurve a;
     a.slot = t->slot; a.min = t->min; a.max = t->max; a.log = t->log; a.taper = t->taper; a.amp = t->amp;
     if (c.contains("rest") && c["rest"].is_number() && std::isfinite(c["rest"].get<double>())) { a.hasRest = true; a.rest = c["rest"].get<double>(); }
