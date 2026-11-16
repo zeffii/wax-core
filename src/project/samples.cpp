@@ -31,22 +31,6 @@ std::vector<std::uint8_t> fromBase64(const std::string& text) {
   return out;
 }
 
-std::vector<float> decodeChannel(const std::string& text, const std::string& encoding) {
-  const std::vector<std::uint8_t> bytes = fromBase64(text);
-  std::vector<float> out;
-  if (encoding == "pcm16") {
-    out.resize(bytes.size() / 2);
-    for (std::size_t i = 0; i < out.size(); i++) {
-      const std::int16_t v = static_cast<std::int16_t>(static_cast<std::uint16_t>(bytes[2 * i]) | (static_cast<std::uint16_t>(bytes[2 * i + 1]) << 8));
-      out[i] = static_cast<float>(v / 32767.0);
-    }
-  } else {
-    out.resize(bytes.size() / 4);
-    if (!out.empty()) std::memcpy(out.data(), bytes.data(), out.size() * 4);   // little-endian floats, as on every machine this runs on
-  }
-  return out;
-}
-
 double numberOr(const Json& j, const char* key, double fallback) {
   return j.contains(key) && j[key].is_number() ? j[key].get<double>() : fallback;
 }
@@ -80,6 +64,22 @@ std::string encodeChannel(const std::vector<float>& channel) {
 }
 
 }  // namespace
+
+std::vector<float> decodeSampleChannel(const std::string& text, const std::string& encoding) {
+  const std::vector<std::uint8_t> bytes = fromBase64(text);
+  std::vector<float> out;
+  if (encoding == "pcm16") {
+    out.resize(bytes.size() / 2);
+    for (std::size_t i = 0; i < out.size(); i++) {
+      const std::int16_t v = static_cast<std::int16_t>(static_cast<std::uint16_t>(bytes[2 * i]) | (static_cast<std::uint16_t>(bytes[2 * i + 1]) << 8));
+      out[i] = static_cast<float>(v / 32767.0);
+    }
+  } else {
+    out.resize(bytes.size() / 4);
+    if (!out.empty()) std::memcpy(out.data(), bytes.data(), out.size() * 4);   // little-endian floats, as on every machine this runs on
+  }
+  return out;
+}
 
 bool isPoolSample(const std::string& id) {
   if (id.size() != 5 || id.compare(0, 3, "tap") != 0) return false;
@@ -127,8 +127,8 @@ std::map<std::string, std::shared_ptr<const SampleMessage>> decodeSamples(const 
       auto message = std::make_shared<SampleMessage>();
       const std::string encoding = s.value("encoding", std::string("pcm16"));
       message->rate = numberOr(s, "rate", 44100);
-      if (s.contains("data") && s["data"].is_string()) message->data = decodeChannel(s["data"].get<std::string>(), encoding);
-      if (s.contains("right") && s["right"].is_string()) message->right = decodeChannel(s["right"].get<std::string>(), encoding);
+      if (s.contains("data") && s["data"].is_string()) message->data = decodeSampleChannel(s["data"].get<std::string>(), encoding);
+      if (s.contains("right") && s["right"].is_string()) message->right = decodeSampleChannel(s["right"].get<std::string>(), encoding);
       message->volume = numberOr(s, "volume", 1);
       message->globalVolume = numberOr(s, "globalVolume", 1);
       message->pan = numberOr(s, "pan", 0);

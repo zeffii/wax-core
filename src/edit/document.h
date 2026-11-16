@@ -28,6 +28,7 @@ public:
   // Every parameter this sets (a recalled preset sets many); by default just paramAddress().
   virtual std::vector<std::string> paramAddresses() const { return paramAddress().empty() ? std::vector<std::string>() : std::vector<std::string>{paramAddress()}; }
   virtual std::string graphInstrument() const { return {}; }   // the instrument whose wiring this changes ("" when none)
+  virtual std::string sampleId() const { return {}; }          // the sample of the project whose audio or settings this changes ("" when none)
   virtual bool songLoop() const { return false; }              // true when this changes the song's loop
   virtual std::string dataNode() const { return {}; }      // "instrument\x1fnode" whose data (drawings) this changes ("" when none)
   // Every node whose data this changes (a recalled preset can carry the drawings of several); by default just dataNode().
@@ -475,10 +476,29 @@ public:
   void apply(Project& project) override;
   void revert(Project& project) override;
   std::string label() const override { return "Load sample " + id_; }
+  std::string sampleId() const override { return id_; }
 
 private:
   std::string id_;
   Json sample_;
+};
+
+// A sample of the project replaced by an edited version of itself (cut, reversed, a loop moved, a level changed: `sample` as the file keeps it).
+// Undo puts the old one back. With `fold`, edits with the same label in a row (dragging a slider) fold into one.
+class SetSample final : public Edit {
+public:
+  SetSample(std::string id, Json sample, std::string label, bool fold = false) : id_(std::move(id)), sample_(std::move(sample)), label_(std::move(label)), fold_(fold) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return label_; }
+  std::string sampleId() const override { return id_; }
+  bool absorb(const Edit& next) override;
+
+private:
+  std::string id_;
+  Json sample_, old_;
+  std::string label_;
+  bool fold_;
 };
 
 // An empty lane (at the end) that plays an instrument the song already has.
@@ -788,6 +808,9 @@ public:
   void markDataChanged(const std::string& node) { changedData_.insert(node); }
   // The instruments whose wiring changed (undo and redo count).
   std::set<std::string> takeChangedGraphs();
+  // The samples whose audio or settings changed, by id (undo and redo count). markSampleChanged puts one back when it could not be sent.
+  std::set<std::string> takeChangedSamples();
+  void markSampleChanged(const std::string& id) { changedSamples_.insert(id); }
   // True once after the song's loop changed (undo and redo count).
   bool takeLoopChanged() { const bool was = loopChanged_; loopChanged_ = false; return was; }
   void markLaneChanged(const std::string& lane) { changed_.insert(lane); }   // to try again later
@@ -796,7 +819,7 @@ private:
   Project project_;
   std::vector<std::unique_ptr<Edit>> undo_, redo_;
   int revision_ = 0, savedRevision_ = 0;
-  std::set<std::string> changed_, changedParams_, changedData_, changedGraphs_;
+  std::set<std::string> changed_, changedParams_, changedData_, changedGraphs_, changedSamples_;
   bool loopChanged_ = false;
 
   void touched(const Edit& edit);

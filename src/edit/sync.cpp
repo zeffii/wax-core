@@ -64,6 +64,17 @@ std::vector<std::string> syncGraphs(Document& document, Engine& engine) {
   return problems;
 }
 
+std::vector<std::string> syncSamples(Document& document, Engine& engine) {
+  std::vector<std::string> problems;
+  for (const std::string& id : document.takeChangedSamples()) {
+    const std::string why = engine.sendSample(document.project(), id);
+    if (why.empty()) continue;
+    document.markSampleChanged(id);
+    problems.push_back(id + ": " + why);
+  }
+  return problems;
+}
+
 void syncLoop(Document& document, Engine& engine) {
   if (!document.takeLoopChanged()) return;
   engine.setLength(document.project().song.length);

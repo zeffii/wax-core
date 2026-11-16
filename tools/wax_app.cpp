@@ -27,6 +27,7 @@
 #include "app/envelope_window.h"
 #include "app/config.h"
 #include "app/sample_browser.h"
+#include "app/sample_view.h"
 #include "app/curve_view.h"
 #include "app/dx_window.h"
 #include "app/graph_view.h"
@@ -92,7 +93,7 @@ struct Options {
 };
 
 // One song, loaded: the project, the engine that plays it, the sound card and the MIDI input.
-enum class Screen { Song, Pattern, Instrument, Info, Config };
+enum class Screen { Song, Pattern, Instrument, Sample, Info, Config };
 
 struct Session {
   Project project;
@@ -101,6 +102,7 @@ struct Session {
   std::unique_ptr<RtMidiIn> midi;
   std::string midiName = "none";
   std::string keyjazzInstrument;
+  app::SampleView sampleView;   // the Sample screen: the sample chosen, its selection, the view of its waveform
   app::SampleBrowserState sampleBrowser;   // the Samples tab: the folder shown and the file picked
   app::CurveView curveView;   // the lane curves drawn over the Song screen: the one each lane shows, what is dragged
   std::vector<std::string> playable;                                       // the machines a keyboard can play
@@ -433,7 +435,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) { player.ring().push({LiveCommand::Play, std::max(0, session->pausedAt), 1}); session->pausedAt = -1; }
     if (ImGui::IsKeyPressed(ImGuiKey_F8, false)) { player.ring().push({LiveCommand::Stop, 0, 1}); session->pausedAt = -1; }
     if (ImGui::IsKeyPressed(ImGuiKey_F9, false)) follow = !follow;
-    if (ImGui::IsKeyPressed(ImGuiKey_Space, false) && !(session->edit && (session->screen == Screen::Song || session->screen == Screen::Pattern))) {   // (editing, Space places a pattern on the Song screen and writes the live value on the Pattern screen)
+    if (ImGui::IsKeyPressed(ImGuiKey_Space, false) && session->screen != Screen::Sample && !(session->edit && (session->screen == Screen::Song || session->screen == Screen::Pattern))) {   // (editing, Space places a pattern on the Song screen and writes the live value on the Pattern screen)
       if (playing) player.ring().push({LiveCommand::Stop, 0, 1});
       else player.ring().push({LiveCommand::Play, 0, 1});
     }
@@ -524,7 +526,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       if (before != editor.tick() * 4096 + editor.cell() || edited) session->scrollToCursor = true;
     }
     const bool hexKeys = typing && editor.onHexCell();   // on a hex cell the letters are digits, not piano keys
-    if (!hexKeys) {
+    if (!hexKeys && session->screen != Screen::Sample) {   // (on the Sample screen the keys play the sample)
       for (int i = 0; i < static_cast<int>(sizeof kPianoKeys / sizeof kPianoKeys[0]); i++) {
         const ImGuiKey key = kPianoKeys[i];
         if (ImGui::IsKeyPressed(key, false) && !io.KeyCtrl && !io.KeyAlt && !io.KeyShift) {   // (Shift+letter is a command, e.g. Shift+I: the machine menu)
@@ -556,6 +558,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (ImGui::IsKeyPressed(ImGuiKey_F1, false)) session->screen = Screen::Song;
     if (ImGui::IsKeyPressed(ImGuiKey_F2, false)) session->screen = Screen::Pattern;
     if (ImGui::IsKeyPressed(ImGuiKey_F3, false)) session->screen = Screen::Instrument;
+    if (ImGui::IsKeyPressed(ImGuiKey_F4, false)) session->screen = Screen::Sample;
     if (ImGui::IsKeyPressed(ImGuiKey_F10, false)) session->screen = Screen::Info;
     if (ImGui::IsKeyPressed(ImGuiKey_F11, false)) session->screen = Screen::Config;
   }
@@ -564,10 +567,10 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   const float below = -(statusH + (mixerShown ? app::mixerHeight() + 10 : 0.0f));
   ImGui::BeginChild("rail", ImVec2(40 * scale, below), false);
   {
-    const struct { const char* label; Screen screen; } entries[] = {{"Song", Screen::Song}, {"Pattern", Screen::Pattern}, {"Instrument", Screen::Instrument}, {"Info", Screen::Info}, {"Config", Screen::Config}};
+    const struct { const char* label; Screen screen; } entries[] = {{"Song", Screen::Song}, {"Pattern", Screen::Pattern}, {"Instrument", Screen::Instrument}, {"Sample", Screen::Sample}, {"Info", Screen::Info}, {"Config", Screen::Config}};
     const struct { const char* icon; const char* tip; Screen screen; } icons[] = {
         {"arrange", "Song: the arrangement (F1)", Screen::Song}, {"patterns", "Pattern (F2)", Screen::Pattern},
-        {"instruments", "Instrument (F3)", Screen::Instrument}, {"info", "Song info (F10)", Screen::Info}, {"config", "Config (F11)", Screen::Config}};
+        {"instruments", "Instrument (F3)", Screen::Instrument}, {"samples", "Sample (F4)", Screen::Sample}, {"info", "Song info (F10)", Screen::Info}, {"config", "Config (F11)", Screen::Config}};
     for (const auto& entry : icons) if (app::iconButton(entry.icon, entry.tip, session->screen == entry.screen, 24)) session->screen = entry.screen;
     (void)entries;
   }
@@ -591,6 +594,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (session->screen != session->browserScreen) {   // each screen shows the list that goes with it
       session->browserScreen = session->screen;
       if (session->screen == Screen::Instrument) session->browserTab = 1;
+      else if (session->screen == Screen::Sample) session->browserTab = 2;
       else if (session->screen == Screen::Song || session->screen == Screen::Pattern) session->browserTab = 0;
     }
     const bool hasOptions = (session->screen == Screen::Song || session->screen == Screen::Pattern || session->screen == Screen::Instrument) && session->browserTab != 2;   // (the Samples tab takes the whole panel)
@@ -1063,6 +1067,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       const std::vector<std::string> graphProblems = syncGraphs(doc, player.engine()), laneProblems = syncLanes(doc, player.engine());
       session->editStatus = !graphProblems.empty() ? graphProblems.front() : !laneProblems.empty() ? laneProblems.front() : std::string();
     }
+  } else if (session->screen == Screen::Sample) {
+    app::drawSampleScreen(session->sampleView, doc, player.preview(), scale);
   } else if (session->screen == Screen::Info) {
     // Song info: plain text saved with the project (notes, credits, greetings). One undo step each time the box is left.
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Song info: notes, credits, greetings. Plain text, saved with the project.");
@@ -1151,6 +1157,10 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   }
   if (!session->panel.drawNode.empty()) { app::showEnvelopes(session->envelopes, laneInstrument, session->panel.drawNode); session->panel.drawNode.clear(); }
   ImGui::Separator();
+  {
+    const std::vector<std::string> sampleProblems = syncSamples(doc, player.engine());   // (after any edit or undo of a sample)
+    if (!sampleProblems.empty()) session->editStatus = sampleProblems.front();
+  }
   if (app::drawEnvelopeWindow(session->envelopes, doc, player.engine())) syncData(doc, player.engine());
   if (!session->panel.dxNode.empty()) { app::showDx(session->dx, laneInstrument, session->panel.dxNode); session->panel.dxNode.clear(); }
   if (app::drawDxWindow(session->dx, doc, player.engine())) { syncData(doc, player.engine()); syncParams(doc, player.engine()); }
@@ -1361,6 +1371,7 @@ int main(int argc, char** argv) {
       session = std::make_unique<Session>(path, options);
       if (options.screen == "song") session->screen = Screen::Song;
       else if (options.screen == "instrument") session->screen = Screen::Instrument;
+      else if (options.screen == "sample") session->screen = Screen::Sample;
       else if (options.screen == "info") session->screen = Screen::Info;
       else if (options.screen == "config") session->screen = Screen::Config;
       std::string title = "Wax - " + session->project.song.name;

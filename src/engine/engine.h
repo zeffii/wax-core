@@ -55,6 +55,9 @@ public:
   void setLength(int ticks) { sequencer_.setLength(ticks); }
   void setLoop(int start, int end) { sequencer_.setLoop(start, end); }
   std::string sendGraph(const Project& project, const std::string& instrument);
+  // A sample of the project changed (its audio, loops or levels): every node that plays it is given the new version. Empty string when sent;
+  // otherwise why not (a full queue), and the sound goes on as it was.
+  std::string sendSample(const Project& project, const std::string& sampleId);
   bool sendData(const std::string& instrument, const std::string& nodeId, Json data);   // false when the queue is full: try again later
 
 private:

@@ -30,6 +30,9 @@ std::string sampleIdFromName(const std::string& fileName);
 // The id for a new sample: `base`, then base2, base3 ... the first the project does not have.
 std::string uniqueSampleId(const Json& samples, const std::string& base);
 
+// One channel of a sample of the project file: base64 of 16-bit PCM ("pcm16") or of float32, as `encoding` says.
+std::vector<float> decodeSampleChannel(const std::string& base64, const std::string& encoding);
+
 // A sample as the project file keeps it: 16-bit PCM, base64. `right` empty: a mono sample.
 Json encodeSample(double rate, const std::vector<float>& left, const std::vector<float>& right);
 

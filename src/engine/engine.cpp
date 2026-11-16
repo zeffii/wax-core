@@ -202,6 +202,31 @@ std::string Engine::sendGraph(const Project& project, const std::string& instrum
   return "no instrument " + instrumentId;
 }
 
+std::string Engine::sendSample(const Project& project, const std::string& sampleId) {
+  if (!project.samples.is_object() || !project.samples.contains(sampleId)) return std::string();   // taken away: nothing plays it any more
+  try {
+    Json only = Json::object();
+    only[sampleId] = project.samples[sampleId];
+    const auto samples = decodeSamples(only);
+    const auto found = samples.find(sampleId);
+    if (found == samples.end()) return std::string();
+    for (const Instrument& instrument : project.instruments) {
+      for (const GraphNode& node : instrument.graph.nodes) {
+        const std::vector<std::string> ids = sampleSlots(instrument, node.id);
+        for (std::size_t slot = 0; slot < ids.size(); slot++) {
+          if (ids[slot] != sampleId) continue;
+          auto message = std::make_shared<SampleMessage>(*found->second);
+          message->slot = static_cast<int>(slot);
+          if (!runtime_.queueSample(instrument.id, node.id, message)) return "busy, try again";
+        }
+      }
+    }
+    return std::string();
+  } catch (const std::exception& e) {
+    return e.what();
+  }
+}
+
 void Engine::collectRetired() {
   runtime_.collectRetiredData();
   std::shared_ptr<void> old;

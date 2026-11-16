@@ -27,6 +27,7 @@
 #include "engine/takes.h"
 #include "io/wav.h"
 #include "project/project.h"
+#include "project/sample_edit.h"
 #include "project/save.h"
 
 namespace {
@@ -829,6 +830,23 @@ void testLiveSampler() {
   on.vel = 1;
   engine.runtime().note("sampler", on);
   check(heard(60) > 1.0, "a note on the new sampler sounds the sample that was loaded with it");
+  // editing the sample while it plays: the nodes that play it are given the new version, and undo gives them the old one back
+  check(wax::syncSamples(doc, engine).empty(), "the loaded sample is sent");
+  heard(3000);   // let the note die away
+  wax::EditableSample probe = wax::readSample(doc.project().samples["probe"]);
+  wax::silenceSample(probe, std::nullopt);
+  doc.apply(std::make_unique<wax::SetSample>("probe", wax::writeSample(probe, doc.project().samples["probe"]), "Silence"));
+  check(wax::syncSamples(doc, engine).empty(), "an edited sample is sent");
+  engine.applySentLanes();   // (the audio thread takes what was sent at the start of a block)
+  engine.runtime().note("sampler", on);
+  check(heard(60) < 0.01, "after silencing the sample the sampler plays silence");
+  doc.undo();
+  check(wax::syncSamples(doc, engine).empty(), "undo sends the old sample");
+  engine.applySentLanes();
+  heard(3000);
+  engine.runtime().note("sampler", on);
+  check(heard(60) > 1.0, "undo brings the sound back");
+  check(wax::syncSamples(doc, engine).empty(), "nothing changed, nothing sent");
   std::printf("ok: live sampler\n");
 }
 
@@ -1139,6 +1157,95 @@ void testCurveDocument() {
 }
 
 // Samples loaded into a project: named as the web app names them, kept as 16-bit PCM in the file, given to the machines that play them.
+void testSampleEdit() {
+  using namespace wax;
+  const auto ramp = [](int n) { EditableSample s; s.rate = 8000; for (int i = 0; i < n; i++) s.left.push_back(static_cast<float>(i) / 100.0f); return s; };
+  const auto throws = [](auto fn) { try { fn(); } catch (const std::runtime_error&) { return true; } return false; };
+
+  EditableSample s = ramp(20);
+  s.props["loopStart"] = 4; s.props["loopEnd"] = 12; s.props["loopOn"] = true; s.props["slices"] = Json::array({2, 8, 15});
+  cropSample(s, SampleRange{3, 14});
+  check(s.frames() == 11 && std::abs(s.left[0] - 0.03f) < 1e-6 && s.number("loopStart") == 1 && s.number("loopEnd") == 9, "crop keeps the range and moves the loop");
+  check(s.props["slices"] == Json::array({5}), "crop keeps and moves the slice markers inside");
+
+  s = ramp(20); s.props["loopStart"] = 4; s.props["loopEnd"] = 12;
+  cropSample(s, SampleRange{5, 14});
+  check(!s.props.contains("loopEnd"), "a loop that reaches outside the crop is dropped");
+  s = ramp(20); s.props["loopStart"] = 4; s.props["loopEnd"] = 12;
+  cropSample(s, std::nullopt);
+  check(s.frames() == 8 && s.number("loopStart") == 0 && s.number("loopEnd") == 8, "crop with no selection keeps the loop region");
+  check(throws([&] { EditableSample t = ramp(5); cropSample(t, std::nullopt); }), "crop with nothing to keep says so");
+
+  s = ramp(20); s.props["loopStart"] = 10; s.props["loopEnd"] = 18;
+  cutSample(s, SampleRange{2, 6});
+  check(s.frames() == 16 && std::abs(s.left[2] - 0.06f) < 1e-6 && s.number("loopStart") == 6 && s.number("loopEnd") == 14, "cut closes the gap and moves the loop");
+  check(throws([&] { EditableSample t = ramp(5); cutSample(t, SampleRange{0, 5}); }), "cut cannot remove everything");
+
+  s = ramp(10);
+  reverseSample(s, SampleRange{2, 6});
+  check(std::abs(s.left[2] - 0.05f) < 1e-6 && std::abs(s.left[5] - 0.02f) < 1e-6 && std::abs(s.left[6] - 0.06f) < 1e-6, "reverse flips only the range");
+  silenceSample(s, SampleRange{0, 3});
+  check(s.left[0] == 0 && s.left[2] == 0 && s.left[3] != 0, "silence zeroes the range");
+
+  s = ramp(5); s.right = {0, 0, 0.8f, 0, 0};
+  normaliseSample(s, std::nullopt);
+  check(std::abs(s.right[2] - 1.0f) < 1e-6 && std::abs(s.left[4] - 0.04f / 0.8f) < 1e-6, "normalise scales both channels by the loudest frame");
+  check(throws([&] { EditableSample t; t.left = {0, 0, 0}; normaliseSample(t, std::nullopt); }), "a silent range cannot be normalised");
+
+  s = EditableSample(); s.left.assign(4, 1.0f);
+  fadeInSample(s, std::nullopt);
+  check(s.left[0] == 0 && std::abs(s.left[2] - 0.5f) < 1e-6, "fade in");
+  s.left.assign(4, 1.0f); fadeOutSample(s, std::nullopt);
+  check(s.left[0] == 1 && std::abs(s.left[3] - 0.25f) < 1e-6, "fade out");
+  s.left = {1.5f, 2.5f, 3.5f}; removeDcSample(s, std::nullopt);
+  check(std::abs(s.left[0] + 1) < 1e-6 && std::abs(s.left[1]) < 1e-6 && std::abs(s.left[2] - 1) < 1e-6, "remove DC");
+  gainSample(s, std::nullopt, 2);
+  check(std::abs(s.left[2] - 2) < 1e-6, "gain");
+
+  s = ramp(10); s.props["loopStart"] = 6; s.props["loopEnd"] = 9; s.props["slices"] = Json::array({1, 7});
+  SampleClip clip; clip.left = {9, 9};
+  pasteClip(s, 4, clip, PasteMode::Insert);
+  check(s.frames() == 12 && s.left[4] == 9 && std::abs(s.left[6] - 0.04f) < 1e-6 && s.number("loopStart") == 8 && s.number("loopEnd") == 11 && s.props["slices"] == Json::array({1, 9}), "paste inserts and moves what follows");
+  s = ramp(10);
+  pasteClip(s, 9, clip, PasteMode::Overwrite);
+  check(s.frames() == 11 && s.left[9] == 9 && s.left[10] == 9 && std::abs(s.left[8] - 0.08f) < 1e-6, "paste overwrite grows past the end");
+  s = ramp(4); s.right = {0, 0, 0, 0};
+  SampleClip mono; mono.left = {1, 1};
+  pasteClip(s, 1, mono, PasteMode::Overwrite);
+  check(s.right[1] == 1 && s.right[2] == 1, "a mono clip goes to both sides of a stereo sample");
+  s = ramp(4); SampleClip st; st.left = {1}; st.right = {0};
+  pasteClip(s, 0, st, PasteMode::Overwrite);
+  check(std::abs(s.left[0] - 0.5f) < 1e-6, "a stereo clip is mixed down into a mono sample");
+  check(throws([&] { EditableSample t = ramp(3); pasteClip(t, 0, SampleClip(), PasteMode::Insert); }), "an empty clip cannot be pasted");
+
+  s = ramp(20); s.props["loopStart"] = 4; s.props["loopEnd"] = 12; s.props["loopXfade"] = 2;
+  const float before = s.left[11];
+  bakeCrossfades(s);
+  check(!s.props.contains("loopXfade") && s.left[11] != before && s.left[10] == 0.1f, "baking writes the crossfade in and clears it");
+  check(throws([&] { bakeCrossfades(s); }), "nothing left to bake");
+
+  s = ramp(6); s.props["volume"] = 0.5; s.props["pan"] = -0.25;
+  const EditableSample back = readSample(writeSample(s));
+  check(back.frames() == 6 && back.rate == 8000 && back.number("volume") == 0.5 && back.number("pan") == -0.25 && std::abs(back.left[5] - 0.05f) < 1e-4, "a sample survives writing and reading");
+  s = ramp(10);
+  setLoopPoints(s, 2, 8, false);
+  check(s.number("loopStart") == 2 && s.number("loopEnd") == 8 && !loopActive(s, false), "a new loop starts switched off");
+  s.props["loopOn"] = true;
+  check(loopActive(s, false) && !loopActive(s, true), "a loop plays when it has points and is on");
+  check(throws([&] { setLoopPoints(s, 4, 5, false); }) && throws([&] { setLoopPoints(s, 0, 11, false); }), "loops are two frames or more and inside the sample");
+  setLoopPoints(s, 0, 0, false);
+  check(!s.props.contains("loopEnd") && !s.props.contains("loopOn"), "0 and 0 take the loop away");
+  setSliceMarkers(s, {7, 3, 7});
+  check(sliceMarkers(s) == std::vector<int>({3, 7}) && throws([&] { setSliceMarkers(s, {10}); }), "slice markers sorted, unique, inside");
+  setSampleLevel(s, "volume", 0.5); setSampleLevel(s, "pan", 0);
+  check(s.number("volume") == 0.5 && !s.props.contains("pan") && throws([&] { setSampleLevel(s, "pan", 2); }), "levels: defaults are not stored");
+  Json original = Json::object(); original["taken"] = true; original["volume"] = 0.3;
+  const Json written = writeSample(ramp(4), original);
+  check(written.value("taken", false) && !written.contains("volume"), "writing keeps the other keys and drops settings the sample no longer has");
+  s = ramp(10);
+  check(throws([&] { applySampleTool(s, "nonsense", std::nullopt); }) && throws([&] { applySampleTool(s, "cut", std::nullopt); }), "unknown tools and a cut with no selection are refused");
+}
+
 void testSampleLoading() {
   check(wax::sampleIdFromName("My Kick (01).wav") == "My_Kick_01_" && wax::sampleIdFromName("808.wav") == "_808" && wax::sampleIdFromName("...") == "_" && wax::sampleIdFromName(".wav") == "sample" && wax::sampleIdFromName("") == "sample", "a file name becomes an id");
   check(wax::sampleIdFromName("a_very_long_sample_name_that_goes_on_and_on.wav").size() == 24, "an id is at most 24 characters");
@@ -1308,7 +1415,15 @@ void testSetParam() {
   std::printf("ok: parameter edits\n");
 }
 
-int main() {
+int main(int argc, char** argv) {
+  if (argc > 1 && std::string(argv[1]) == "--samples") {   // just the sample tests (the whole run takes a long while)
+    testSampleLoading();
+    testSampleEdit();
+    testLiveSampler();
+    if (failures) std::printf("%d check%s failed\n", failures, failures == 1 ? "" : "s");
+    else std::printf("sample tests passed\n");
+    return failures;
+  }
   testBlockEdit();
   testSongSettings();
   testLiveCellText();
@@ -1327,6 +1442,7 @@ int main() {
   testCurveEdit();
   testCurveDocument();
   testSampleLoading();
+  testSampleEdit();
   testPresets();
   testGraphSaved();
   testExposePort();

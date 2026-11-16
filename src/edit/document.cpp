@@ -903,6 +903,24 @@ void AddSample::revert(Project& project) {
   if (project.samples.is_object()) project.samples.erase(id_);
 }
 
+void SetSample::apply(Project& project) {
+  if (!project.samples.is_object()) project.samples = Json::object();
+  old_ = project.samples.contains(id_) ? project.samples[id_] : Json();
+  project.samples[id_] = sample_;
+}
+
+void SetSample::revert(Project& project) {
+  if (!project.samples.is_object()) return;
+  if (old_.is_null()) project.samples.erase(id_); else project.samples[id_] = old_;
+}
+
+bool SetSample::absorb(const Edit& next) {
+  const SetSample* more = dynamic_cast<const SetSample*>(&next);
+  if (!fold_ || !more || more->id_ != id_ || more->label_ != label_) return false;
+  sample_ = more->sample_;
+  return true;
+}
+
 void SetCurves::apply(Project& project) {
   for (Lane& lane : project.lanes) {
     if (lane.id != lane_) continue;
@@ -950,6 +968,7 @@ void Document::touched(const Edit& edit) {
   for (const std::string& node : edit.dataNodes()) changedData_.insert(node);
   if (edit.songLoop()) loopChanged_ = true;
   if (!edit.graphInstrument().empty()) changedGraphs_.insert(edit.graphInstrument());
+  if (!edit.sampleId().empty()) changedSamples_.insert(edit.sampleId());
 }
 
 std::vector<std::unique_ptr<Edit>> Document::pinFollowers(const std::map<std::string, std::vector<CurveSpan>>& before) {
@@ -1015,6 +1034,12 @@ void Document::redo() {
   touched(*redo_.back());
   undo_.push_back(std::move(redo_.back()));
   redo_.pop_back();
+}
+
+std::set<std::string> Document::takeChangedSamples() {
+  std::set<std::string> out;
+  out.swap(changedSamples_);
+  return out;
 }
 
 std::set<std::string> Document::takeChangedGraphs() {

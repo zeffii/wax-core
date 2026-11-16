@@ -24,6 +24,10 @@ void syncData(Document& document, Engine& engine);
 // compiled (a loop, say); the caller then undoes the edit that caused it.
 std::vector<std::string> syncGraphs(Document& document, Engine& engine);
 
+// Gives every node that plays a sample changed since the last call the new version of it. Returns a message for each one that could not be sent
+// (it is tried again at the next call).
+std::vector<std::string> syncSamples(Document& document, Engine& engine);
+
 // Sends the song loop to the engine when it changed since the last call.
 void syncLoop(Document& document, Engine& engine);
 
