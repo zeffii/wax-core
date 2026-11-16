@@ -167,6 +167,34 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     tiles[n.id] = t;
   }
 
+  // keep the graph clear of the exposed dock, once for each instrument (the dock may sit over nodes the file placed under its corner)
+  if (!state.tidied.count(instrumentId) && state.dockMax.x > state.dockMin.x && !tiles.empty()) {
+    state.tidied.insert(instrumentId);
+    const float margin = 12;
+    const float dockX = (state.dockMin.x - origin.x) / scale, dockY = (state.dockMin.y - origin.y) / scale;
+    const float dockW = (state.dockMax.x - state.dockMin.x) / scale, dockH = (state.dockMax.y - state.dockMin.y) / scale;
+    float dx = 0, dy = 0, lowest = 0;
+    bool under = false;
+    for (const auto& [id, t] : tiles) {
+      const float x = (t.min.x - origin.x) / scale, y = (t.min.y - origin.y) / scale - 14, w = (t.max.x - t.min.x) / scale, h = (t.max.y - t.min.y) / scale + 14;   // (the name above it)
+      lowest = std::max(lowest, y + h);
+      if (x < dockX + dockW + margin && x + w > dockX - margin && y < dockY + dockH + margin && y + h > dockY - margin) {
+        under = true;
+        dx = std::max(dx, dockX + dockW + margin - x);
+        dy = std::max(dy, dockY + dockH + margin - y);
+      }
+    }
+    const float viewHeight = (dl->GetClipRectMax().y - dl->GetClipRectMin().y) / scale;
+    if (under) {
+      if (!(dy <= dx && lowest + dy <= viewHeight)) dy = 0; else dx = 0;
+      std::vector<MoveNodes::Place> places;
+      for (const auto& [id, t] : tiles) places.push_back({id, std::round((t.min.x - origin.x) / scale + dx), std::round((t.min.y - origin.y) / scale + dy)});
+      doc.apply(std::make_unique<MoveNodes>(instrumentId, places));
+      ImGui::EndChild();
+      return true;   // (drawn again next frame, where the nodes now are)
+    }
+  }
+
   // what each port carries: a dual node whose audio input receives stereo runs as a pair, so its audio ports are stereo too
   std::set<std::string> wide;
   for (bool changed = true; changed;) {

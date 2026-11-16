@@ -282,6 +282,7 @@ namespace wax::app {
 bool drawExposedDock(ParamPanelState& state, Document& doc, const Engine& engine, const std::string& instrumentId, ImVec2 areaMin, ImVec2 areaMax) {
   const float scale = ImGui::GetStyle().FontScaleDpi;
   const Instrument* instrument = findInstrument(doc.project(), instrumentId);
+  state.exposedMin = state.exposedMax = ImVec2(0, 0);
   if (!instrument || instrument->exposed.empty()) return false;
   const NodeRegistry& types = builtinNodes();
 
@@ -299,6 +300,8 @@ bool drawExposedDock(ParamPanelState& state, Document& doc, const Engine& engine
   const bool visible = ImGui::Begin("exposed###exposed", nullptr, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings);
   ImGui::PopStyleColor(3);
   state.exposedPlaced = true;
+  state.exposedMin = ImGui::GetWindowPos();
+  state.exposedMax = ImVec2(state.exposedMin.x + ImGui::GetWindowWidth(), state.exposedMin.y + ImGui::GetWindowHeight());
   bool changed = false;
   if (visible) {
     ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 0.85f);

@@ -1184,6 +1184,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     laneInstrument = session->instrument;
     ImGui::BeginChild("instmain", ImVec2(0, 0), false);
     if (session->panel.instrument != laneInstrument) { session->panel.instrument = laneInstrument; session->panel.node.clear(); }
+    session->graphView.dockMin = session->panel.exposedMin; session->graphView.dockMax = session->panel.exposedMax;
     app::drawGraphView(session->graphView, doc, laneInstrument, session->panel.node, 0);
     const ImVec2 graphMin = ImGui::GetWindowPos(), graphMax(graphMin.x + ImGui::GetWindowWidth(), graphMin.y + ImGui::GetWindowHeight());
     ImGui::EndChild();

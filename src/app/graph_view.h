@@ -42,6 +42,10 @@ struct GraphViewState {
   InsertMenuState wireMenu;      // the same menu again, for a node to put into the wire that was right-clicked
   std::string menuWireFrom, menuWireTo;   // (that wire: output address, input address)
   std::string replacing;     // the node the replace menu is for
+  // The exposed dock (screen rectangle, set by the caller each frame; zero size when there is none). The first time an instrument's graph is shown
+  // with a dock over it, the whole graph is moved clear of the dock (down if that fits, else right), as the web app does.
+  ImVec2 dockMin{0, 0}, dockMax{0, 0};
+  std::set<std::string> tidied;
   ResponseHandles response;  // what an equaliser's response picture (last frame) lets the mouse take hold of
   int responseDrag = -1;     // the handle being dragged (its index in `response.list`), or -1
   bool responseFresh = false;   // the drag has not changed anything yet (its first change starts the undo step)
