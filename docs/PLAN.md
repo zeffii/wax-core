@@ -229,3 +229,5 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 - Pattern view text size: Ctrl + mouse wheel over the pattern grows or shrinks its text (50% to 300%, kept while the app runs; not yet saved in the preferences).
 
 - Khufu picture: two cycles of the low/mid/high registers, each faint and the mix as it is added up.
+
+- Membrane picture: the head with the pattern of the picked mode (filled dot up, hollow down, a cross where it is struck) and every mode as a stem along its pitch; click a stem to see its pattern (kept for the session). Uses `membraneModes` from the node itself so it agrees with the sound.

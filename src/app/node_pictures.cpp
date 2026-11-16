@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "app/theme.h"
+#include "nodes/membrane_view.h"
 #include "nodes/spacecore.h"
 
 namespace wax::app {
@@ -320,15 +321,92 @@ void drawKhufu(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeTy
   trace(levels, kText, 1.6f * std::max(1.0f, scale));
 }
 
+// ---- membrane: the head with the pattern of one mode, and every mode as a stem ----
+
+std::map<std::string, std::string>& pickedModes() { static std::map<std::string, std::string> picked; return picked; }   // node -> "m,n", kept for the session
+
+void drawMembrane(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale, ResponseHandles& handles) {
+  const float head = 78 * scale, hx = f.x0 + 92 * scale, hy = f.y0 + 100 * scale, sx = f.x0 + 196 * scale, sw = 150 * scale, sy = f.y0 + 22 * scale, sh = 112 * scale;
+  const double position = valueOf(node, type, "position"), strike = valueOf(node, type, "strike");
+  const std::vector<MembraneMode> modes = membraneModes(position, valueOf(node, type, "stiffness"), valueOf(node, type, "damping"), valueOf(node, type, "highdamp"), valueOf(node, type, "quality"));
+  if (modes.empty()) return;
+  // how loud a mode is at the strike point, 0 to 1: its weight, the beater's low-pass at a nominal drum pitch, a little for decay
+  std::vector<double> level;
+  const double fc = 300 * std::pow(60.0, strike);
+  double top = 1e-9;
+  for (const MembraneMode& m : modes) {
+    const double hz = m.ratio * 160, lp = 1 / (1 + (hz / fc) * (hz / fc));
+    level.push_back(std::fabs(m.weight) * lp * std::min(1.0, 0.25 + m.t60 * 2));
+    top = std::max(top, level.back());
+  }
+  for (double& v : level) v /= top;
+  const std::string& pickedKey = pickedModes()[node.id];
+  std::size_t chosen = modes.size();
+  for (std::size_t i = 0; i < modes.size(); i++) if (std::to_string(modes[i].m) + "," + std::to_string(modes[i].n) == pickedKey) chosen = i;
+  if (chosen == modes.size()) { chosen = 0; for (std::size_t i = 0; i < modes.size(); i++) if (modes[i].m == 1 && modes[i].n == 1) { chosen = i; break; } }
+  const MembraneMode& mode = modes[chosen];
+  char text[96];
+  // the head: the rim, then rings of dots, a filled dot moves up and a hollow one down, the size is how far
+  dl->AddCircle(ImVec2(hx, hy), head + 0.5f, textAlpha(140), 64);
+  dl->AddCircle(ImVec2(hx, hy), head * 0.9f, textAlpha(30), 64);
+  struct Dot { double rho, theta, z; };
+  std::vector<Dot> dots;
+  constexpr int kRings = 11;
+  for (int r = 1; r <= kRings; r++) {
+    const double rho = r / (kRings + 0.6);
+    const int count = std::max(6, static_cast<int>(std::lround(rho * 44)));
+    for (int i = 0; i < count; i++) {
+      const double theta = static_cast<double>(i) / count * 2 * kPi;
+      dots.push_back({rho, theta, membraneBessel(mode.m, mode.j * rho) * std::cos(mode.m * theta)});
+    }
+  }
+  dots.push_back({0, 0, membraneBessel(mode.m, 0)});
+  double peak = 1e-9;
+  for (const Dot& d : dots) peak = std::max(peak, std::fabs(d.z));
+  for (const Dot& d : dots) {
+    const float size = static_cast<float>(std::fabs(d.z) / peak * 3.4) * scale;
+    if (size < 0.5f * scale) continue;
+    const ImVec2 at(hx + static_cast<float>(std::cos(d.theta) * d.rho) * head, hy + static_cast<float>(std::sin(d.theta) * d.rho) * head);
+    if (d.z > 0) dl->AddCircleFilled(at, size, kBlue); else dl->AddCircle(at, size, kOrange);
+  }
+  const ImVec2 cross(hx + static_cast<float>(std::cos(kMembraneStrikeAngle) * position * 0.9) * head, hy + static_cast<float>(std::sin(kMembraneStrikeAngle) * position * 0.9) * head);   // where it is struck
+  dl->AddLine(ImVec2(cross.x - 5 * scale, cross.y), ImVec2(cross.x + 5 * scale, cross.y), kText, 1.4f);
+  dl->AddLine(ImVec2(cross.x, cross.y - 5 * scale), ImVec2(cross.x, cross.y + 5 * scale), kText, 1.4f);
+  // the stems: pitch as a multiple of the lowest, height how hard the strike sets the mode going. Click one to see its pattern.
+  dl->AddLine(ImVec2(sx, sy + sh), ImVec2(sx + sw, sy + sh), textAlpha(50));
+  for (int r = 1; r <= 7; r++) {
+    const float x = sx + r / 8.0f * sw;
+    dl->AddLine(ImVec2(std::round(x), sy + sh), ImVec2(std::round(x), sy + sh + 3 * scale), textAlpha(128));
+    std::snprintf(text, sizeof text, "%d", r);
+    dl->AddText(font, f.size, ImVec2(x - 2 * scale, sy + sh + 5 * scale), textAlpha(128), text);
+  }
+  dl->AddText(font, f.size, ImVec2(sx, sy + sh + 17 * scale), textAlpha(190), "pitch (times the lowest)");
+  for (std::size_t i = 0; i < modes.size(); i++) {
+    const float x = std::round(sx + static_cast<float>(modes[i].ratio / 8) * sw) + 0.5f, h = std::max(1.0f, static_cast<float>(level[i]) * sh);
+    const bool on = i == chosen;
+    dl->AddLine(ImVec2(x, sy + sh), ImVec2(x, sy + sh - h), on ? kBlue : withAlpha(kText, static_cast<int>(140 + 80 * level[i])), on ? 1.6f : 1.0f);
+    dl->AddCircleFilled(ImVec2(x, sy + sh - h), (on ? 3 : 2) * scale, on ? kBlue : kText);
+    if (level[i] > 0.45 || on) {
+      std::snprintf(text, sizeof text, "%d,%d", modes[i].m, modes[i].n);
+      dl->AddText(font, f.size, ImVec2(x - 7 * scale, sy + sh - h - 14 * scale), textAlpha(on ? 255 : 180), text);
+    }
+    handles.list.push_back({node.id, "@mode" + std::to_string(modes[i].m) + "," + std::to_string(modes[i].n), 0, ImVec2(x, sy + sh - h)});
+  }
+  const auto count = [](int n, const char* word) { return (n == 0 ? std::string("no") : std::to_string(n)) + " " + word + (n == 1 ? "" : "s"); };
+  std::snprintf(text, sizeof text, "mode %d,%d · %.2fx · %s, %s", mode.m, mode.n, mode.ratio, count(mode.m, "nodal line").c_str(), count(mode.n - 1, "nodal circle").c_str());
+  dl->AddText(font, f.size, ImVec2(f.x0 + 6 * scale, f.y0 + f.h - 14 * scale), textAlpha(190), text);
+}
+
 }  // namespace
 
-bool hasPicture(const std::string& nodeType) { return nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu"; }
+bool hasPicture(const std::string& nodeType) { return nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu" || nodeType == "membrane"; }
 
 void drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, ImVec2 tileMin, ImVec2 tileMax, ImVec2 areaMin, ImVec2 areaMax, float scale, const PictureTiming& timing, ResponseHandles& handles) {
   if (node.type == "prismacanyon") drawCanyon(dl, font, node, type, frameFor(dl, font, node.id + " echoes", 360, 20 + 30 * kCanyonLines + 24, tileMin, tileMax, areaMin, areaMax, scale), scale, timing);
   else if (node.type == "ensemble") drawEnsemble(dl, font, node, type, frameFor(dl, font, node.id + " delays", 320, 150, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "haas") drawHaas(dl, font, node, type, frameFor(dl, font, node.id + " sides", 400, 280, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "reflect") drawReflect(dl, font, node, type, frameFor(dl, font, node.id + " room", 560, 384, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
+  else if (node.type == "membrane") drawMembrane(dl, font, node, type, frameFor(dl, font, node.id + " membrane", 360, 196, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "khufu") drawKhufu(dl, font, node, type, frameFor(dl, font, node.id + " registers", 310, 150, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "rotary") drawRotary(dl, font, node, type, frameFor(dl, font, node.id + " cabinet", 300, 190, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
 }
@@ -345,6 +423,7 @@ std::vector<std::pair<std::string, double>> dragPictureHandle(const ResponseHand
     const double k = handle.gw / std::max(0.1, valueOf(node, type, "width"));
     return {{"width", clampTo("width", std::round((at.x - handle.gx) / k * 2) / 2)}, {"depth", clampTo("depth", std::round((at.y - handle.gy) / k * 2) / 2)}};
   }
+  if (handle.param.rfind("@mode", 0) == 0) { pickedModes()[node.id] = handle.param.substr(5); return {}; }
   if (handle.param.rfind("@speed", 0) == 0) return {{"speed", static_cast<double>(handle.param.back() - '0')}};
   return {};
 }

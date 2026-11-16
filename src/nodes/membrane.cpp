@@ -10,6 +10,7 @@
 
 #include "core/js_math.h"
 #include "nodes/all_nodes.h"
+#include "nodes/membrane_view.h"
 #include "nodes/shared_dsp.h"
 
 namespace wax {
@@ -204,6 +205,25 @@ private:
 };
 
 }  // namespace
+
+double membraneBessel(int m, double x) { return bessel(m, x); }
+
+std::vector<MembraneMode> membraneModes(double position, double stiffness, double damping, double highdamp, double quality) {
+  const std::vector<Mode>& all = modes().all;
+  const std::size_t limit = quality >= 0.5 ? kEcoModes : all.size();
+  const double t60 = 3 * js::pow(0.05 / 3, damping), slope = 0.3 + 1.2 * highdamp;
+  std::vector<MembraneMode> out;
+  for (std::size_t i = 0; i < limit; i++) {
+    const Mode& md = all[i];
+    MembraneMode d;
+    d.m = md.m; d.n = md.n; d.j = md.j;
+    d.ratio = md.ratio * std::sqrt(1 + stiffness * 0.02 * md.ratio * md.ratio);
+    d.t60 = std::max(0.004, t60 * js::pow(md.ratio, -slope) * (md.m == 0 && md.n == 1 ? 1 : 0.85));
+    d.weight = bessel(md.m, md.j * position * 0.9) * md.norm * js::pow(md.ratio, -0.35);
+    out.push_back(d);
+  }
+  return out;
+}
 
 void registerMembrane(NodeRegistry& registry) {
   NodeType type;
