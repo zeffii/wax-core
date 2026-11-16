@@ -629,7 +629,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     for (const std::string& name : types.typeNames()) {
       const NodeType* t = types.find(name);
       if (!t || name == "out" || name == "tempo" || t->inputs.empty() || t->outputs.empty()) continue;
-      const GraphNode blank;
+      const GraphNode blank{};
       const PortKind in = portKind(*t, blank, t->inputs.front()), out = portKind(*t, blank, t->outputs.front());
       if ((in == PortKind::Audio || in == PortKind::Stereo) && (out == PortKind::Audio || out == PortKind::Stereo)) available.insert(name);
     }
