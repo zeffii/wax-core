@@ -2,11 +2,13 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <memory>
 #include <set>
 #include <vector>
 
+#include "app/node_help.h"
 #include "app/theme.h"
 #include "app/units.h"
 #include "app/widgets.h"
@@ -126,6 +128,18 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
     dl->AddText(ImVec2(p.x + 2 * scale + (hasPort ? 7 * scale : 0), p.y + 1.5f * scale), kDimText, name.c_str());
     if (hasPort) dl->AddCircleFilled(ImVec2(p.x + 4 * scale, p.y + rowH * 0.5f), 2.5f * scale, kAccent);   // a dot: it has a port
 
+    if (ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(p, ImVec2(p.x + nameW, p.y + rowH)) && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {   // the web's "?" hint: on the name
+      const std::string hint = paramHint(picked->type, spec.name);
+      char facts[96];
+      std::snprintf(facts, sizeof facts, "range %g to %g, default %g%s", spec.min, spec.max, spec.def, spec.isInt ? ", whole numbers" : "");
+      ImGui::BeginTooltip();
+      ImGui::PushTextWrapPos(300 * scale);
+      ImGui::TextUnformatted(spec.name.c_str());
+      if (!hint.empty()) ImGui::TextUnformatted(hint.c_str());
+      ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(kDimText), "%s", facts);
+      ImGui::PopTextWrapPos();
+      ImGui::EndTooltip();
+    }
     ImGui::PushID(spec.name.c_str());
     ImGui::SetCursorScreenPos(barMin);
     ImGui::InvisibleButton("bar", ImVec2(barMax.x - barMin.x, barMax.y - barMin.y));
