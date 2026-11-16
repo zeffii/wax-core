@@ -785,10 +785,18 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     ImGui::BeginChild("browser", ImVec2(session->browserWidth * scale, below), false, ImGuiWindowFlags_NoNav);
     {   // the tabs
       const char* tabs[] = {"Patterns", "Machines", "Samples"};
+      ImDrawList* tabLines = ImGui::GetWindowDrawList();
+      const float left = ImGui::GetCursorScreenPos().x, right = left + ImGui::GetContentRegionAvail().x;
+      float baseline = 0;
       for (int i = 0; i < 3; i++) {
         if (i) ImGui::SameLine(0, 8 * scale);
         if (app::textButton(tabs[i], session->browserTab == i)) session->browserTab = i;
+        const ImVec2 lo = ImGui::GetItemRectMin(), hi = ImGui::GetItemRectMax();
+        baseline = hi.y + 1 * scale;
+        if (session->browserTab == i) tabLines->AddRectFilled(ImVec2(lo.x, baseline - 1 * scale), ImVec2(hi.x, baseline + 1 * scale), app::kAccent);   // the open tab: underlined
       }
+      tabLines->AddLine(ImVec2(left, baseline + 1 * scale), ImVec2(right, baseline + 1 * scale), app::textAlpha(55));   // the line the tabs sit on
+      ImGui::Dummy(ImVec2(0, 3 * scale));
     }
     if (session->screen != session->browserScreen) {   // each screen shows the list that goes with it
       session->browserScreen = session->screen;
