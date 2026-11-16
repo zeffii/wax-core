@@ -133,8 +133,11 @@ std::string describeColumn(const Project& project, const Lane& lane, const std::
       } else if (id == 0 && !c.presets.empty()) {
         parts.push_back("00: recall preset");
         parts.push_back("number " + std::to_string(std::stoul(token.substr(2), nullptr, 16)));
-      } else {
-        parts.push_back("CC = command, XXXX = value");
+      } else if (command && target && target->setting) {   // saves or loads the settings of its group
+        parts.push_back(token.substr(0, 2) + (target->setting == 1 ? ": save settings" : ": load settings"));
+        parts.push_back("number " + std::to_string(std::stoul(token.substr(2), nullptr, 16)));
+      } else {   // a number the instrument has no command for
+        parts.push_back(token.substr(0, 2) + ": no such command in this instrument");
       }
     }
   }
