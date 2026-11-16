@@ -238,3 +238,4 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 - Double-click on empty graph space opens the add-node menu (as the web app).
 - File > Recent: the last 10 songs (opened or saved), kept in the settings; one that has moved shows dim and opening it only warns in the status bar. Mixer dB scale: a space before the 0 so first digits align.
 - Kaleidoscope picture (band with draggable ends and body; output tiles/overtones; no live spectra). File > Recent is now a submenu.
+- Drum synth picture: envelopes, click, composed root note and first 25 ms, rendered by the node's own code offline (a click from a sample is not drawn). drum2/hat2 (bezier drawings) still to do.

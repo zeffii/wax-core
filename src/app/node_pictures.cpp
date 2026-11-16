@@ -5,10 +5,14 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <functional>
 #include <map>
+#include <memory>
 #include <vector>
 
 #include "app/theme.h"
+#include "core/node.h"
+#include "nodes/adsr.h"
 #include "nodes/kalcore.h"
 #include "nodes/membrane_view.h"
 #include "project/sample_edit.h"
@@ -578,9 +582,149 @@ void drawKaleidoscope(ImDrawList* dl, ImFont* font, const GraphNode& node, const
   dl->AddText(font, f.size, ImVec2(f.x0 + 8 * scale, f.y0 + f.h - 16 * scale), textAlpha(190), text);
 }
 
+// ---- drum synth: the node's own code run offline, so the pictures show what is heard ----
+
+// Runs a node of `type` for `ms` milliseconds: a note on at the start and, when offAt >= 0, a note off at that time. The values are the
+// node's parameters in the type's order. Returns the left output.
+std::vector<float> renderOffline(const NodeType& type, std::vector<float> values, int note, double vel, double ms, double sr, double offAt) {
+  NodeContext context;
+  context.sampleRate = sr;
+  std::unique_ptr<Node> node = type.create(context);
+  std::vector<int> slots(values.size());
+  for (std::size_t i = 0; i < slots.size(); i++) slots[i] = static_cast<int>(i);
+  const int total = std::max(1, static_cast<int>(sr * ms / 1000)), offSample = offAt >= 0 ? static_cast<int>(sr * offAt / 1000) : -1;
+  std::vector<float> out(static_cast<std::size_t>(total)), right(512);
+  NoteEvent on;
+  on.type = NoteType::On; on.note = note; on.vel = vel;
+  node->note(on);
+  for (int at = 0; at < total;) {
+    int n = std::min(512, total - at);
+    if (offSample > at && offSample < at + n) n = offSample - at;
+    if (at == offSample) { NoteEvent off; off.type = NoteType::Off; off.note = note; node->note(off); }
+    float* outs[2] = {out.data() + at, right.data()};
+    node->process(nullptr, outs, n, values.data(), slots.data());
+    at += n;
+  }
+  return out;
+}
+
+std::vector<float> adsrCurve(double a, double d, double s, double r, int hold, int total) {   // one value a millisecond
+  Adsr env(1000);
+  env.set(a, d, s, r); env.on();
+  std::vector<float> out(static_cast<std::size_t>(total));
+  for (int i = 0; i < total; i++) { if (i == hold) env.off(); out[static_cast<std::size_t>(i)] = static_cast<float>(env.next()); }
+  return out;
+}
+
+// A waveform as a line for each pixel column (its smallest and largest value), about the middle of its box.
+void drawWave(ImDrawList* dl, const std::vector<float>& data, float x, float y, float w, float h, ImU32 colour, std::size_t from, std::size_t to, float scale) {
+  const float mid = y + h / 2, amp = h / 2 - 2 * scale;
+  dl->AddLine(ImVec2(x, std::round(mid) + 0.5f), ImVec2(x + w, std::round(mid) + 0.5f), textAlpha(64));
+  to = std::min(to, data.size());
+  if (to <= from) return;
+  const int columns = std::max(1, static_cast<int>(w));
+  for (int px = 0; px < columns; px++) {
+    const std::size_t a = from + static_cast<std::size_t>(px) * (to - from) / columns, b = std::max(a + 1, from + static_cast<std::size_t>(px + 1) * (to - from) / columns);
+    float lo = 0, hi = 0;
+    for (std::size_t i = a; i < b && i < to; i++) { lo = std::min(lo, data[i]); hi = std::max(hi, data[i]); }
+    const float y0 = mid - std::min(1.0f, hi) * amp, y1 = mid - std::max(-1.0f, lo) * amp;
+    dl->AddLine(ImVec2(x + px + 0.5f, y0), ImVec2(x + px + 0.5f, std::max(y1, y0 + 1)), colour);
+  }
+}
+
+// Millisecond marks along the bottom of a panel.
+void drawMsAxis(ImDrawList* dl, ImFont* font, float size, float x, float w, double ms, float base, float scale) {
+  static const double nice[] = {1, 2, 5, 10, 20, 50, 100, 200, 500, 1000};
+  double step = 1000;
+  for (const double n : nice) if (ms / n <= 6) { step = n; break; }
+  char text[16];
+  for (double t = 0; t <= ms; t += step) {
+    const float px = std::round(x + static_cast<float>(t / ms) * w) + 0.5f;
+    dl->AddLine(ImVec2(px, base - 3 * scale), ImVec2(px, base), textAlpha(110));
+    std::snprintf(text, sizeof text, "%d", static_cast<int>(t));
+    dl->AddText(font, size * 0.85f, ImVec2(px - 4 * scale, base - 14 * scale), textAlpha(110), text);
+  }
+}
+
+void drawDrum(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale) {
+  const ImU32 kAmp = IM_COL32(235, 160, 45, 255), kPit = IM_COL32(60, 160, 230, 255), kNoise = IM_COL32(60, 190, 110, 255), kClick = IM_COL32(200, 100, 210, 255);
+  const auto v = [&](const char* name) { return valueOf(node, type, name); };
+  std::vector<float> values;
+  for (const ParamSpec& spec : type.params) values.push_back(static_cast<float>(node.param(spec.name, spec.def)));
+  const float pad = 8 * scale, left = f.x0 + 34 * scale, pw = f.w - 42 * scale;
+  const auto title = [&](float y, const std::string& text, const std::string& right = "") {
+    dl->AddLine(ImVec2(f.x0, y - 1), ImVec2(f.x0 + f.w, y - 1), textAlpha(25));
+    dl->AddText(font, f.size, ImVec2(f.x0 + pad, y + 2 * scale), textAlpha(190), text.c_str());
+    if (!right.empty()) dl->AddText(font, f.size, ImVec2(f.x0 + f.w - pad - ImGui::CalcTextSize(right.c_str()).x * f.size / ImGui::GetFontSize(), y + 2 * scale), textAlpha(190), right.c_str());
+  };
+  const auto hz = [](double x) { char t[24]; if (x >= 1000) std::snprintf(t, sizeof t, "%.1fk", x / 1000); else std::snprintf(t, sizeof t, "%d", static_cast<int>(std::lround(x))); return std::string(t); };
+  const bool holdSome = v("sustain") > 0.02 || v("psus") > 0.02 || v("nsus") > 0.02;
+  const float envY = f.y0 + 22 * scale, envH = 104 * scale, clickY = envY + envH, clickH = 78 * scale, noteY = clickY + clickH, noteH = 96 * scale, zoomY = noteY + noteH, zoomH = 60 * scale;
+
+  // the envelopes: one time axis for the three, long enough for the slowest to fade
+  const double span = std::min(2500.0, std::max(60.0, std::max({v("attack") + v("decay") * 0.9, v("patk") + v("pdec") * 0.9, v("natk") + v("ndec") * 0.9, 1.0}) * 1.15 + (holdSome ? 80 + std::max({v("release"), v("prel"), v("nrel")}) * 0.6 : 0)));
+  const int total = static_cast<int>(std::lround(span)), hold = holdSome ? static_cast<int>(std::lround(span * 0.55)) : 100000;
+  const std::vector<float> amp = adsrCurve(v("attack"), v("decay"), v("sustain"), v("release"), hold, total), pit = adsrCurve(v("patk"), v("pdec"), v("psus"), v("prel"), hold, total), noi = adsrCurve(v("natk"), v("ndec"), v("nsus"), v("nrel"), hold, total);
+  title(envY - 18 * scale, "envelopes", hz(v("startPitch") * v("pitchMul")) + " > " + hz(v("endPitch") * v("pitchMul")) + " Hz");
+  const float ey = envY + 6 * scale, eh = envH - 30 * scale;
+  dl->AddLine(ImVec2(left, ey), ImVec2(left + pw, ey), textAlpha(45));
+  dl->AddLine(ImVec2(left, ey + eh), ImVec2(left + pw, ey + eh), textAlpha(45));
+  const auto line = [&](const std::vector<float>& values01, ImU32 colour, const std::function<double(double)>& map, float thick) {
+    ImVec2 last{};
+    for (std::size_t i = 0; i < values01.size(); i++) {
+      const ImVec2 at(left + static_cast<float>(i) / std::max<std::size_t>(1, values01.size() - 1) * pw, ey + eh - static_cast<float>(map(values01[i])) * eh);
+      if (i) dl->AddLine(last, at, colour, thick);
+      last = at;
+    }
+  };
+  line(amp, kAmp, [&](double x) { return x * v("body"); }, 2.0f * scale);
+  line(noi, kNoise, [&](double x) { return x * v("noise"); }, 1.6f * scale);
+  const double lo = std::min(v("startPitch"), v("endPitch")), hi = std::max(v("startPitch"), v("endPitch")), lg = std::log(std::max(hi / lo, 1.01));
+  line(pit, kPit, [&](double x) { return std::log((v("endPitch") + (v("startPitch") - v("endPitch")) * x) / lo) / lg; }, 1.8f * scale);
+  drawMsAxis(dl, font, f.size, left, pw, span, envY + envH, scale);
+  float lx = f.x0 + 82 * scale;
+  for (const auto& [name, colour] : {std::pair<const char*, ImU32>{"volume", kAmp}, {"pitch", kPit}, {"noise", kNoise}}) {
+    dl->AddRectFilled(ImVec2(lx, envY - 14 * scale), ImVec2(lx + 8 * scale, envY - 11 * scale), colour);
+    dl->AddText(font, f.size, ImVec2(lx + 11 * scale, envY - 18 * scale), textAlpha(190), name);
+    lx += 11 * scale + 6.5f * scale * std::strlen(name) + 8 * scale;
+  }
+
+  // the click on its own (a click from a sample is not drawn: the picture has no sample)
+  const bool sampleMode = v("clickMode") >= 1;
+  const double clickMs = std::min(150.0, std::max(2.0, v("clickLen") * 1.4));
+  char text[96];
+  if (sampleMode) std::snprintf(text, sizeof text, "from a sample, %.1f ms, tail %.1f ms", v("clickLen"), v("clickTail"));
+  else std::snprintf(text, sizeof text, "synthesized, %s Hz, %.1f ms", hz(v("clickTone")).c_str(), v("clickLen"));
+  title(clickY, "click", text);
+  std::vector<float> clickOnly = values;
+  const auto set = [&](std::vector<float>& vals, const char* name, double value) { vals[static_cast<std::size_t>(type.paramIndex(name))] = static_cast<float>(value); };
+  set(clickOnly, "body", 0); set(clickOnly, "noise", 0); set(clickOnly, "drive", 0); set(clickOnly, "level", 1); set(clickOnly, "vel", 0); set(clickOnly, "click", 1);
+  if (!sampleMode) {
+    drawWave(dl, renderOffline(type, clickOnly, 60, 1, clickMs, 44100, -1), left, clickY + 16 * scale, pw, clickH - 30 * scale, kClick, 0, 1 << 30, scale);
+    if (!(v("click") > 0)) dl->AddText(font, f.size, ImVec2(left + 6 * scale, clickY + 18 * scale), textAlpha(150), "click amount is 0");
+  } else dl->AddText(font, f.size, ImVec2(left + 6 * scale, clickY + 18 * scale), textAlpha(150), "(the sample's own wave is not drawn)");
+  drawMsAxis(dl, font, f.size, left, pw, clickMs, clickY + clickH, scale);
+
+  // the root note, whole and the first 25 ms (a click from a sample is left out: it is silent here)
+  const double noteMs = std::min(1600.0, std::max(80.0, std::max({v("attack") + v("decay") * 0.85, v("natk") + v("ndec") * 0.85 * (v("noise") > 0.02 ? 1 : 0), v("release") * (holdSome ? 0.5 : 0)}) * 1.1 + (holdSome ? 120 : 0)));
+  const std::vector<float> hit = renderOffline(type, values, static_cast<int>(v("root")), 1, noteMs, 44100, holdSome ? noteMs * 0.6 : -1);
+  float peak = 0;
+  for (const float x : hit) peak = std::max(peak, std::fabs(x));
+  static const char* const kinds[] = {"white", "pink", "brown", "blue", "violet"};
+  std::snprintf(text, sizeof text, "peak %.2f, %s noise", peak, kinds[std::clamp(static_cast<int>(std::lround(v("noiseType"))), 0, 4)]);
+  title(noteY, "root note, composed", text);
+  drawWave(dl, hit, left, noteY + 16 * scale, pw, noteH - 30 * scale, textAlpha(220), 0, hit.size(), scale);
+  drawMsAxis(dl, font, f.size, left, pw, noteMs, noteY + noteH, scale);
+  const double zoomMs = std::min(25.0, noteMs);
+  std::snprintf(text, sizeof text, "first %d ms", static_cast<int>(std::lround(zoomMs)));
+  title(zoomY, text);
+  if (v("click") > 0) dl->AddRectFilled(ImVec2(left, zoomY + 14 * scale), ImVec2(left + static_cast<float>(std::min(v("clickLen"), zoomMs) / zoomMs) * pw, zoomY + zoomH - 2 * scale), withAlpha(kClick, 30));
+  drawWave(dl, hit, left, zoomY + 14 * scale, pw, zoomH - 16 * scale, textAlpha(220), 0, static_cast<std::size_t>(44100 * zoomMs / 1000), scale);
+}
+
 }  // namespace
 
-bool hasPicture(const std::string& nodeType) { return nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu" || nodeType == "membrane" || nodeType == "granular" || nodeType == "kaleidoscope"; }
+bool hasPicture(const std::string& nodeType) { return nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu" || nodeType == "membrane" || nodeType == "granular" || nodeType == "kaleidoscope" || nodeType == "drumsynth"; }
 
 float drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, ImVec2 tileMin, ImVec2 tileMax, ImVec2 areaMin, ImVec2 areaMax, float scale, const PictureTiming& timing, ResponseHandles& handles) {
   gBelow = 0;
@@ -593,6 +737,7 @@ float drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const
   else if (node.type == "khufu") drawKhufu(dl, font, node, type, frameFor(dl, font, node.id + " registers", 310, 150, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "rotary") drawRotary(dl, font, node, type, frameFor(dl, font, node.id + " cabinet", 300, 190, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "kaleidoscope") drawKaleidoscope(dl, font, node, type, frameFor(dl, font, node.id + " band", 460, 270, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
+  else if (node.type == "drumsynth") drawDrum(dl, font, node, type, frameFor(dl, font, node.id + " hit", 360, 372, tileMin, tileMax, areaMin, areaMax, scale), scale);
   return gBelow;
 }
 
