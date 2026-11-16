@@ -22,6 +22,7 @@
 #include "edit/sync.h"
 #include "nodes/bezier.h"
 #include "nodes/dx7core.h"
+#include "nodes/genexpr_check.h"
 #include "app/units.h"
 #include "engine/engine.h"
 #include "engine/takes.h"
@@ -1665,6 +1666,19 @@ void testLevels() {
   std::printf("ok: levels\n");
 }
 
+void testGenExprCheck() {
+  const wax::GenExprReport good = wax::checkGenExpr("Param amount(0.5, min=0, max=1);\nout1 = in1 * amount;\n");
+  check(good.ok && good.params.size() == 1 && good.params[0].name == "amount" && good.params[0].max == 1 && good.params[0].def == 0.5, "a good program compiles and lists its knob");
+  const wax::GenExprReport bad = wax::checkGenExpr("out1 = in1;\nout2 = nosuch * 2;\n");
+  check(!bad.ok && bad.errors.size() == 1 && bad.errors[0].line == 2 && bad.errors[0].col >= 8, "a mistake is reported on its line");
+  const wax::GenExprReport open = wax::checkGenExpr("out1 = (in1 + 2;\n");
+  check(!open.ok && open.errors[0].line == 1 && open.errors[0].message.find("expected )") == 0, "a missing bracket is named");
+  const wax::GenExprReport range = wax::checkGenExpr("Param p(5, min=0, max=1);\nout1 = in1;\n");
+  check(!range.ok && range.errors[0].line == 1, "a Param outside its range is a mistake");
+  check(wax::checkGenExpr(wax::genexprDefaultCode()).ok, "the default code compiles");
+  std::printf("ok: genexpr check\n");
+}
+
 void testSetParam() {
   const std::string songs = WAX_TEST_SONGS;
   wax::Document doc(wax::loadProject(songs + "/jawharp.wax"));
@@ -1743,6 +1757,7 @@ int main(int argc, char** argv) {
   testDrawingEdit();
   testSpline();
   testLevels();
+  testGenExprCheck();
   testSetParam();
   testSave();
   testNewPattern();

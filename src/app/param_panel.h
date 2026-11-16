@@ -5,6 +5,7 @@
 #pragma once
 
 #include <map>
+#include <set>
 #include <string>
 
 #include "edit/document.h"
@@ -30,7 +31,8 @@ struct ParamPanelState {
   std::string chordNode;    // set when the user asked for the chord names of this node
   std::string gateNode;     // set when the user asked for the step levels of this node (gate, arpeggiator)
   std::string dxNode;       // set when the user asked for the DX loader of this node
-  std::string vectorNode;   // set when the user asked for the diamond / wave sequences of this node (compass, waveseq, vecpath, vecmix)
+  std::string vectorNode;
+  std::string genexprNode;   // set when the user asked to edit this genexpr node's code   // set when the user asked for the diamond / wave sequences of this node (compass, waveseq, vecpath, vecmix)
   bool dragging = false;    // a drag is in progress: its steps are one undo
   bool placed = false;      // the window has been put at the graph's corner once; after that it stays where the user left it
   int paramCursor = 0;      // the row the keys act on
@@ -39,6 +41,7 @@ struct ParamPanelState {
   ExposedWindow follow;     // the floating window of the cursor lane's machine on the Song and Pattern screens
   bool followOpen = false;  // ... and whether it is shown
   std::map<std::string, ExposedWindow> pinned;   // a window kept open for each pinned machine (its id)
+  std::set<std::string> pinsSeen;                // the pins as keepPins last saw them (to tell what the user changed)
   bool open = true;         // the window is shown (the close button hides it; the Instrument screen's tab brings it back)
 };
 
@@ -54,6 +57,10 @@ bool drawExposedDock(ParamPanelState& state, Document& doc, const Engine& engine
 // The floating windows over the Song and Pattern screens: one for `followInstrument` (the cursor lane's machine; its X hides it, `followOpen`
 // shows it) with a pin that keeps a window for that machine open, and a window for each pinned machine (its X, or unpin, puts it away).
 // Returns true when a parameter changed.
+// Keeps the pins across sessions and songs (call once a frame, before drawing): what the user pinned or unpinned since the last call is
+// saved in the settings, and the remembered machines that this song has are pinned, those it lacks put away (but not forgotten).
+void keepPins(ParamPanelState& state, const Project& project);
+
 bool drawFloatPanels(ParamPanelState& state, Document& doc, const Engine& engine, const std::string& followInstrument, ImVec2 areaMin, ImVec2 areaMax);
 
 }  // namespace wax::app

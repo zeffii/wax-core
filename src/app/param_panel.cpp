@@ -8,6 +8,7 @@
 #include <set>
 #include <vector>
 
+#include "app/config.h"
 #include "app/gate_window.h"
 #include "app/vector_window.h"
 #include "app/shape_window.h"
@@ -290,6 +291,7 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
   if (picked->type == "dvii" && textButton("edit voice")) state.dxNode = picked->id;
   if (hasGate(picked->type) && textButton("edit steps")) state.gateNode = picked->id;
   if (hasVectorWindow(picked->type) && textButton(picked->type == "waveseq" ? "edit waves" : picked->type == "compass" ? "edit pad and waves" : "edit pad")) state.vectorNode = picked->id;
+  if (picked->type == "genexpr" && textButton("edit code")) state.genexprNode = picked->id;
   if (picked->type == "chord" && textButton("edit chords")) state.chordNode = picked->id;
   if (picked->type == "wavetable" && textButton("edit table")) state.tableNode = picked->id;
   if (hasShape(picked->type) && textButton(picked->type == "osc" || picked->type == "westcoast" || picked->type == "fmsynth" ? "draw wave" : picked->type == "addsynth" ? "draw spectrum" : picked->type == "shiva" ? "edit taps" : "draw curve")) state.shapeNode = picked->id;
@@ -300,7 +302,6 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
     if (c.to.rfind(prefix, 0) == 0) wired.insert(c.to.substr(prefix.size()));
   }
 
-  const float rowH = ImGui::GetTextLineHeight() + 3 * scale;
   const float total = ImGui::GetContentRegionAvail().x;
   float nameW = 0;   // as wide as the longest name (and its port dot), not a share of the panel
   for (const ParamSpec& spec : type->params) if (spec.name != "bypass") nameW = std::max(nameW, ImGui::CalcTextSize(spec.name.c_str()).x);
@@ -387,6 +388,27 @@ bool drawExposedWindow(ParamPanelState& state, ExposedWindow& win, const char* w
 bool drawExposedDock(ParamPanelState& state, Document& doc, const Engine& engine, const std::string& instrumentId, ImVec2 areaMin, ImVec2 areaMax) {
   const float scale = ImGui::GetStyle().FontScaleDpi;
   return drawExposedWindow(state, state.dock, "exposed", "exposed", doc, engine, instrumentId, areaMin, areaMax, ImVec2(areaMin.x + 12 * scale, areaMin.y + 12 * scale), nullptr, 0, nullptr);
+}
+
+void keepPins(ParamPanelState& state, const Project& project) {
+  std::vector<std::string>& wanted = settings().pinnedMachines;
+  const auto has = [&](const std::string& id) { for (const Instrument& i : project.instruments) if (i.id == id) return true; return false; };
+  bool changed = false;
+  for (const auto& entry : state.pinned) {   // pinned by the user
+    if (state.pinsSeen.count(entry.first) || std::find(wanted.begin(), wanted.end(), entry.first) != wanted.end()) continue;
+    wanted.push_back(entry.first);
+    changed = true;
+  }
+  for (const std::string& id : state.pinsSeen) {   // unpinned by the user (a machine the song lost was taken out below, not by the user)
+    if (state.pinned.count(id) || !has(id)) continue;
+    wanted.erase(std::remove(wanted.begin(), wanted.end(), id), wanted.end());
+    changed = true;
+  }
+  if (changed) saveSettings();
+  for (const std::string& id : wanted) if (has(id)) state.pinned.emplace(id, ExposedWindow());
+  for (auto it = state.pinned.begin(); it != state.pinned.end();) it = has(it->first) ? std::next(it) : state.pinned.erase(it);
+  state.pinsSeen.clear();
+  for (const auto& entry : state.pinned) state.pinsSeen.insert(entry.first);
 }
 
 bool drawFloatPanels(ParamPanelState& state, Document& doc, const Engine& engine, const std::string& followInstrument, ImVec2 areaMin, ImVec2 areaMax) {

@@ -40,6 +40,7 @@
 #include "app/wavetable_window.h"
 #include "app/gate_window.h"
 #include "app/fonts.h"
+#include "app/genexpr_window.h"
 #include "app/vector_window.h"
 #include "app/shape_window.h"
 #include "app/graph_view.h"
@@ -99,7 +100,7 @@ void SDLCALL dialogDone(void* userdata, const char* const* files, int) {
 }
 
 struct Options {
-  std::string path, screenshot, press, clicks, envelope, dxnode, vectornode, screen, theme;   // clicks: "x,y;x,y" mouse clicks, one every 6 frames; envelope: "instrument.node" opens its envelope window   // press: keys to press one after another (for checking the window without a keyboard)
+  std::string path, screenshot, press, clicks, envelope, dxnode, vectornode, genexprnode, screen, theme;   // clicks: "x,y;x,y" mouse clicks, one every 6 frames; envelope: "instrument.node" opens its envelope window   // press: keys to press one after another (for checking the window without a keyboard)
   double rate = 48000;
   int threads = 0, midiPort = 0, frames = 3, playFrom = -1, buffer = 0;
   bool useNull = false;
@@ -167,6 +168,7 @@ struct Session {
   app::GraphViewState graphView;
   app::GateWindow gate;
   app::VectorWindow vector;
+  app::GenExprWindow genexpr;
   app::ChordWindow chords;
   app::WavetableWindow table;
   app::ShapeWindow shape;
@@ -484,6 +486,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   ImGui::SameLine(0, 24 * ImGui::GetStyle().FontScaleDpi);
   const double tickSeconds = 60.0 / (std::max(1.0, song.bpm) * std::max(1, song.ticksPerBeat));
   session->heard.update(playing, player.tick(), ImGui::GetTime(), session->audio ? session->audio->latencySeconds() : 0.0, tickSeconds);
+  app::keepPins(session->panel, session->doc->project());   // the pinned parameter windows are remembered between songs and sessions
   const int tick = playing ? session->heard.tick : player.tick();
   const int perBeat = std::max(1, song.ticksPerBeat), perBar = perBeat * std::max(1, song.beatsPerBar);
   {   // the project name: it is the file name when you save
@@ -1478,6 +1481,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   if (!session->panel.gateNode.empty()) { app::showGate(session->gate, laneInstrument, session->panel.gateNode); session->panel.gateNode.clear(); }
   if (app::drawGateWindow(session->gate, doc, player.engine())) syncData(doc, player.engine());
   if (!session->panel.vectorNode.empty()) { app::showVector(session->vector, laneInstrument, session->panel.vectorNode); session->panel.vectorNode.clear(); }
+  if (!session->panel.genexprNode.empty()) { app::showGenExpr(session->genexpr, laneInstrument, session->panel.genexprNode); session->panel.genexprNode.clear(); }
+  if (app::drawGenExprWindow(session->genexpr, doc, player.engine())) syncData(doc, player.engine());
   if (app::drawVectorWindow(session->vector, doc, player.engine())) { syncData(doc, player.engine()); syncParams(doc, player.engine()); }
   if (!session->panel.dxNode.empty()) { app::showDx(session->dx, laneInstrument, session->panel.dxNode); session->panel.dxNode.clear(); }
   if (app::drawDxWindow(session->dx, doc, player.engine())) { syncData(doc, player.engine()); syncParams(doc, player.engine()); }
@@ -1654,6 +1659,7 @@ bool parse(int argc, char** argv, Options& o) {
     else if (a == "--envelope" && more) o.envelope = argv[++i];
     else if (a == "--dx" && more) o.dxnode = argv[++i];
     else if (a == "--vector" && more) o.vectornode = argv[++i];
+    else if (a == "--genexpr" && more) o.genexprnode = argv[++i];
     else if (a == "--screen" && more) o.screen = argv[++i];
     else if (a == "--theme" && more) o.theme = argv[++i];
     else if (a == "--frames" && more) o.frames = std::max(1, std::atoi(argv[++i]));
@@ -1756,6 +1762,10 @@ int main(int argc, char** argv) {
     if (!options.dxnode.empty() && frame == 3 && session) {
       const std::size_t dot = options.dxnode.find('.');
       app::showDx(session->dx, options.dxnode.substr(0, dot), options.dxnode.substr(dot + 1));
+    }
+    if (!options.genexprnode.empty() && frame == 3 && session) {
+      const std::size_t dot = options.genexprnode.find('.');
+      app::showGenExpr(session->genexpr, options.genexprnode.substr(0, dot), options.genexprnode.substr(dot + 1));
     }
     if (!options.vectornode.empty() && frame == 3 && session) {
       const std::size_t dot = options.vectornode.find('.');

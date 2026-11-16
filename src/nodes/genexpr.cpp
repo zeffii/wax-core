@@ -4,6 +4,7 @@
 // A program with any mistake produces nothing, and then there is silence (the web app also keeps the last good program,
 // but a native node only ever gets its code from the node's data).
 #include "nodes/all_nodes.h"
+#include "nodes/genexpr_check.h"
 
 #include <cmath>
 #include <cstdint>
@@ -31,14 +32,18 @@ const char* const kDefaultCode =
     "out1 = mix(in1, smooth, amount);\n"
     "out2 = in2;\n";
 
-struct CompileError {};
-[[noreturn]] void fail() { throw CompileError{}; }
+// Where a mistake is, for the code panel (1-based line and column, and the column after its last character).
+struct Where { int line = 1, col = 1, end = 0; };
+struct CompileError { std::string message; Where at; };
+thread_local Where gWhere;   // the place the compiler is working on: a mistake is reported here
+[[noreturn]] void fail(const char* message = "this is not valid GenExpr here") { throw CompileError{message, gWhere}; }
 
 // ---------------------------------------------------------------------------------------------------------- lexer
 struct Tok {
   enum T { Num, Id, Op, Eof } t = Eof;
   std::string v;
   double num = 0;
+  int line = 1, col = 1;   // where it starts
 };
 
 const char* const kOps[] = {"**", "==", "!=", "<=", ">=", "&&", "||", "+=", "-=", "*=", "/=", "+", "-", "*", "/", "%",
@@ -49,15 +54,19 @@ bool isIdStart(char c) { return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
 
 std::vector<Tok> lex(const std::string& text) {
   std::vector<Tok> toks;
-  size_t i = 0;
+  size_t i = 0, lineStart = 0;
+  int line = 1;
   const size_t len = text.size();
+  const auto here = [&]() { return Where{line, static_cast<int>(i - lineStart) + 1, static_cast<int>(i - lineStart) + 2}; };
   while (i < len) {
     const char c = text[i];
-    if (c == ' ' || c == '\t' || c == '\r' || c == '\n') { i++; continue; }
+    if (c == '\n') { i++; line++; lineStart = i; continue; }
+    if (c == ' ' || c == '\t' || c == '\r') { i++; continue; }
     if (c == '/' && i + 1 < len && text[i + 1] == '/') { while (i < len && text[i] != '\n') i++; continue; }
     if (c == '/' && i + 1 < len && text[i + 1] == '*') {
       const size_t end = text.find("*/", i + 2);
-      if (end == std::string::npos) fail();
+      if (end == std::string::npos) { gWhere = here(); fail("this comment never ends (it needs */)"); }
+      for (size_t q = i; q < end; q++) if (text[q] == '\n') { line++; lineStart = q + 1; }
       i = end + 2;
       continue;
     }
@@ -87,6 +96,7 @@ std::vector<Tok> lex(const std::string& text) {
       t.t = Tok::Num;
       t.v = w.substr(0, j);
       t.num = std::strtod(t.v.c_str(), nullptr);
+      t.line = line; t.col = static_cast<int>(i - lineStart) + 1;
       toks.push_back(t);
       i += j;
     } else if (isIdStart(c)) {
@@ -96,6 +106,7 @@ std::vector<Tok> lex(const std::string& text) {
       Tok t;
       t.t = Tok::Id;
       t.v = w2.substr(0, k);
+      t.line = line; t.col = static_cast<int>(i - lineStart) + 1;
       toks.push_back(t);
       i += k;
     } else {
@@ -106,16 +117,19 @@ std::vector<Tok> lex(const std::string& text) {
           Tok t;
           t.t = Tok::Op;
           t.v = op;
+          t.line = line; t.col = static_cast<int>(i - lineStart) + 1;
           toks.push_back(t);
           i += n;
           found = true;
           break;
         }
       }
-      if (!found) fail();
+      if (!found) { gWhere = here(); fail("this character is not part of GenExpr"); }
     }
   }
-  toks.push_back(Tok{});
+  Tok eof;
+  eof.line = line; eof.col = static_cast<int>(len - lineStart) + 1;
+  toks.push_back(eof);
   return toks;
 }
 
@@ -128,6 +142,7 @@ struct PNode {
   std::string name, op;
   std::vector<P> args;  // call and method arguments
   P l, r, c;            // bin: l r; un: l; cond: c l r; method: l is the object
+  Where at;             // where it starts
 };
 
 struct PStmt;
@@ -143,16 +158,23 @@ struct PStmt {
   std::vector<std::string> names;  // tuple
   std::vector<P> values;         // tuple; set uses values[0]
   P e;                           // expr
+  Where at;                      // where it starts
 };
 
 class Parser {
 public:
   explicit Parser(std::vector<Tok> t) : toks_(std::move(t)) {}
 
+  // A mistake at the token about to be read.
+  [[noreturn]] void fail(const char* message) const {
+    gWhere = {peek().line, peek().col, peek().col + static_cast<int>(std::max<size_t>(1, peek().v.size()))};
+    ::wax::fail(message);
+  }
+
   std::vector<S> parse() {
     std::vector<S> body;
     while (peek().t != Tok::Eof) {
-      if (is("}")) fail();  // closes nothing
+      if (is("}")) fail("this } closes nothing");
       body.push_back(statement());
     }
     return body;
@@ -167,9 +189,18 @@ private:
   const Tok& next() { const Tok& t = at(p_); p_++; return t; }
   bool is(const char* v, Tok::T t = Tok::Op) const { return peek().t == t && peek().v == v; }
   bool isAt(size_t i, const char* v) const { return at(i).t == Tok::Op && at(i).v == v; }
-  void expect(const char* v) { if (!is(v)) fail(); next(); }
+  void expect(const char* v) {
+    if (!is(v)) { const std::string m = std::string("expected ") + v + (peek().t == Tok::Eof ? " but the code ends here" : " here"); fail(m.c_str()); }
+    next();
+  }
 
-  P mk(PNode::K k) { auto n = std::make_shared<PNode>(); n->k = k; return n; }
+  P mk(PNode::K k) {
+    auto n = std::make_shared<PNode>();
+    n->k = k;
+    const Tok& t = at(p_ > 0 ? p_ - 1 : 0);   // (the token just read)
+    n->at = {t.line, t.col, t.col + static_cast<int>(std::max<size_t>(1, t.v.size()))};
+    return n;
+  }
 
   void arglist(std::vector<P>& args) {
     if (!is(")")) {
@@ -197,14 +228,15 @@ private:
       return n;
     }
     if (tk.t == Tok::Op && tk.v == "(") { P e = expr(); expect(")"); return e; }
-    fail();
+    gWhere = {tk.line, tk.col, tk.col + static_cast<int>(std::max<size_t>(1, tk.v.size()))};
+    ::wax::fail(tk.t == Tok::Eof ? "the code ends where a value was expected" : "a value was expected here");
   }
 
   P postfix() {
     P e = primary();
     while (is(".")) {
       next();
-      if (peek().t != Tok::Id) fail();
+      if (peek().t != Tok::Id) fail("a method name should follow the dot");
       const std::string name = next().v;
       expect("(");
       P n = mk(PNode::Method);
@@ -289,6 +321,7 @@ private:
   S statement() {
     auto s = std::make_shared<PStmt>();
     const Tok tk = peek();
+    s->at = {tk.line, tk.col, tk.col + static_cast<int>(std::max<size_t>(1, tk.v.size()))};
     if (tk.t == Tok::Id && tk.v == "if") {
       next();
       expect("(");
@@ -341,7 +374,7 @@ private:
         s->values.push_back(expr());
         while (is(",")) { next(); s->values.push_back(expr()); }
         expect(";");
-        if (s->values.size() != s->names.size()) fail();
+        if (s->values.size() != s->names.size()) fail("there are not as many values as names on the left");
         return s;
       }
     }
@@ -355,7 +388,7 @@ private:
       return s;
     }
     P e = expr();
-    if (e->k != PNode::Call && e->k != PNode::Method) fail();  // this does nothing
+    if (e->k != PNode::Call && e->k != PNode::Method) { gWhere = e->at; ::wax::fail("this does nothing: only a call can stand alone as a statement"); }
     expect(";");
     s->k = PStmt::Expr;
     s->e = e;
@@ -427,6 +460,7 @@ struct Program {
   std::vector<std::pair<int, double>> inits;
   std::vector<size_t> buffers;
   struct Par { double def, min, max; };
+  std::vector<std::string> paramNames;   // for the code panel
   std::vector<Par> params;
 };
 
@@ -490,41 +524,43 @@ private:
       const double b = constant(e->r);
       return e->op == "+" ? a + b : e->op == "-" ? a - b : e->op == "*" ? a * b : (b == 0 ? 0 : a / b);
     }
-    fail();
+    fail("this has to be a plain number (a number, a constant, or sums of them)");
   }
 
   void declare(const PStmt& s) {
-    if (syms_.count(s.name) || findFunc(s.name) || isBufferFunc(s.name) || isWord(s.name)) fail();
+    gWhere = s.at;
+    if (syms_.count(s.name) || findFunc(s.name) || isBufferFunc(s.name) || isWord(s.name)) fail("this name is already taken");
     std::vector<const DeclArg*> pos;
     const DeclArg* named[2] = {nullptr, nullptr};  // min, max
     for (const auto& a : s.args) {
       if (!a.keyed) { pos.push_back(&a); continue; }
       if (s.kind == "Param" && a.key == "min") named[0] = &a;
       else if (s.kind == "Param" && a.key == "max") named[1] = &a;
-      else fail();  // no other settings exist
+      else fail("only min and max can be named here");
     }
     if (s.kind == "History") {
-      if (pos.size() > 1) fail();
+      if (pos.size() > 1) fail("a History takes one starting value");
       const int k = state(1);
       prog_->inits.push_back({k, pos.empty() ? 0.0 : constant(pos[0]->value)});
       Sym y{History, k};
       syms_[s.name] = y;
     } else if (s.kind == "Param") {
-      if (pos.empty()) fail();
-      if (pos.size() > 3) fail();
+      if (pos.empty()) fail("a Param needs a starting value");
+      if (pos.size() > 3) fail("a Param takes a start, a min and a max");
       const double def = constant(pos[0]->value);
       const double min = named[0] ? constant(named[0]->value) : pos.size() > 1 ? constant(pos[1]->value) : std::min(0.0, def);
       const double max = named[1] ? constant(named[1]->value) : pos.size() > 2 ? constant(pos[2]->value) : std::max(1.0, def);
-      if (!(min < max)) fail();
-      if (def < min || def > max) fail();
-      if (static_cast<int>(prog_->params.size()) >= kMaxParams) fail();
+      if (!(min < max)) fail("min has to be below max");
+      if (def < min || def > max) fail("the starting value is outside min and max");
+      if (static_cast<int>(prog_->params.size()) >= kMaxParams) fail("a node has at most 8 Params");
       const int idx = static_cast<int>(prog_->params.size());
       prog_->params.push_back({def, min, max});
+      prog_->paramNames.push_back(s.name);
       syms_[s.name] = Sym{ParamS, idx};
     } else {  // Data and Delay
-      if (pos.size() != 1) fail();
+      if (pos.size() != 1) fail("this takes one value: its size");
       const double size = std::floor(constant(pos[0]->value));
-      if (!(size >= 1) || size > kMaxBuffer) fail();
+      if (!(size >= 1) || size > kMaxBuffer) fail("the size has to be from 1 to 4194304");
       Sym y{s.kind == "Data" ? DataS : DelayS, 0};
       y.b = static_cast<int>(prog_->buffers.size());
       prog_->buffers.push_back(static_cast<size_t>(size));
@@ -548,15 +584,15 @@ private:
         case OutS: { auto e = mk(E::Out); e->idx = s.n; return e; }
         case ParamS: { auto e = mk(E::Param); e->idx = s.n; return e; }
         case History: { auto e = mk(E::Hist); e->idx = s.n; return e; }
-        default: fail();  // a buffer is not a number
+        default: fail("a buffer is not a number (use peek, poke or .read)");
       }
     }
-    if (findFunc(name) || isBufferFunc(name)) fail();
+    if (findFunc(name) || isBufferFunc(name)) fail("this is a function: it needs brackets and arguments");
     if (setNames_.count(name)) {
-      if (!assigned_.count(name)) fail();  // used before it is set
+      if (!assigned_.count(name)) fail("this is used before it is set");
       auto e = mk(E::Local); e->idx = locals_.at(name); return e;
     }
-    fail();
+    fail("this name is not known (declare it, or set it before use)");
   }
 
   const Sym& bufferSym(const P& a) {
@@ -564,10 +600,11 @@ private:
       auto it = syms_.find(a->name);
       if (it != syms_.end() && (it->second.kind == DataS || it->second.kind == DelayS)) return it->second;
     }
-    fail();
+    fail("a Data or Delay buffer is needed here");
   }
 
   EP gen(const P& e) {
+    gWhere = e->at;
     switch (e->k) {
       case PNode::Num: return num(std::isfinite(e->num) ? e->num : 0);
       case PNode::Id: return genId(e->name);
@@ -600,21 +637,21 @@ private:
       case PNode::Call: {
         if (isBufferFunc(e->name)) {
           const size_t want = e->name == "peek" ? 2 : e->name == "poke" ? 3 : 1;
-          if (e->args.size() != want) fail();
+          if (e->args.size() != want) fail(e->name == "peek" ? "peek takes a buffer and an index" : e->name == "poke" ? "poke takes a buffer, a value and an index" : "dim takes a buffer");
           const Sym& b = bufferSym(e->args[0]);
           std::vector<EP> rest;
           for (size_t i = 1; i < e->args.size(); i++) rest.push_back(gen(e->args[i]));
           if (e->name == "dim") return num(b.size);
-          if (b.kind != DataS) fail();
+          if (b.kind != DataS) fail("peek and poke work on a Data buffer");
           auto n = mk(e->name == "peek" ? E::Peek : E::Poke);
           n->idx = b.b;
           n->k = std::move(rest);
           return n;
         }
         const FuncInfo* f = findFunc(e->name);
-        if (!f) fail();
+        if (!f) fail("there is no function with this name");
         const int count = static_cast<int>(e->args.size());
-        if (count < f->lo || count > f->hi) fail();
+        if (count < f->lo || count > f->hi) fail("this function does not take this many arguments");
         auto n = mk(E::Func);
         n->fn = f->fn;
         for (const auto& a : e->args) n->k.push_back(gen(a));
@@ -624,7 +661,7 @@ private:
       case PNode::Method: {
         const Sym* b = nullptr;
         if (e->l->k == PNode::Id) { auto it = syms_.find(e->l->name); if (it != syms_.end()) b = &it->second; }
-        if (!b || (b->kind != DataS && b->kind != DelayS)) fail();
+        if (!b || (b->kind != DataS && b->kind != DelayS)) fail("only a Data or Delay buffer has methods");
         std::vector<EP> args;
         for (const auto& a : e->args) args.push_back(gen(a));
         if (b->kind == DelayS) {
@@ -638,7 +675,7 @@ private:
           if (e->name == "read" && args.size() == 1) { auto n = mk(E::Peek); n->idx = b->b; n->k = std::move(args); return n; }
           if (e->name == "write" && args.size() == 2) { auto n = mk(E::PokeVoid); n->idx = b->b; n->k = std::move(args); return n; }
         }
-        fail();
+        fail("this method needs different arguments (read takes 1; write takes 1 on a Delay, 2 on a Data)");
       }
     }
     fail();
@@ -650,9 +687,9 @@ private:
       const Sym& s = it->second;
       if (s.kind == OutS) return Target{Target::Out, s.n};
       if (s.kind == History) return Target{Target::Hist, s.n};
-      fail();  // an input, a constant, a Param or a buffer cannot be set
+      fail("an input, a constant, a Param or a buffer cannot be set");
     }
-    if (findFunc(name) || isBufferFunc(name) || isWord(name)) fail();
+    if (findFunc(name) || isBufferFunc(name) || isWord(name)) fail("this name belongs to GenExpr and cannot be set");
     assigned_[name] = true;
     auto l = locals_.find(name);
     if (l == locals_.end()) l = locals_.emplace(name, static_cast<int>(locals_.size())).first;
@@ -662,8 +699,9 @@ private:
   std::vector<StmtP> stmts(const std::vector<S>& list, int depth) {
     std::vector<StmtP> out;
     for (const auto& s : list) {
+      gWhere = s->at;
       if (s->k == PStmt::Decl) {
-        if (depth) fail();
+        if (depth) fail("a declaration cannot be inside an if");
         declare(*s);
       } else if (s->k == PStmt::Set) {
         auto st = std::make_unique<Stmt>();
@@ -1047,6 +1085,21 @@ private:
 };
 
 }  // namespace
+
+const char* genexprDefaultCode() { return kDefaultCode; }
+
+GenExprReport checkGenExpr(const std::string& code, double sampleRate) {
+  GenExprReport report;
+  try {
+    Compiler compiler(sampleRate);
+    const auto program = compiler.compile(code);
+    report.ok = true;
+    for (std::size_t i = 0; i < program->params.size(); i++) report.params.push_back({program->paramNames[i], program->params[i].min, program->params[i].max, program->params[i].def});
+  } catch (const CompileError& e) {
+    report.errors.push_back({e.at.line, e.at.col, std::max(e.at.end, e.at.col + 1), e.message});
+  }
+  return report;
+}
 
 void registerGenExpr(NodeRegistry& registry) {
   NodeType type;
