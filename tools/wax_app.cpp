@@ -645,8 +645,13 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     const struct { const char* label; Screen screen; } entries[] = {{"Song", Screen::Song}, {"Pattern", Screen::Pattern}, {"Instrument", Screen::Instrument}, {"Sample", Screen::Sample}, {"Info", Screen::Info}, {"Config", Screen::Config}};
     const struct { const char* icon; const char* tip; Screen screen; } icons[] = {
         {"arrange", "Song: the arrangement (F1)", Screen::Song}, {"patterns", "Pattern (F2)", Screen::Pattern},
-        {"instruments", "Instrument (F3)", Screen::Instrument}, {"samples", "Sample (F4)", Screen::Sample}, {"info", "Song info (F10)", Screen::Info}, {"config", "Config (F11)", Screen::Config}};
+        {"instruments", "Instrument (F3)", Screen::Instrument}, {"samples", "Sample (F4)", Screen::Sample}, {"info", "Song info (F10)", Screen::Info}};
     for (const auto& entry : icons) if (app::iconButton(entry.icon, entry.tip, session->screen == entry.screen, 24)) session->screen = entry.screen;
+    // the other domain, at the bottom of the rail (above the mixer when it shows): the shortcut sheet and the settings
+    const float iconStep = 24 * scale + ImGui::GetStyle().ItemSpacing.y;
+    ImGui::SetCursorPosY(std::max(ImGui::GetCursorPosY(), ImGui::GetWindowHeight() - 2 * iconStep));
+    if (app::iconButton("keys-toggle", "Shortcuts: the keys of the Pattern screen, beside the grid", session->showKeys, 24)) session->showKeys = !session->showKeys;
+    if (app::iconButton("config", "Config (F11)", session->screen == Screen::Config, 24)) session->screen = Screen::Config;
     (void)entries;
   }
   ImGui::EndChild();
@@ -1348,8 +1353,6 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       ImGui::SameLine(0, 14 * scale);
     }
     if (app::iconButton("browser-toggle", "Browser: the patterns and machines, down the left of every screen (Alt+B)", session->showBrowser, 16)) session->showBrowser = !session->showBrowser;
-    ImGui::SameLine(0, 10 * scale);
-    if (app::iconButton("keys-toggle", "Shortcuts: the keys of the Pattern screen, beside the grid", session->showKeys, 16)) session->showKeys = !session->showKeys;
     ImGui::SameLine(0, 10 * scale);
     if (app::iconButton("mixer-toggle", "Mixer: a fader for each lane, along the bottom of the Song and Pattern screens", session->showMixer, 16)) session->showMixer = !session->showMixer;
     ImGui::SameLine(0, 10 * scale);

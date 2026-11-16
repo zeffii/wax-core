@@ -30,7 +30,7 @@ const std::vector<Shortcut>& patternShortcuts() {
       {"Enter", "switch editing on or off; the grid takes the keys while it is on"},
       {"Click", "click a cell to put the cursor there; click a row number to play from it"},
       {"Up / Down", "move a row"},
-      {"Left / Right", "move a cell; crossing the ends does not wrap"},
+      {"Left / Right", "move a cell; past the last column it goes on into the next lane (All lanes view)"},
       {"PgUp / PgDn", "a bar of rows up or down"},
       {"Shift+arrows", "select cells; Esc drops the selection"},
       {"Ctrl+C, X, V, A", "copy, cut, paste; select the whole lane. Ctrl+Z undoes, Ctrl+Y or Ctrl+Shift+Z redoes"},
