@@ -258,4 +258,5 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 
 ## Retrofit todo (decisions to settle in both apps)
 - (Settled) Song screen: Enter opens the pattern (a new one where none is), Ctrl+Enter solo-edits it ("No pattern here." where none is), as in the web app.
+- (Open) Pattern screen Esc: native goes back to the Song screen, leaving solo-edit on the way (user's wish, 2026-11-16). The web's handler (src/seq/view.js) leaves solo first and needs a second Esc to go back; match one to the other once the user decides.
 - Rule for all of the above: the web app's key handlers are the ground truth for what a key does (src/seq/seqview.js and src/seq/view.js for the Song and Pattern screens, src/main.js for the global keys), not its shortcut lists or ours, which may have drifted. When a key differs, port the handler's behaviour, then fix the sheet.
