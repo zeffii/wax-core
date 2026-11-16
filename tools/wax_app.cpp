@@ -580,22 +580,27 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       else player.ring().push({LiveCommand::Play, 0, 1});
     }
     if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) {
-      if (session->screen == Screen::Song && (session->edit || ctrl) && !io.KeyShift && !io.KeyAlt) {   // in the sequence, Enter (or Ctrl+Enter) opens the pattern under the cursor on its own: solo-edit (a new pattern where none is)
-        if (!editor.patternHere()) edited |= editor.createPatternHere();
-        const Lane* soloLane = nullptr;
-        for (const Lane& l : doc.project().lanes) if (l.id == editor.lane()) soloLane = &l;
-        const Placement* at = soloLane ? seq::placementAt(*soloLane, editor.tick()) : nullptr;
-        const Pattern* pattern = at ? seq::patternOf(*soloLane, at->pattern) : nullptr;
-        if (!at || !pattern) session->editStatus = "No pattern here, and one cannot start here.";
-        else {
-          const int lo = at->start, hi = std::min(song.length, at->start + std::min(at->length, static_cast<int>(pattern->rows.size())));
-          session->solo = {true, lo, hi, soloLane->id};
-          editor.setSolo(lo, hi);
-          selectedLane = soloLane->id; session->wantLane = selectedLane; session->wantTick = std::clamp(editor.tick(), lo, hi - 1);
-          session->screen = Screen::Pattern;
-          session->edit = true;
-          session->editStatus = "Solo-edit: only this pattern can be changed. Tab: whole song or just the pattern. Esc leaves.";
+      if (ctrl && !io.KeyShift && !io.KeyAlt) {   // Ctrl+Enter in the sequence: the pattern under the cursor on its own (solo-edit); where none is: "No pattern here."
+        if (session->screen == Screen::Song) {
+          const Lane* soloLane = nullptr;
+          for (const Lane& l : doc.project().lanes) if (l.id == editor.lane()) soloLane = &l;
+          const Placement* at = soloLane ? seq::placementAt(*soloLane, editor.tick()) : nullptr;
+          const Pattern* pattern = at ? seq::patternOf(*soloLane, at->pattern) : nullptr;
+          if (!at || !pattern) session->editStatus = "No pattern here.";
+          else {
+            const int lo = at->start, hi = std::min(song.length, at->start + std::min(at->length, static_cast<int>(pattern->rows.size())));
+            session->solo = {true, lo, hi, soloLane->id};
+            editor.setSolo(lo, hi);
+            selectedLane = soloLane->id; session->wantLane = selectedLane; session->wantTick = std::clamp(editor.tick(), lo, hi - 1);
+            session->screen = Screen::Pattern;
+            session->edit = true;
+            session->editStatus = "Solo-edit: only this pattern can be changed. Tab: whole song or just the pattern. Esc leaves.";
+          }
         }
+      } else if (session->screen == Screen::Song && session->edit) {   // in the sequence, Enter goes into the pattern under the cursor (a new one where none is)
+        if (!editor.patternHere()) edited |= editor.createPatternHere();
+        if (editor.patternHere()) { selectedLane = editor.lane(); session->wantLane = selectedLane; session->wantTick = editor.tick(); session->screen = Screen::Pattern; }
+        else session->editStatus = "No pattern here, and one cannot start here.";
       } else session->edit = !session->edit;
     }
     if (session->solo.on && session->screen != Screen::Pattern) { session->solo = {}; editor.clearSolo(); }   // (leaving the Pattern screen ends solo-edit)
