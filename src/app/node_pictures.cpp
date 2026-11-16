@@ -13,6 +13,8 @@
 #include "app/theme.h"
 #include "core/node.h"
 #include "nodes/adsr.h"
+#include "nodes/bezier.h"
+#include "nodes/drawings.h"
 #include "nodes/kalcore.h"
 #include "nodes/membrane_view.h"
 #include "project/sample_edit.h"
@@ -586,9 +588,10 @@ void drawKaleidoscope(ImDrawList* dl, ImFont* font, const GraphNode& node, const
 
 // Runs a node of `type` for `ms` milliseconds: a note on at the start and, when offAt >= 0, a note off at that time. The values are the
 // node's parameters in the type's order. Returns the left output.
-std::vector<float> renderOffline(const NodeType& type, std::vector<float> values, int note, double vel, double ms, double sr, double offAt) {
+std::vector<float> renderOffline(const NodeType& type, std::vector<float> values, int note, double vel, double ms, double sr, double offAt, const Json* data = nullptr) {
   NodeContext context;
   context.sampleRate = sr;
+  context.data = data;
   std::unique_ptr<Node> node = type.create(context);
   std::vector<int> slots(values.size());
   for (std::size_t i = 0; i < slots.size(); i++) slots[i] = static_cast<int>(i);
@@ -722,9 +725,55 @@ void drawDrum(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeTyp
   drawWave(dl, hit, left, zoomY + 14 * scale, pw, zoomH - 16 * scale, textAlpha(220), 0, static_cast<std::size_t>(44100 * zoomMs / 1000), scale);
 }
 
+// ---- the drawn drums (drum synth 2, hi-hat 2): their drawings and the hit they make, from the node's own code ----
+
+void drawDrawnHit(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale) {
+  const bool hat = node.type == "hat2";
+  struct Row { const char* key; const char* title; ImU32 colour; double ms; };
+  const auto v = [&](const char* name) { return valueOf(node, type, name); };
+  std::vector<Row> rows;
+  if (hat) rows = {{"closed", "closed hat", IM_COL32(60, 190, 210, 255), 140 / std::max(0.01, v("crate"))}, {"open", "open hat", IM_COL32(235, 160, 45, 255), 700 / std::max(0.01, v("orate"))}};
+  else rows = {{"pitch", "pitch", IM_COL32(60, 160, 230, 255), 250 / std::max(0.01, v("prate"))}, {"amp", "volume", IM_COL32(235, 160, 45, 255), 700 / std::max(0.01, v("arate"))}, {"noise", "noise", IM_COL32(60, 190, 110, 255), 400 / std::max(0.01, v("nrate"))}};
+  std::vector<float> values;
+  for (const ParamSpec& spec : type.params) values.push_back(static_cast<float>(node.param(spec.name, spec.def)));
+  const float pad = 8 * scale, left = f.x0 + 34 * scale, pw = f.w - 42 * scale, rowH = 56 * scale;
+  float y = f.y0 + 22 * scale;
+  char text[64];
+  for (const Row& row : rows) {   // the drawings, with how long each takes
+    const bezier::Table table = bezier::envelopeTable(bezier::drawingOf(&node.data, row.key, defaultDrawing(node.type, row.key)));
+    dl->AddText(font, f.size, ImVec2(f.x0 + pad, y), textAlpha(190), row.title);
+    std::snprintf(text, sizeof text, "%d ms", static_cast<int>(std::lround(row.ms)));
+    dl->AddText(font, f.size, ImVec2(f.x0 + f.w - pad - ImGui::CalcTextSize(text).x * f.size / ImGui::GetFontSize(), y), textAlpha(150), text);
+    const float top = y + 14 * scale, h = rowH - 20 * scale;
+    dl->AddLine(ImVec2(left, top + h), ImVec2(left + pw, top + h), textAlpha(45));
+    ImVec2 last{};
+    for (int i = 0; i <= 160; i++) {
+      const ImVec2 at(left + pw * i / 160.0f, top + h - static_cast<float>(bezier::readEnvelope(table, i / 160.0)) * h);
+      if (i) dl->AddLine(last, at, row.colour, 1.8f * scale);
+      last = at;
+    }
+    y += rowH;
+  }
+  // the hit(s)
+  const auto hit = [&](const char* title, int note, double ms) {
+    const std::vector<float> wave = renderOffline(type, values, note, 1, ms, 44100, -1, &node.data);
+    float peak = 0;
+    for (const float x : wave) peak = std::max(peak, std::fabs(x));
+    std::snprintf(text, sizeof text, "peak %.2f, %d ms", peak, static_cast<int>(std::lround(ms)));
+    dl->AddLine(ImVec2(f.x0, y - 2 * scale), ImVec2(f.x0 + f.w, y - 2 * scale), textAlpha(25));
+    dl->AddText(font, f.size, ImVec2(f.x0 + pad, y), textAlpha(190), title);
+    dl->AddText(font, f.size, ImVec2(f.x0 + f.w - pad - ImGui::CalcTextSize(text).x * f.size / ImGui::GetFontSize(), y), textAlpha(150), text);
+    drawWave(dl, wave, left, y + 14 * scale, pw, 62 * scale, textAlpha(220), 0, wave.size(), scale);
+    drawMsAxis(dl, font, f.size, left, pw, ms, y + 76 * scale, scale);
+    y += 80 * scale;
+  };
+  if (hat) { hit("closed hat", 0, std::max(40.0, rows[0].ms * 1.1)); hit("open hat", 1, std::max(80.0, rows[1].ms * 1.1)); }
+  else hit("the hit", static_cast<int>(v("root")), std::min(1500.0, std::max(150.0, rows[1].ms * 1.05)));
+}
+
 }  // namespace
 
-bool hasPicture(const std::string& nodeType) { return nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu" || nodeType == "membrane" || nodeType == "granular" || nodeType == "kaleidoscope" || nodeType == "drumsynth"; }
+bool hasPicture(const std::string& nodeType) { return nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu" || nodeType == "membrane" || nodeType == "granular" || nodeType == "kaleidoscope" || nodeType == "drumsynth" || nodeType == "drumsynth2" || nodeType == "hat2"; }
 
 float drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, ImVec2 tileMin, ImVec2 tileMax, ImVec2 areaMin, ImVec2 areaMax, float scale, const PictureTiming& timing, ResponseHandles& handles) {
   gBelow = 0;
@@ -738,6 +787,8 @@ float drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const
   else if (node.type == "rotary") drawRotary(dl, font, node, type, frameFor(dl, font, node.id + " cabinet", 300, 190, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "kaleidoscope") drawKaleidoscope(dl, font, node, type, frameFor(dl, font, node.id + " band", 460, 270, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "drumsynth") drawDrum(dl, font, node, type, frameFor(dl, font, node.id + " hit", 360, 372, tileMin, tileMax, areaMin, areaMax, scale), scale);
+  else if (node.type == "drumsynth2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", 360, 22 + 3 * 56 + 84, tileMin, tileMax, areaMin, areaMax, scale), scale);
+  else if (node.type == "hat2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", 360, 22 + 2 * 56 + 2 * 80 + 6, tileMin, tileMax, areaMin, areaMax, scale), scale);
   return gBelow;
 }
 
