@@ -1,5 +1,5 @@
 // The Song screen's pattern list: the patterns of the lane under the cursor, one line each (index, name, rows, how often it is placed).
-// Click picks one (outlined); double-click or the Place button puts it at the cursor row; New makes a blank one there.
+// Click picks one (outlined); clicking a pattern's colour square opens the colour popup (presets, automatic, custom); double-click or the Place button puts it at the cursor row; New makes a blank one there.
 #pragma once
 
 #include <string>
@@ -18,7 +18,8 @@ struct PatternListResult {
   std::string place;       // a pattern to place at the cursor row ("" none)
   bool create = false;     // New was pressed
   bool clone = false;      // Clone was pressed (the outlined pattern)
-  int colorStep = 0;       // -1 / +1: the outlined pattern's colour one step back / forward
+  std::string colourFor;   // the pattern whose colour was chosen in the swatch's popup ("" none)
+  Json colour;             // its new colour: a preset number, "#rrggbb", or null for automatic
   std::string rename;      // a new name for the outlined pattern ("" none)
 };
 

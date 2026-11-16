@@ -1,6 +1,7 @@
 #include "app/pattern_colour.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <string>
 
@@ -27,13 +28,26 @@ ImU32 fromHsl(float h, float s, float l, int alpha) {
 
 ImU32 patternColour(const Pattern& pattern, int alpha) {
   const Json& c = pattern.color;
-  if (c.is_number_integer() && c.get<int>() >= 0 && c.get<int>() < kPresets) return fromHsl(static_cast<float>(kPastelHue[c.get<int>()]), 65, 72, alpha);
+  if (c.is_number_integer() && c.get<int>() >= 0 && c.get<int>() < kPresets) return patternPresetColour(c.get<int>(), alpha);
   if (c.is_string() && c.get<std::string>().size() == 7 && c.get<std::string>()[0] == '#') {
     const unsigned long v = std::strtoul(c.get<std::string>().c_str() + 1, nullptr, 16);
     return IM_COL32((v >> 16) & 255, (v >> 8) & 255, v & 255, alpha);
   }
   const Hsl a = kAuto[static_cast<std::size_t>(pattern.index % 6)];
   return fromHsl(static_cast<float>(a.h), static_cast<float>(a.s), static_cast<float>(a.l), alpha);
+}
+
+int patternPresetCount() { return kPresets; }
+
+ImU32 patternPresetColour(int preset, int alpha) {
+  return fromHsl(static_cast<float>(kPastelHue[((preset % kPresets) + kPresets) % kPresets]), 65, 72, alpha);
+}
+
+Json customPatternColor(float red, float green, float blue) {
+  const auto byte = [](float v) { return static_cast<int>(std::fmin(1.0f, std::fmax(0.0f, v)) * 255 + 0.5f); };
+  char text[8];
+  std::snprintf(text, sizeof text, "#%02x%02x%02x", byte(red), byte(green), byte(blue));
+  return Json(std::string(text));
 }
 
 Json steppedPatternColor(const Pattern& pattern, int delta) {
