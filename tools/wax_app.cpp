@@ -108,6 +108,9 @@ struct Options {
 // One song, loaded: the project, the engine that plays it, the sound card and the MIDI input.
 enum class Screen { Song, Pattern, Instrument, Sample, Info, Config };
 
+// A path from UTF-8 text (std::filesystem::u8path is deprecated since C++20).
+static std::filesystem::path pathFromUtf8(const std::string& text) { return std::filesystem::path(std::u8string(text.begin(), text.end())); }
+
 // The x of the thin line to the right of the rail (the rail is 40 units wide and starts at `left`).
 static float railLineX(float left, float scale) { return std::floor(left + 40 * scale + ImGui::GetStyle().ItemSpacing.x / 2) + 0.5f; }
 
@@ -179,6 +182,7 @@ struct Session {
   app::SequenceBlock glueBlock;          // ...and the block it was asked about
   std::vector<Lane> waypoint;            // W: the arrangement as it was (every lane's patterns and placements); Shift+W goes back to it
   bool hasWaypoint = false;
+  seq::Clip seqClip;                     // Ctrl+C / Ctrl+X on the Song screen: the placements of a block, with copies of their patterns
   std::string path;                      // the file this song was opened from, where Ctrl+S saves it
 
   int audioBuffer = 0;                   // the sound card buffer asked for (0: the card's own)
@@ -421,8 +425,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       if (!app::settings().recentFiles.empty() && ImGui::BeginMenu("Recent")) {   // the recent songs, a submenu; one that has moved shows dim (opening it only warns)
         for (const std::string& file : app::settings().recentFiles) {
           std::error_code ignored;
-          const bool there = std::filesystem::exists(std::filesystem::u8path(file), ignored);
-          const std::string name = std::filesystem::u8path(file).filename().generic_string();
+          const bool there = std::filesystem::exists(pathFromUtf8(file), ignored);
+          const std::string name = pathFromUtf8(file).filename().generic_string();
           ImGui::PushID(file.c_str());
           if (!there) ImGui::PushStyleColor(ImGuiCol_Text, app::kDimText);
           if (ImGui::MenuItem((there ? name : name + "  (moved?)").c_str())) { gOpenRecent = file; ImGui::CloseCurrentPopup(); }
@@ -777,6 +781,93 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
           doc.apply(std::make_unique<SetLoop>(std::move(loop), off ? "Loop off" : "Loop on"));
           syncLoop(doc, player.engine());
           session->editStatus = off ? "Loop off (its points are kept)." : "Loop on.";
+        }
+      }
+    }
+    if (ctrl && session->edit && session->screen == Screen::Song && !io.KeyAlt && !io.KeyShift && !editor.lane().empty()) {   // the sequence's blocks: copy, cut, paste, duplicate
+      const std::vector<Lane>& all = doc.project().lanes;
+      const int cell = app::sequenceRowTicks(song), rowStart = editor.tick() / cell * cell;
+      std::vector<std::string> signatures;   // lanes with the same columns can take each other's patterns
+      for (const Lane& l : all) {
+        std::string sig;
+        for (const Column& c : player.engine().laneColumns(l.id)) sig += std::to_string(static_cast<int>(c.token)) + ":" + c.label + "|";
+        signatures.push_back(sig);
+      }
+      int laneAt = 0;
+      for (std::size_t i = 0; i < all.size(); i++) if (all[i].id == editor.lane()) laneAt = static_cast<int>(i);
+      // the block: the selection, else the pattern under the cursor (as many rows tall as it is)
+      app::SequenceBlock block = selectedBlock(doc.project(), *session, editor.lane(), editor.tick(), cell);
+      if (block.first < 0) {
+        block.first = block.last = laneAt; block.from = block.to = rowStart;
+        const Lane& here = all[static_cast<std::size_t>(laneAt)];
+        if (const Placement* p = seq::placementAt(here, editor.tick())) {
+          const Pattern* pat = seq::patternOf(here, p->pattern);
+          const int rows = std::min(p->length, pat ? static_cast<int>(pat->rows.size()) : p->length);
+          block.from = p->start / cell * cell; block.to = (p->start + rows - 1) / cell * cell;
+        }
+        block.to += cell;   // (to is exclusive)
+      }
+      seq::Context context;
+      context.length = song.length;
+      const auto count = [](int n) { return std::to_string(n) + (n == 1 ? " pattern" : " patterns"); };
+      const auto putCursor = [&](int lane, int tick) {   // the cursor moves; the lane tab follows
+        const std::string id = all[static_cast<std::size_t>(lane)].id;
+        selectedLane = id;
+        editor.setLane(id, player.engine().laneColumns(id));
+        editor.moveTo(tick, 0);
+        session->wantLane = id; session->wantTick = tick;
+      };
+      // puts the clip down at a lane and tick and selects what was put down
+      const auto place = [&](const seq::Clip& clip, int lane, int tick, const char* label) {
+        std::vector<Lane> work = all;
+        const seq::PlaceResult r = seq::placeClip(work, signatures, clip, lane, tick, context);
+        if (!r.changed.empty()) {
+          std::vector<Lane> changed;
+          for (int i : r.changed) changed.push_back(work[static_cast<std::size_t>(i)]);
+          doc.apply(std::make_unique<SetLaneSequences>(changed, label));
+          edited = true;
+        }
+        const int lastLane = std::min(static_cast<int>(all.size()) - 1, lane + clip.lanes - 1);
+        const int lastTick = std::min(song.length - 1, tick + clip.ticks - cell) / cell * cell;
+        session->seqSelecting = lastLane > lane || lastTick > tick;
+        session->seqAnchorLane = all[static_cast<std::size_t>(lane)].id; session->seqAnchorTick = tick;
+        putCursor(lastLane, lastTick);
+        return r;
+      };
+      const auto capture = [&]() { return seq::captureClip(all, signatures, block.first, block.last, block.from, block.to); };
+      if (ImGui::IsKeyPressed(ImGuiKey_C, false) || ImGui::IsKeyPressed(ImGuiKey_X, false)) {
+        const bool cut = ImGui::IsKeyPressed(ImGuiKey_X, false);
+        seq::Clip clip = capture();
+        if (clip.items.empty()) session->editStatus = "Nothing to copy here.";
+        else {
+          session->seqClip = clip;
+          if (cut) {
+            std::vector<Lane> changed;
+            for (int i = block.first; i <= block.last; i++) { Lane copy = all[static_cast<std::size_t>(i)]; if (seq::clearRange(copy, block.from, block.to)) changed.push_back(copy); }
+            doc.apply(std::make_unique<SetLaneSequences>(changed, "cut")); edited = true;
+            session->seqSelecting = false;
+          }
+          session->editStatus = std::string(cut ? "Cut " : "Copied ") + count(static_cast<int>(clip.items.size())) + ".";
+        }
+      }
+      if (ImGui::IsKeyPressed(ImGuiKey_V, false)) {
+        const seq::Clip& clip = session->seqClip;
+        if (clip.items.empty()) session->editStatus = "Nothing copied.";
+        else if (block.from >= song.length) session->editStatus = "No room here.";
+        else {
+          const int at = session->seqSelecting ? block.from : rowStart, lane = session->seqSelecting ? block.first : laneAt;
+          const seq::PlaceResult r = place(clip, lane, at, "paste");
+          session->editStatus = r.placed ? "Pasted " + count(r.placed) + (r.skipped ? ", " + std::to_string(r.skipped) + " did not fit." : ".") : r.skipped ? "Those lanes have different columns." : "Nothing changed.";
+        }
+      }
+      if (ImGui::IsKeyPressed(ImGuiKey_D, false)) {   // the block is copied to the rows right below it; the selection moves down with the copy, so again copies it once more
+        const seq::Clip clip = capture();
+        const int down = clip.ticks, at = block.from + down;
+        if (clip.items.empty()) session->editStatus = "Nothing to copy here.";
+        else if (at >= song.length) session->editStatus = "No room below.";
+        else {
+          const seq::PlaceResult r = place(clip, block.first, at, "copy down");
+          session->editStatus = r.placed ? "Copied " + count(static_cast<int>(clip.items.size())) + " down." : "Nothing changed.";
         }
       }
     }
@@ -1929,7 +2020,7 @@ int main(int argc, char** argv) {
       const std::string file = gOpenRecent;
       gOpenRecent.clear();
       std::error_code ignored;
-      if (!std::filesystem::exists(std::filesystem::u8path(file), ignored)) {
+      if (!std::filesystem::exists(pathFromUtf8(file), ignored)) {
         const std::string warning = "Warning: " + file + " is not there any more (moved, renamed or deleted since it was last saved). Use File > Open to find it";
         if (session) session->editStatus = warning; else status = warning;
       }

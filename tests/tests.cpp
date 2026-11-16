@@ -1559,6 +1559,19 @@ void testSequenceOps() {
   check(document.project().lanes[0].placements.empty() && document.project().lanes[1].placements.empty(), "sequence: several lanes replaced at once");
   document.undo();
   check(document.project().lanes[0].placements.size() == one.placements.size() && document.project().lanes[1].placements.size() == two.placements.size(), "sequence: one undo puts every lane back");
+  // blocks: copy, paste into another lane (same columns) and back into the lane they came from
+  std::vector<Lane> pair;
+  Lane from = cleared, to;
+  from.id = "from"; to.id = "to";
+  pair = {from, to};
+  const std::vector<std::string> sigs = {"x", "x"};
+  const Clip clip = captureClip(pair, sigs, 0, 0, 0, 48);
+  check(clip.items.size() == 2 && clip.ticks == 48 && clip.lanes == 1, "block: capture takes the placements that start in it");
+  const PlaceResult there = placeClip(pair, sigs, clip, 1, 64, context);
+  check(there.placed == 2 && pair[1].placements.size() == 2 && pair[1].patterns.size() == 1 && pair[1].placements[0].start == 64, "block: pasted into another lane as copies (one pattern shared by both placements)");
+  const PlaceResult back = placeClip(pair, sigs, clip, 0, 100, context);
+  check(back.placed == 2 && pair[0].patterns.size() == 1, "block: pasted into its own lane it is the same pattern");
+  check(placeClip(pair, {"x", "other"}, clip, 1, 0, context).skipped == 2, "block: a lane with other columns takes nothing");
   Project soloing;
   Lane lead, bass, master;
   lead.id = "lead"; lead.instrument = "a"; bass.id = "bass"; bass.instrument = "b"; master.id = "master"; master.instrument = "master";

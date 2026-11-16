@@ -5,6 +5,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "project/project.h"
 
@@ -46,5 +47,33 @@ bool colourPattern(Lane& lane, int tick, int delta);
 bool toggleMute(Lane& lane, const Context& context, int tick);
 // A note-off mark at the tick, or the one there taken away.
 bool toggleOff(Lane& lane, const Context& context, int tick);
+
+
+// ---- Blocks: copy, cut, paste and duplicate across lanes ----
+
+// A placement taken out of a block: where it was (lane and tick relative to the block's corner) and a copy of its pattern.
+struct ClipItem {
+  int lane = 0, tick = 0, length = 0;
+  std::string sourceLane, sourcePattern;   // where it came from: pasted back there it is the same pattern again
+  std::string signature;                   // the columns of the lane it came from: other lanes take the pattern only when theirs match
+  Pattern pattern;
+};
+
+struct Clip {
+  int lanes = 0, ticks = 0;   // the block's size
+  std::vector<ClipItem> items;
+};
+
+// The placements that start in ticks [from, to) of lanes first..last. `signatures` has one entry per lane (what its columns are).
+Clip captureClip(const std::vector<Lane>& lanes, const std::vector<std::string>& signatures, int first, int last, int from, int to);
+
+struct PlaceResult {
+  int placed = 0, skipped = 0;        // patterns put down, and those that did not fit (another lane's columns, no lane there, no free index)
+  std::vector<int> changed;           // the lanes (by position) that were edited
+};
+
+// Puts the clip down with its corner at lane `first`, tick `at`, over whatever starts in that span. A pattern goes back into its own lane as the same
+// pattern; into another lane it is copied, when that lane has the same columns. Edits `lanes` (copies the caller then applies).
+PlaceResult placeClip(std::vector<Lane>& lanes, const std::vector<std::string>& signatures, const Clip& clip, int first, int at, const Context& context);
 
 }  // namespace wax::seq

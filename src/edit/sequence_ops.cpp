@@ -1,6 +1,7 @@
 #include "edit/sequence_ops.h"
 
 #include <algorithm>
+#include <map>
 #include <chrono>
 #include <cstdio>
 #include <set>
@@ -245,6 +246,73 @@ bool toggleMute(Lane& lane, const Context& context, int tick) {
 bool toggleOff(Lane& lane, const Context& context, int tick) {
   if (tick < 0 || tick >= context.length) return false;
   return flip(lane.offs, tick);
+}
+
+
+Clip captureClip(const std::vector<Lane>& lanes, const std::vector<std::string>& signatures, int first, int last, int from, int to) {
+  Clip clip;
+  clip.lanes = last - first + 1;
+  clip.ticks = to - from;
+  for (int li = first; li <= last && li < static_cast<int>(lanes.size()); li++) {
+    const Lane& lane = lanes[static_cast<std::size_t>(li)];
+    for (const Placement& p : lane.placements) {
+      if (p.start < from || p.start >= to) continue;
+      const Pattern* pattern = patternOf(lane, p.pattern);
+      if (!pattern) continue;
+      ClipItem item;
+      item.lane = li - first; item.tick = p.start - from; item.length = p.length;
+      item.sourceLane = lane.id; item.sourcePattern = p.pattern;
+      item.signature = signatures[static_cast<std::size_t>(li)];
+      item.pattern = *pattern;
+      clip.items.push_back(std::move(item));
+    }
+  }
+  return clip;
+}
+
+PlaceResult placeClip(std::vector<Lane>& lanes, const std::vector<std::string>& signatures, const Clip& clip, int first, int at, const Context& context) {
+  PlaceResult result;
+  for (int i = 0; i < clip.lanes; i++) {
+    std::vector<const ClipItem*> mine;
+    for (const ClipItem& item : clip.items) if (item.lane == i) mine.push_back(&item);
+    const int li = first + i;
+    if (li >= static_cast<int>(lanes.size())) { result.skipped += static_cast<int>(mine.size()); continue; }
+    Lane& lane = lanes[static_cast<std::size_t>(li)];
+    Lane work = lane;   // (a lane that does not take everything is left as it was)
+    std::map<std::string, std::string> adopted;   // source pattern -> the copy made in this lane
+    std::vector<Placement> incoming;
+    bool fits = true;
+    for (const ClipItem* item : mine) {
+      std::string id;
+      if (item->sourceLane == work.id && patternOf(work, item->sourcePattern)) id = item->sourcePattern;
+      else if (item->signature != signatures[static_cast<std::size_t>(li)]) { fits = false; break; }
+      else {
+        const std::string key = item->sourceLane + ":" + item->sourcePattern;
+        if (!adopted.count(key)) adopted[key] = addPattern(work, item->pattern.rows, item->pattern.name, item->pattern.color);
+        id = adopted[key];
+        if (id.empty()) continue;
+      }
+      Placement placement;
+      placement.pattern = id; placement.start = at + item->tick; placement.length = item->length;
+      if (placement.start < 0 || placement.start >= context.length) continue;
+      placement.length = std::min(placement.length, context.length - placement.start);
+      incoming.push_back(placement);
+    }
+    if (!fits) { result.skipped += static_cast<int>(mine.size()); continue; }
+    const int to = at + clip.ticks;
+    std::vector<Placement> keep;
+    for (const Placement& p : work.placements) {
+      const bool inside = p.start >= at && p.start < to;
+      const bool covered = std::any_of(incoming.begin(), incoming.end(), [&](const Placement& n) { return n.start == p.start; });
+      if (!inside && !covered) keep.push_back(p);
+    }
+    const bool changed = keep.size() != work.placements.size() || !incoming.empty();
+    work.placements = keep;
+    work.placements.insert(work.placements.end(), incoming.begin(), incoming.end());
+    result.placed += static_cast<int>(incoming.size());
+    if (changed) { lane = work; result.changed.push_back(li); }
+  }
+  return result;
 }
 
 }  // namespace wax::seq
