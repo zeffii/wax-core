@@ -49,8 +49,18 @@ PatternViewResult drawPatternView(const std::vector<PatternLane>& lanes, int tic
   const float infoHeight = ImGui::GetTextLineHeightWithSpacing();   // room for the line under the grid
   if (!ImGui::BeginTable("pattern", columns + 1, tableFlags, ImVec2(0, std::max(60.0f, ImGui::GetContentRegionAvail().y - infoHeight)))) return result;
   ImGui::TableSetupScrollFreeze(1, several ? 2 : 1);
-  ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed);
-  for (const PatternLane& lane : lanes) for (const std::string& label : *lane.labels) ImGui::TableSetupColumn(label.c_str());
+  // Every column has the width of its widest text (the heading or any cell of any row), worked out from all the rows: left to the table, a
+  // column would be as wide as the rows on show, and widen or narrow as the grid scrolls.
+  const float charWidth = ImGui::CalcTextSize("0").x;
+  const auto letters = [](const std::string& text) { int n = 0; for (const unsigned char ch : text) if ((ch & 0xC0) != 0x80) n++; return n; };
+  ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 3 * charWidth);
+  for (const PatternLane& lane : lanes) {
+    for (std::size_t c = 0; c < lane.labels->size(); c++) {
+      int widest = letters((*lane.labels)[c]);
+      for (const std::vector<std::string>& cells : *lane.rows) if (c < cells.size()) widest = std::max(widest, letters(cells[c]));
+      ImGui::TableSetupColumn((*lane.labels)[c].c_str(), ImGuiTableColumnFlags_WidthFixed, static_cast<float>(widest) * charWidth);
+    }
+  }
   if (cursor.hideEmpty) {
     for (std::size_t li = 0; li < lanes.size(); li++)
       for (int c = 0; c < static_cast<int>(lanes[li].labels->size()); c++) {

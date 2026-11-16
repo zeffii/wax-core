@@ -14,16 +14,6 @@ Json column(const char* param, const char* label, int bits = 0, const char* scal
   return c;
 }
 
-// The limiter's columns: on or off, the ceiling, the gain into it, and the release.
-Json limiterColumns() {
-  return Json::array({column("limit", "Lim", 4), column("ceiling", "Ceil"), column("boost", "Gain"), column("release", "Rel", 0, "log")});
-}
-
-// The carve stage's columns: on or off, how strongly, how deep (dB), and how narrow the bands.
-Json carveColumns() {
-  return Json::array({column("carve", "Crv", 4), column("cvamt", "CAmt"), column("cvdepth", "CDep"), column("cvfocus", "CFoc")});
-}
-
 // The tempo node's parameters as the song's header sets them.
 Json tempoParams(const Json& song) {
   return {
@@ -35,9 +25,9 @@ Json tempoParams(const Json& song) {
 }
 
 Json masterInstrument(const Json& song) {
+  // A master the file does not have shows tempo, swing, ticks per beat and volume as pattern columns; the limiter's and the carve stage's
+  // columns are there only when the song exposes them (from the parameter panel).
   Json exposed = Json::array({column("bpm", "BPM", 16), column("swing", "Swg"), column("tpb", "TPB"), column("volume", "Vol")});
-  for (const Json& c : limiterColumns()) exposed.push_back(c);
-  for (const Json& c : carveColumns()) exposed.push_back(c);
   return {
     {"graph", {
       {"nodes", Json::array({
@@ -51,11 +41,6 @@ Json masterInstrument(const Json& song) {
     {"exposed", exposed},
     {"commands", Json::array()},
   };
-}
-
-bool exposes(const Json& instrument, const char* param) {
-  for (const Json& e : instrument.value("exposed", Json::array())) if (e.value("param", std::string()) == param) return true;
-  return false;
 }
 
 Json* findNode(Json& instrument, const std::string& key, const std::string& value) {
@@ -72,7 +57,8 @@ void ensureMaster(Json& data) {
   Json master = kept ? instruments["master"] : masterInstrument(song);
 
   if (kept) {
-    // A saved master machine starts at the song's own tempo, and gets what later builds added to it.
+    // A saved master machine starts at the song's own tempo, and gets the bus and the output gain that later builds added to it. Its columns are
+    // as the song saved them (the limiter's and carve stage's are not added back).
     if (Json* tempo = findNode(master, "id", "m")) {
       if (!tempo->contains("params")) (*tempo)["params"] = Json::object();
       const Json fromSong = tempoParams(song);   // (named, so it outlives the loop over its items)
@@ -87,8 +73,6 @@ void ensureMaster(Json& data) {
       if (!(*out)["params"].contains("gain")) (*out)["params"]["gain"] = 1;
     }
     if (!master.contains("exposed")) master["exposed"] = Json::array();
-    if (!exposes(master, "limit")) for (const Json& c : limiterColumns()) master["exposed"].push_back(c);
-    if (!exposes(master, "carve")) for (const Json& c : carveColumns()) master["exposed"].push_back(c);
   }
 
   // The master comes first among the instruments, the others keep their order.

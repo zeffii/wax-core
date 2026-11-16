@@ -294,7 +294,8 @@ void startExport(Session& session, const std::string& path) {
   });
 }
 
-// A new song: nothing in it but the master lane (the tempo node and the output), as the web app starts one. Save asks for a file.
+// A new song: nothing in it but the master lane (the tempo node and the output). Its master shows four columns: tempo, swing, ticks per beat and
+// volume; the limiter's are exposed from the parameter panel when wanted. Save asks for a file.
 Project blankProject() {
   static const char* const kBlank = R"({
     "format": "webtracker", "version": 1,
@@ -306,9 +307,7 @@ Project blankProject() {
       "noteColumns": 0,
       "exposed": [
         {"node": "m", "param": "bpm", "label": "BPM", "bits": 16}, {"node": "m", "param": "swing", "label": "Swg"},
-        {"node": "m", "param": "tpb", "label": "TPB"}, {"node": "m", "param": "volume", "label": "Vol"},
-        {"node": "m", "param": "limit", "label": "Lim", "long": "Limiter", "bits": 4}, {"node": "m", "param": "ceiling", "label": "Ceil", "long": "Ceiling"},
-        {"node": "m", "param": "boost", "label": "Gain", "long": "Limiter gain"}, {"node": "m", "param": "release", "label": "Rel", "long": "Limiter release", "scale": "log"}],
+        {"node": "m", "param": "tpb", "label": "TPB"}, {"node": "m", "param": "volume", "label": "Vol"}],
       "commands": []}},
     "samples": {},
     "lanes": [{"id": "master", "instrument": "master", "patterns": {}, "placements": []}]
