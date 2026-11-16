@@ -194,3 +194,5 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 - Pattern editor column widths are fixed from every row (heading or widest cell), so they no longer change while scrolling. A song without a master machine gets BPM/Swg/TPB/Vol columns only; the limiter's and carve stage's columns appear when exposed from the parameter panel (saved masters keep what they saved).
 
 - Exposed-parameter dock (`drawExposedDock`, param_panel.cpp): a window at the graph's left with a row per exposed column of the machine (named by its label, same bars/menus as the parameter panel via the shared `drawRow`); shown only when something is exposed. Still to do: keys into the docks, pin/float copies for other machines.
+
+- Parameter views: a panel wider than ~330 px shows each row's buttons (e: pattern column on/off, p: port on/off, and the column's width 1h/2h/4h, "--" when not a column), as the web does; narrower, only the right-click menu. The parameter panel and the exposed dock are both dragged by their title and resized by their edge; their height follows the rows (what last frame's content needed), at most 2/3 of the graph area, then a scrollbar.

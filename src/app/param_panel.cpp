@@ -58,6 +58,18 @@ std::string cellHex(const ParamSpec& spec, bool log, double value, int digits) {
   return text;
 }
 
+// A floating panel's height follows its rows: what the last frame's content needed (an estimate on the first), at most two thirds of the
+// graph area, and past that the window scrolls. The callback pins the height while the user can still drag the width.
+void pinHeight(ImGuiSizeCallbackData* data) { data->DesiredSize.y = *static_cast<float*>(data->UserData); }
+
+float wantedHeight(float contentHeight, int rows, float areaHeight, float scale) {
+  const float content = contentHeight > 0 ? contentHeight : (rows + 2) * 20 * scale;
+  return std::min(content, areaHeight * 2.0f / 3.0f);
+}
+
+// The window's content height, for the next frame (call just before End).
+float measuredContent() { return ImGui::GetCursorPosY() + ImGui::GetStyle().WindowPadding.y; }
+
 // One row of a panel at the cursor: the parameter's name (or `label`), then its bar. `wired`: a wire drives it. Returns true when the value changed.
 bool drawRow(ParamPanelState& state, Document& doc, const Engine& engine, const Instrument* instrument, const std::string& instrumentId,
              const GraphNode* picked, const ParamSpec& spec, const std::string& label, bool dim, float total, float nameW) {
@@ -69,7 +81,11 @@ bool drawRow(ParamPanelState& state, Document& doc, const Engine& engine, const 
     const std::string address = instrumentId + "." + picked->id + "." + spec.name;
     const double value = engine.registry().slotOf(address) >= 0 ? engine.registry().get(address) : picked->param(spec.name, spec.def);
     const ImVec2 p = ImGui::GetCursorScreenPos();
-    const ImVec2 barMin(p.x + nameW, p.y + 1), barMax(p.x + total, p.y + rowH - 1);
+    // a wide panel also has the row's buttons at its right: e (a pattern column or not), p (a port or not) and the column's width (1h, 2h, 4h)
+    const float buttonW = 16 * scale;
+    const bool buttons = total >= 330 * scale;
+    const float buttonsW = buttons ? 3 * buttonW : 0;
+    const ImVec2 barMin(p.x + nameW, p.y + 1), barMax(p.x + total - buttonsW, p.y + rowH - 1);
 
     // the name, as many characters as fit
     std::string name = label;
@@ -159,6 +175,31 @@ bool drawRow(ParamPanelState& state, Document& doc, const Engine& engine, const 
       }
       ImGui::EndPopup();
     }
+    if (buttons) {
+      const bool column = shownAs != nullptr;
+      const int bits = column ? shownAs->bits : 0;
+      const bool wasPort = hasPort;
+      struct Button { const char* text; bool lit; };
+      const Button faces[3] = {{"e", column}, {"p", wasPort}, {!column ? "--" : bits == 16 ? "4h" : bits == 4 ? "1h" : "2h", column}};
+      for (int k = 0; k < 3; k++) {
+        const ImVec2 lo(barMax.x + k * buttonW + 1, p.y + 1), hi(barMax.x + (k + 1) * buttonW - 1, p.y + rowH - 1);
+        ImGui::SetCursorScreenPos(lo);
+        ImGui::PushID(k);
+        ImGui::InvisibleButton("b", ImVec2(hi.x - lo.x, hi.y - lo.y));
+        const bool over = ImGui::IsItemHovered();
+        const bool clicked = ImGui::IsItemClicked();
+        ImGui::PopID();
+        dl->AddRectFilled(lo, hi, faces[k].lit ? withAlpha(kWarm, 50) : textAlpha(over ? 24 : 10));
+        const ImVec2 size = ImGui::CalcTextSize(faces[k].text);
+        dl->AddText(ImVec2((lo.x + hi.x - size.x) / 2, p.y + 1.5f * scale), faces[k].lit ? kWarm : kDimText, faces[k].text);
+        if (!clicked) continue;
+        if (k == 0) doc.apply(std::make_unique<SetExposed>(instrumentId, picked->id, spec.name, !column));
+        else if (k == 1) doc.apply(std::make_unique<SetPort>(instrumentId, picked->id, spec.name, !wasPort));
+        else if (column) doc.apply(std::make_unique<SetExposedBits>(instrumentId, picked->id, spec.name, bits == 4 ? 8 : bits == 8 ? 16 : 4));
+        else continue;
+        changed = true;
+      }
+    }
     ImGui::PopID();
     ImGui::PopID();
     ImGui::SetCursorScreenPos(ImVec2(p.x, p.y + rowH));
@@ -190,8 +231,10 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
   const float width = kNormalWidth * 1.25f * scale;
   if (!state.placed) {
     ImGui::SetNextWindowPos(ImVec2(std::max(areaMin.x, areaMax.x - width - 12 * scale), areaMin.y + 12 * scale), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(width, std::min(areaMax.y - areaMin.y - 24 * scale, 380 * scale)), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(width, 0), ImGuiCond_Always);
   }
+  float height = wantedHeight(state.paramContent, picked ? static_cast<int>(type->params.size()) : 1, areaMax.y - areaMin.y, scale);
+  ImGui::SetNextWindowSizeConstraints(ImVec2(kMinWidth * scale, 0), ImVec2(kMaxWidth * 3 * scale, FLT_MAX), pinHeight, &height);
   const std::string title = picked ? picked->id + "  " + picked->type + "###params" : "no parameters###params";
   ImGui::PushStyleColor(ImGuiCol_TitleBg, colour(kAccent));
   ImGui::PushStyleColor(ImGuiCol_TitleBgActive, colour(kAccent));
@@ -225,6 +268,7 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
     if (drawRow(state, doc, engine, instrument, instrumentId, picked, spec, spec.name, wired.count(spec.name) > 0, total, nameW)) changed = true;
   }
   ImGui::PopFont();
+  state.paramContent = measuredContent();
   ImGui::End();
   return changed;
 }
@@ -240,15 +284,17 @@ bool drawExposedDock(ParamPanelState& state, Document& doc, const Engine& engine
   const NodeRegistry& types = builtinNodes();
 
   const float width = kNormalWidth * 1.1f * scale;
-  // as high as its rows (the window is not drawn over what lies under it otherwise); at the graph's left corner, where the user may move it
-  const float rowHeight = (ImGui::GetTextLineHeight() + 3 * scale) * 0.85f + 0.5f;
-  const float height = ImGui::GetFrameHeight() + 2 * ImGui::GetStyle().WindowPadding.y + 4 * scale + rowHeight * static_cast<float>(instrument->exposed.size());
-  if (!state.exposedPlaced) ImGui::SetNextWindowPos(ImVec2(areaMin.x + 12 * scale, areaMin.y + 12 * scale), ImGuiCond_Always);
-  ImGui::SetNextWindowSize(ImVec2(width, std::min(height, areaMax.y - areaMin.y - 24 * scale)), ImGuiCond_Always);
+  // dragged about by its title, and wider or narrower by its edge; its height is its rows' (see pinHeight)
+  if (!state.exposedPlaced) {
+    ImGui::SetNextWindowPos(ImVec2(areaMin.x + 12 * scale, areaMin.y + 12 * scale), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(width, 0), ImGuiCond_Always);
+  }
+  float height = wantedHeight(state.exposedContent, static_cast<int>(instrument->exposed.size()), areaMax.y - areaMin.y, scale);
+  ImGui::SetNextWindowSizeConstraints(ImVec2(kMinWidth * scale, 0), ImVec2(kMaxWidth * 3 * scale, FLT_MAX), pinHeight, &height);
   ImGui::PushStyleColor(ImGuiCol_TitleBg, colour(kAccent));
   ImGui::PushStyleColor(ImGuiCol_TitleBgActive, colour(kAccent));
   ImGui::PushStyleColor(ImGuiCol_Text, colour(kHiFg));
-  const bool visible = ImGui::Begin("exposed###exposed", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings);
+  const bool visible = ImGui::Begin("exposed###exposed", nullptr, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings);
   ImGui::PopStyleColor(3);
   state.exposedPlaced = true;
   bool changed = false;
@@ -270,6 +316,7 @@ bool drawExposedDock(ParamPanelState& state, Document& doc, const Engine& engine
       }
     }
     ImGui::PopFont();
+    state.exposedContent = measuredContent();
   }
   ImGui::End();
   return changed;
