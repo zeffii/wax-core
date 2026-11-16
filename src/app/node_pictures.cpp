@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <map>
 #include <vector>
 
@@ -282,15 +283,53 @@ void drawRotary(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeT
   }
 }
 
+// ---- khufu: two cycles of the three registers, and what they add up to ----
+
+void drawKhufu(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale) {
+  const float PL = 8 * scale, PR = 8 * scale, top = 22 * scale, span = f.w - PL - PR;
+  const char* names[3] = {"low", "mid", "high"};
+  const ImU32 colours[3] = {kBlue, kOrange, hsl(145, 0.55f, 0.45f)};
+  double levels[3];
+  for (int i = 0; i < 3; i++) levels[i] = valueOf(node, type, names[i]);
+  const double total = std::max(1.0, levels[0] + levels[1] + levels[2]);
+  const float mid = f.y0 + top + (f.h - top) / 2, tall = (f.h - top) / 2 - 8 * scale;
+  float x = f.x0 + 100 * scale;   // the legend: each register's name and level, in its colour
+  char text[32];
+  for (int i = 0; i < 3; i++) {
+    std::snprintf(text, sizeof text, "%s %d%%", names[i], static_cast<int>(std::lround(levels[i] * 100)));
+    dl->AddText(font, f.size, ImVec2(x, f.y0 + 4 * scale), levels[i] > 0 ? colours[i] : withAlpha(colours[i], 100), text);
+    x += static_cast<float>(std::strlen(text)) * f.size * 0.6f + 10 * scale;
+  }
+  dl->AddLine(ImVec2(f.x0 + PL, mid), ImVec2(f.x0 + f.w - PR, mid), textAlpha(40));
+  const auto trace = [&](const double lv[3], ImU32 colour, float width) {
+    std::vector<ImVec2> pts;
+    for (int px = 0; px <= static_cast<int>(span) * 2; px++) {
+      const double phase = std::fmod(px / 2.0 / span * 2, 1.0);
+      double sum = 0;
+      for (int i = 0; i < 3; i++) sum += (1 - 2 * std::fmod(phase * (1 << i), 1.0)) * lv[i];
+      pts.push_back(ImVec2(f.x0 + PL + px / 2.0f, mid - static_cast<float>(sum / total) * tall));
+    }
+    dl->AddPolyline(pts.data(), static_cast<int>(pts.size()), colour, 0, width);
+  };
+  for (int i = 0; i < 3; i++) {
+    if (levels[i] <= 0) continue;
+    double only[3] = {0, 0, 0};
+    only[i] = levels[i];
+    trace(only, withAlpha(colours[i], 115), 1.0f);
+  }
+  trace(levels, kText, 1.6f * std::max(1.0f, scale));
+}
+
 }  // namespace
 
-bool hasPicture(const std::string& nodeType) { return nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary"; }
+bool hasPicture(const std::string& nodeType) { return nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu"; }
 
 void drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, ImVec2 tileMin, ImVec2 tileMax, ImVec2 areaMin, ImVec2 areaMax, float scale, const PictureTiming& timing, ResponseHandles& handles) {
   if (node.type == "prismacanyon") drawCanyon(dl, font, node, type, frameFor(dl, font, node.id + " echoes", 360, 20 + 30 * kCanyonLines + 24, tileMin, tileMax, areaMin, areaMax, scale), scale, timing);
   else if (node.type == "ensemble") drawEnsemble(dl, font, node, type, frameFor(dl, font, node.id + " delays", 320, 150, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "haas") drawHaas(dl, font, node, type, frameFor(dl, font, node.id + " sides", 400, 280, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "reflect") drawReflect(dl, font, node, type, frameFor(dl, font, node.id + " room", 560, 384, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
+  else if (node.type == "khufu") drawKhufu(dl, font, node, type, frameFor(dl, font, node.id + " registers", 310, 150, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "rotary") drawRotary(dl, font, node, type, frameFor(dl, font, node.id + " cabinet", 300, 190, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
 }
 
