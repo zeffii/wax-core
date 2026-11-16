@@ -30,6 +30,7 @@ struct ParamPanelState {
   std::string chordNode;    // set when the user asked for the chord names of this node
   std::string gateNode;     // set when the user asked for the step levels of this node (gate, arpeggiator)
   std::string dxNode;       // set when the user asked for the DX loader of this node
+  std::string vectorNode;   // set when the user asked for the diamond / wave sequences of this node (compass, waveseq, vecpath, vecmix)
   bool dragging = false;    // a drag is in progress: its steps are one undo
   bool placed = false;      // the window has been put at the graph's corner once; after that it stays where the user left it
   int paramCursor = 0;      // the row the keys act on

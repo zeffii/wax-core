@@ -39,6 +39,7 @@
 #include "app/chord_window.h"
 #include "app/wavetable_window.h"
 #include "app/gate_window.h"
+#include "app/vector_window.h"
 #include "app/shape_window.h"
 #include "app/graph_view.h"
 #include "app/machine_tree.h"
@@ -97,7 +98,7 @@ void SDLCALL dialogDone(void* userdata, const char* const* files, int) {
 }
 
 struct Options {
-  std::string path, screenshot, press, clicks, envelope, dxnode, screen, theme;   // clicks: "x,y;x,y" mouse clicks, one every 6 frames; envelope: "instrument.node" opens its envelope window   // press: keys to press one after another (for checking the window without a keyboard)
+  std::string path, screenshot, press, clicks, envelope, dxnode, vectornode, screen, theme;   // clicks: "x,y;x,y" mouse clicks, one every 6 frames; envelope: "instrument.node" opens its envelope window   // press: keys to press one after another (for checking the window without a keyboard)
   double rate = 48000;
   int threads = 0, midiPort = 0, frames = 3, playFrom = -1, buffer = 0;
   bool useNull = false;
@@ -164,6 +165,7 @@ struct Session {
   app::DxWindow dx;
   app::GraphViewState graphView;
   app::GateWindow gate;
+  app::VectorWindow vector;
   app::ChordWindow chords;
   app::WavetableWindow table;
   app::ShapeWindow shape;
@@ -1472,6 +1474,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   if (app::drawChordWindow(session->chords, doc, player.engine())) syncData(doc, player.engine());
   if (!session->panel.gateNode.empty()) { app::showGate(session->gate, laneInstrument, session->panel.gateNode); session->panel.gateNode.clear(); }
   if (app::drawGateWindow(session->gate, doc, player.engine())) syncData(doc, player.engine());
+  if (!session->panel.vectorNode.empty()) { app::showVector(session->vector, laneInstrument, session->panel.vectorNode); session->panel.vectorNode.clear(); }
+  if (app::drawVectorWindow(session->vector, doc, player.engine())) { syncData(doc, player.engine()); syncParams(doc, player.engine()); }
   if (!session->panel.dxNode.empty()) { app::showDx(session->dx, laneInstrument, session->panel.dxNode); session->panel.dxNode.clear(); }
   if (app::drawDxWindow(session->dx, doc, player.engine())) { syncData(doc, player.engine()); syncParams(doc, player.engine()); }
   if (mixerShown && app::drawMixer(session->mixer, doc, player.engine(), selectedLane)) {
@@ -1646,6 +1650,7 @@ bool parse(int argc, char** argv, Options& o) {
     else if (a == "--clicks" && more) o.clicks = argv[++i];
     else if (a == "--envelope" && more) o.envelope = argv[++i];
     else if (a == "--dx" && more) o.dxnode = argv[++i];
+    else if (a == "--vector" && more) o.vectornode = argv[++i];
     else if (a == "--screen" && more) o.screen = argv[++i];
     else if (a == "--theme" && more) o.theme = argv[++i];
     else if (a == "--frames" && more) o.frames = std::max(1, std::atoi(argv[++i]));
@@ -1747,6 +1752,10 @@ int main(int argc, char** argv) {
     if (!options.dxnode.empty() && frame == 3 && session) {
       const std::size_t dot = options.dxnode.find('.');
       app::showDx(session->dx, options.dxnode.substr(0, dot), options.dxnode.substr(dot + 1));
+    }
+    if (!options.vectornode.empty() && frame == 3 && session) {
+      const std::size_t dot = options.vectornode.find('.');
+      app::showVector(session->vector, options.vectornode.substr(0, dot), options.vectornode.substr(dot + 1));
     }
     if (!options.envelope.empty() && frame == 3 && session) {
       const std::size_t dot = options.envelope.find('.');

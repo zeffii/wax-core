@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "app/gate_window.h"
+#include "app/vector_window.h"
 #include "app/shape_window.h"
 #include "app/node_help.h"
 #include "app/theme.h"
@@ -288,6 +289,7 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
   if (!drawingsOf(picked->type).empty() && textButton("draw envelopes")) state.drawNode = picked->id;
   if (picked->type == "dvii" && textButton("edit voice")) state.dxNode = picked->id;
   if (hasGate(picked->type) && textButton("edit steps")) state.gateNode = picked->id;
+  if (hasVectorWindow(picked->type) && textButton(picked->type == "waveseq" ? "edit waves" : picked->type == "compass" ? "edit pad and waves" : "edit pad")) state.vectorNode = picked->id;
   if (picked->type == "chord" && textButton("edit chords")) state.chordNode = picked->id;
   if (picked->type == "wavetable" && textButton("edit table")) state.tableNode = picked->id;
   if (hasShape(picked->type) && textButton(picked->type == "osc" || picked->type == "westcoast" || picked->type == "fmsynth" ? "draw wave" : picked->type == "addsynth" ? "draw spectrum" : picked->type == "shiva" ? "edit taps" : "draw curve")) state.shapeNode = picked->id;

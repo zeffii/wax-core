@@ -17,6 +17,7 @@
 #include "nodes/drawings.h"
 #include "nodes/kalcore.h"
 #include "nodes/membrane_view.h"
+#include "nodes/pulsarcore.h"
 #include "project/sample_edit.h"
 #include "nodes/spacecore.h"
 
@@ -725,6 +726,50 @@ void drawDrum(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeTyp
   drawWave(dl, hit, left, zoomY + 14 * scale, pw, zoomH - 16 * scale, textAlpha(220), 0, static_cast<std::size_t>(44100 * zoomMs / 1000), scale);
 }
 
+// ---- pulsar, pulse train: a few periods of the train as it sounds, the masked ones faint ----
+
+// One pulsaret's shape at q (0..1), as the oscillator plays it; the noise wave takes its numbers from `rand` so the picture holds still.
+double pulsaretShape(int wave, double q, const std::function<double()>& rand) {
+  switch (wave) {
+    case 0: return std::sin(6.283185307179586 * q);
+    case 1: return std::sin(3.141592653589793 * q) * 2 - 1.273;
+    case 2: return q < 0.25 ? 4 * q : q < 0.75 ? 2 - 4 * q : 4 * q - 4;
+    case 3: return 2 * q - 1;
+    case 4: return q < 0.5 ? 1 : -1;
+    default: return rand() * 2 - 1;
+  }
+}
+
+void drawPulsarTrain(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale) {
+  constexpr int kPeriods = 5;
+  constexpr double kShownHz = 220;   // A3
+  const double formant = std::max(1.0, valueOf(node, type, "formant")), mask = valueOf(node, type, "mask");
+  const int wave = static_cast<int>(std::lround(valueOf(node, type, "wave")));
+  const bezier::Table window = bezier::envelopeTable(bezier::drawingOf(&node.data, "window", pulsar::defaultWindow()));
+  const double duty = kShownHz / formant;   // how much of a period one pulsaret fills
+  const float left = f.x0 + 8 * scale, width = f.w - 16 * scale, top = f.y0 + 22 * scale, height = f.h - 28 * scale;
+  const float mid = top + height / 2, amp = height * 0.4f, per = width / kPeriods;
+  dl->AddLine(ImVec2(left, mid), ImVec2(left + width, mid), textAlpha(50));
+  double seed = 7;
+  const std::function<double()> rand = [&]() { seed = std::fmod(seed * 16807, 2147483647.0); return seed / 2147483647.0; };
+  for (int p = 0; p < kPeriods; p++) {
+    const bool kept = !(mask > 0 && std::fmod(p * 0.618, 1.0) < mask);
+    const double length = std::min(1.0, duty);   // a pulsaret longer than the period is cut off by the next one
+    const int steps = std::max(8, static_cast<int>(std::lround(per * length / (1.5f * scale))));
+    ImVec2 last{};
+    for (int i = 0; i <= steps; i++) {
+      const double q = static_cast<double>(i) / steps * length / duty;
+      const double v = pulsaretShape(wave, q, rand) * bezier::readEnvelope(window, q);
+      const ImVec2 at(left + p * per + static_cast<float>(i) / steps * static_cast<float>(length) * per, mid - static_cast<float>(v) * amp);
+      if (i) dl->AddLine(last, at, kept ? IM_COL32(235, 160, 45, 255) : textAlpha(46), 1.3f * scale);
+      last = at;
+    }
+  }
+  char text[96];
+  std::snprintf(text, sizeof text, "%d periods at 220 Hz · formant %d Hz · duty %d%%", kPeriods, static_cast<int>(std::lround(formant)), static_cast<int>(std::lround(duty * 100)));
+  dl->AddText(font, f.size * 0.9f, ImVec2(f.x0 + 8 * scale, f.y0 + f.h - 14 * scale), textAlpha(130), text);
+}
+
 // ---- the drawn drums (drum synth 2, hi-hat 2): their drawings and the hit they make, from the node's own code ----
 
 void drawDrawnHit(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale) {
@@ -773,7 +818,7 @@ void drawDrawnHit(ImDrawList* dl, ImFont* font, const GraphNode& node, const Nod
 
 }  // namespace
 
-bool hasPicture(const std::string& nodeType) { return nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu" || nodeType == "membrane" || nodeType == "granular" || nodeType == "kaleidoscope" || nodeType == "drumsynth" || nodeType == "drumsynth2" || nodeType == "hat2"; }
+bool hasPicture(const std::string& nodeType) { return nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu" || nodeType == "membrane" || nodeType == "granular" || nodeType == "kaleidoscope" || nodeType == "drumsynth" || nodeType == "drumsynth2" || nodeType == "hat2" || nodeType == "pulsar" || nodeType == "pulsetrain"; }
 
 float drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, ImVec2 tileMin, ImVec2 tileMax, ImVec2 areaMin, ImVec2 areaMax, float scale, const PictureTiming& timing, ResponseHandles& handles) {
   gBelow = 0;
@@ -788,6 +833,7 @@ float drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const
   else if (node.type == "kaleidoscope") drawKaleidoscope(dl, font, node, type, frameFor(dl, font, node.id + " band", 460, 270, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "drumsynth") drawDrum(dl, font, node, type, frameFor(dl, font, node.id + " hit", 360, 372, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "drumsynth2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", 360, 22 + 3 * 56 + 84, tileMin, tileMax, areaMin, areaMax, scale), scale);
+  else if (node.type == "pulsar" || node.type == "pulsetrain") drawPulsarTrain(dl, font, node, type, frameFor(dl, font, node.id + " pulse train", 360, 130, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "hat2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", 360, 22 + 2 * 56 + 2 * 80 + 6, tileMin, tileMax, areaMin, areaMax, scale), scale);
   return gBelow;
 }
