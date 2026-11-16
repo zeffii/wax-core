@@ -1230,6 +1230,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       session->wantLane = hit.lane; session->wantTick = hit.tick; selectedLane = hit.lane;
       editor.setLane(hit.lane, player.engine().laneColumns(hit.lane));   // (the keys carry on from the click)
       editor.moveTo(hit.tick, 0);
+      session->edit = true;   // a click puts the caret there, ready to move about
     }
     ImGui::EndChild();
     if (session->showKeys) { ImGui::SameLine(0, 8 * scale); app::drawShortcutSheet("songkeys", app::songShortcuts(), 0, 0); }
