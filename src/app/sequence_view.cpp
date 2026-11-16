@@ -82,7 +82,7 @@ float sequenceWidth(const Project& project) {
   return width;
 }
 
-SequenceClick drawSequenceView(const Project& project, const std::string& selectedLane, int playTick, int cursorTick, bool follow, CurveView& curves, const CurveView::Targets& targets, const SequenceBlock& block, const std::map<std::string, MinimapLane>* minimap) {
+SequenceClick drawSequenceView(const Project& project, const std::string& selectedLane, int playTick, int cursorTick, int pickedTick, bool follow, CurveView& curves, const CurveView::Targets& targets, const SequenceBlock& block, const std::map<std::string, MinimapLane>* minimap) {
   SequenceClick result;
   const float scale = ImGui::GetStyle().FontScaleDpi;
   if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::GetIO().KeyCtrl && ImGui::GetIO().MouseWheel != 0) {   // Ctrl+wheel: the size of a row, a step a notch
@@ -207,8 +207,8 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
     laneIndex++;
     const float w = laneWidth(lane, scale);
     const bool selected = lane.id == selectedLane;
-    const ImU32 blockFill = selected ? accentAlpha(70) : dimAlpha(50);
-    const ImU32 blockEdge = selected ? kAccent : dimAlpha(140);
+    const ImU32 blockFill = dimAlpha(50);   // (every lane alike: the picked lane is shown by its head, the picked pattern by its rectangle)
+    const ImU32 blockEdge = dimAlpha(140);
     draw->AddLine(ImVec2(left, origin.y + headHeight), ImVec2(left, origin.y + headHeight + rowHeight * static_cast<float>(rows)), lineAlpha(160));
     for (int r = first; r <= last; ++r) {
       const float y = origin.y + headHeight + static_cast<float>(r) * rowHeight;
@@ -220,7 +220,7 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
       if (!shown) shown = placementAt(lane, t0);
       if (!shown) continue;
       const Pattern* shownPattern = patternOf(lane, shown->pattern);
-      const ImU32 fill = shownPattern ? patternColour(*shownPattern, selected ? 70 : 50) : blockFill;   // the pattern's own colour
+      const ImU32 fill = shownPattern ? patternColour(*shownPattern, 50) : blockFill;   // the pattern's own colour
       draw->AddRectFilled(ImVec2(left + 2 * scale, y), ImVec2(left + w - 2 * scale, y + rowHeight), fill);
       draw->AddLine(ImVec2(left + 2 * scale, y), ImVec2(left + 2 * scale, y + rowHeight), blockEdge);
       if (pictures) {
@@ -249,6 +249,13 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
       const float bottom = origin.y + headHeight + static_cast<float>((block.to + cell - 1) / cell) * rowHeight;
       draw->AddRectFilled(ImVec2(left, top), ImVec2(left + w, bottom), accentAlpha(55));
     }
+    if (selected && pickedTick >= 0) {   // the pattern that was clicked: a rectangle round it
+      if (const Placement* picked = placementAt(lane, pickedTick)) {
+        const float top = origin.y + headHeight + static_cast<float>(picked->start / cell) * rowHeight;
+        const float bottom = origin.y + headHeight + static_cast<float>((picked->start + picked->length + cell - 1) / cell) * rowHeight;
+        draw->AddRect(ImVec2(left + 2 * scale, top + 1), ImVec2(left + w - 2 * scale, bottom - 1), kAccent, 0, 0, 1.5f * scale);
+      }
+    }
     if (cursorTick >= 0 && selected) {
       const float y = origin.y + headHeight + static_cast<float>(cursorTick / cell) * rowHeight;
       draw->AddRectFilled(ImVec2(left, y), ImVec2(left + w, y + rowHeight), kCursorCell);
@@ -265,6 +272,10 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
   for (const Lane& lane : project.lanes) {
     const float w = laneWidth(lane, scale);
     draw->PushClipRect(ImVec2(left, headTop), ImVec2(left + w, headTop + headHeight), true);
+    if (lane.id == selectedLane) {   // the picked lane: its head is tinted and underlined
+      draw->AddRectFilled(ImVec2(left, headTop), ImVec2(left + w, headTop + headHeight), accentAlpha(40));
+      draw->AddRectFilled(ImVec2(left, headTop + headHeight - 2 * scale), ImVec2(left + w, headTop + headHeight), kAccent);
+    }
     draw->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.85f, ImVec2(left + 4 * scale, headTop + 3 * scale), lane.id == selectedLane ? kAccent : kDimText, lane.id.c_str());   // a small face, so names fit the lane
     draw->PopClipRect();
     left += w;
