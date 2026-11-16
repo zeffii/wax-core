@@ -731,6 +731,23 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         session->editStatus = e.what();
       }
     }
+    if (io.KeyAlt && !ctrl && !io.KeyShift && (session->screen == Screen::Song || session->screen == Screen::Pattern) && !editor.lane().empty()) {
+      // Alt+S solos the lane under the cursor (again to bring everyone back); Alt+M silences it (the pair of the mixer's S and M)
+      if (ImGui::IsKeyPressed(ImGuiKey_S, false)) {
+        const std::optional<bool> on = doc.toggleSolo(editor.lane());
+        bool any = false;
+        for (const Lane& l : doc.project().lanes) any |= l.solo;
+        session->editStatus = !on ? "The master lane cannot be soloed." : *on ? editor.lane() + " solo." : any ? editor.lane() + " unsoloed." : "Solo off: every lane plays.";
+        edited = true;
+      }
+      if (ImGui::IsKeyPressed(ImGuiKey_M, false)) {
+        bool silenced = false;
+        for (const Lane& l : doc.project().lanes) if (l.id == editor.lane()) silenced = l.silenced;
+        doc.apply(std::make_unique<SetSilenced>(editor.lane(), !silenced));
+        session->editStatus = silenced ? editor.lane() + " is back on." : editor.lane() + " muted.";
+        edited = true;
+      }
+    }
     if (io.KeyAlt && !ctrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_B, false)) session->showBrowser = !session->showBrowser;   // the browser
     if (io.KeyShift && !ctrl && !io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_I, false)) session->wantTree = true;   // the machine tree
     if (ctrl && !io.KeyShift && !io.KeyAlt && session->screen == Screen::Pattern) {   // the song loop: start and end at the cursor row, switch
@@ -1753,15 +1770,17 @@ void feedKeys(const std::string& script, int frame) {
   const int index = frame / 2;
   if (index < 0 || index >= static_cast<int>(keys.size())) return;
   std::string name = keys[static_cast<std::size_t>(index)];
-  bool ctrl = false, shift = false;
+  bool ctrl = false, shift = false, alt = false;
   for (;;) {
-    if (name.rfind("ctrl+", 0) == 0) { ctrl = true; name = name.substr(5); }
+    if (name.rfind("alt+", 0) == 0) { alt = true; name = name.substr(4); }
+    else if (name.rfind("ctrl+", 0) == 0) { ctrl = true; name = name.substr(5); }
     else if (name.rfind("shift+", 0) == 0) { shift = true; name = name.substr(6); }
     else break;
   }
   const bool down = frame % 2 == 0;
   io.AddKeyEvent(ImGuiMod_Ctrl, ctrl && down);
   io.AddKeyEvent(ImGuiMod_Shift, shift && down);
+  io.AddKeyEvent(ImGuiMod_Alt, alt && down);
   io.AddKeyEvent(keyNamed(name), down);
 }
 

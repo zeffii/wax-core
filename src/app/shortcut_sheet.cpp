@@ -70,6 +70,8 @@ const std::vector<Shortcut>& songShortcuts() {
       {"Shift+arrows", "select a block of lanes and rows (PgUp, PgDn, Home, End too); any other key drops it"},
       {"G", "glue the selected block into one new pattern per lane (asks about lanes that play nothing there)"},
       {"Delete", "remove the pattern here (it stays in the list); on empty ground pull the patterns below up; with a block selected, remove the patterns starting in it"},
+      {"Alt+S", "solo the lane under the cursor (the others let go); again to bring everyone back"},
+      {"Alt+M", "silence the lane under the cursor whatever its marks say; again to bring it back"},
       {"W", "set a waypoint: remember the arrangement as it is"},
       {"Shift+W", "go back to the waypoint (one undo step)"},
       {"Insert", "push the patterns from here down sixteen ticks"},

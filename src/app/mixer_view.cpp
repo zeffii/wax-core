@@ -226,7 +226,13 @@ bool drawMixer(MixerState& state, Document& doc, Engine& engine, const std::stri
       ImGui::SetCursorScreenPos(ImVec2(side, track.y));
       ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(kDimText), "%s", dbText(shown).c_str());
       ImGui::SetCursorScreenPos(ImVec2(side, track.y + lineHeight + 3 * scale));
-      if (button("##mute", "M", lane.silenced, sideWidth, scale)) { doc.apply(std::make_unique<SetSilenced>(lane.id, !lane.silenced)); cx.changed = true; }
+      const bool soloable = lane.instrument != "master";
+      const float half = (sideWidth - 3 * scale) * 0.5f;
+      if (button("##mute", "M", lane.silenced, soloable ? half : sideWidth, scale)) { doc.apply(std::make_unique<SetSilenced>(lane.id, !lane.silenced)); cx.changed = true; }
+      if (soloable) {   // S: solo (Alt+S); the other lanes let go while any lane is soloed
+        ImGui::SameLine(0, 3 * scale);
+        if (button("##solo", "S", lane.solo, half, scale)) { doc.toggleSolo(lane.id); cx.changed = true; }
+      }
       ImGui::SetCursorScreenPos(ImVec2(side, track.y + 2 * (lineHeight + 5 * scale)));
       const bool mixOn = current(engine, base + "master", 1) >= 0.5;
       if (button("##mix", "mix", mixOn, sideWidth, scale)) cx.setParam(lane.instrument, out->id, "master", mixOn ? 0 : 1, false);

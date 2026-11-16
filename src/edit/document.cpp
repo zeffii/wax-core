@@ -1453,3 +1453,24 @@ std::set<std::string> Document::takeChangedLanes() {
 }
 
 }  // namespace wax
+
+namespace wax {
+
+std::optional<bool> Document::toggleSolo(const std::string& laneId) {
+  Lane* target = nullptr;
+  for (Lane& lane : project_.lanes) if (lane.id == laneId) target = &lane;
+  if (!target || target->instrument == "master") return std::nullopt;
+  target->solo = !target->solo;
+  bool any = false;
+  for (const Lane& lane : project_.lanes) any |= lane.solo;
+  for (Lane& lane : project_.lanes) {
+    const bool want = any && !lane.solo && lane.instrument != "master";
+    if (want != lane.soloMuted) { lane.soloMuted = want; changed_.insert(lane.id); }
+  }
+  const bool wasModified = modified();
+  revision_++;
+  if (!wasModified) savedRevision_ = revision_;
+  return target->solo;
+}
+
+}  // namespace wax

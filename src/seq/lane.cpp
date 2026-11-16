@@ -97,6 +97,8 @@ std::vector<std::uint8_t> buildMask(const Lane& lane, int length) {
   std::vector<std::uint8_t> mask(static_cast<std::size_t>(std::max(1, length)), 0);
   if (lane.silenced) {
     std::fill(mask.begin(), mask.end(), std::uint8_t{2});
+  } else if (lane.soloMuted) {
+    std::fill(mask.begin(), mask.end(), std::uint8_t{3});   // 3: let go because another lane is soloed (not drawn as muted)
   } else {
     std::vector<int> flips;
     for (const int t : lane.mutes) if (t < length) flips.push_back(t);

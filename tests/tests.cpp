@@ -1559,6 +1559,15 @@ void testSequenceOps() {
   check(document.project().lanes[0].placements.empty() && document.project().lanes[1].placements.empty(), "sequence: several lanes replaced at once");
   document.undo();
   check(document.project().lanes[0].placements.size() == one.placements.size() && document.project().lanes[1].placements.size() == two.placements.size(), "sequence: one undo puts every lane back");
+  Project soloing;
+  Lane lead, bass, master;
+  lead.id = "lead"; lead.instrument = "a"; bass.id = "bass"; bass.instrument = "b"; master.id = "master"; master.instrument = "master";
+  soloing.lanes = {lead, bass, master};
+  Document solos(soloing);
+  check(solos.toggleSolo("lead") == true && !solos.project().lanes[0].soloMuted && solos.project().lanes[1].soloMuted && !solos.project().lanes[2].soloMuted, "solo: the other lanes let go, the master does not");
+  check(!solos.modified() && !solos.canUndo(), "solo: not undoable, does not modify the song");
+  check(solos.takeChangedLanes().count("bass") == 1, "solo: the lane that let go is rebuilt");
+  check(solos.toggleSolo("lead") == false && !solos.project().lanes[1].soloMuted && !solos.toggleSolo("master").has_value(), "solo: off again; the master cannot be soloed");
 }
 
 void testExposeMovesCells() {

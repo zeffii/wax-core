@@ -5,6 +5,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -1020,6 +1021,10 @@ public:
   // True once after the song's loop changed (undo and redo count).
   bool takeLoopChanged() { const bool was = loopChanged_; loopChanged_ = false; return was; }
   void markLaneChanged(const std::string& lane) { changed_.insert(lane); }   // to try again later
+
+  // Solo for a lane on or off (Alt+S): while any lane is soloed the others, except the master, let go and play nothing. Not undoable and not
+  // saved, and it does not make the song "modified". Returns whether the lane is soloed now, or nothing for the master.
+  std::optional<bool> toggleSolo(const std::string& lane);
 
 private:
   Project project_;

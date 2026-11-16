@@ -127,6 +127,8 @@ struct Lane {
   std::vector<int> mutes;  // the ticks where the lane flips between playing and muted
   std::vector<int> offs;   // the ticks where the lane lets go of its notes
   bool silenced = false;
+  bool solo = false;       // Alt+S: this lane is soloed (not saved, not undoable: a performance switch)
+  bool soloMuted = false;  // ...and so this one lets go because another lane is soloed (the master never does)
   Json raw;                // curves: read when automation is ported
 };
 
