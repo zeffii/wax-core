@@ -601,7 +601,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (session->screen == Screen::Song || session->screen == Screen::Pattern) app::laneSoloKeys(songEnv);   // Alt+S solo, Alt+M silence the cursor lane
     if (io.KeyAlt && !ctrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_B, false)) session->showBrowser = !session->showBrowser;   // the browser
     if (io.KeyShift && !ctrl && !io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_I, false)) session->wantTree = true;   // the machine tree
-    if (ctrl && !io.KeyShift && !io.KeyAlt && session->screen == Screen::Pattern) {   // the song loop: start and end at the cursor row, switch
+    if (ctrl && !io.KeyShift && !io.KeyAlt && (session->screen == Screen::Pattern || session->screen == Screen::Song)) {   // the song loop: start and end at the cursor row, switch
       const auto setPoint = [&](const char* which, int at) {
         std::string message;
         Json loop = loopWithPoint(song, which, at, message);
@@ -609,8 +609,10 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         syncLoop(doc, player.engine());
         session->editStatus = message;
       };
-      if (ImGui::IsKeyPressed(ImGuiKey_B, false)) setPoint("start", editor.tick());
-      if (ImGui::IsKeyPressed(ImGuiKey_E, false)) setPoint("end", editor.tick() + 1);
+      const int rowTicks = session->screen == Screen::Song ? app::sequenceRowTicks(song) : 1;   // (on the Song screen a row is a stretch of ticks: the loop starts where it starts, ends where it starts)
+      const int rowStart = editor.tick() / rowTicks * rowTicks;
+      if (ImGui::IsKeyPressed(ImGuiKey_B, false)) setPoint("start", rowStart);
+      if (ImGui::IsKeyPressed(ImGuiKey_E, false)) setPoint("end", session->screen == Screen::Song ? rowStart : editor.tick() + 1);
       if (ImGui::IsKeyPressed(ImGuiKey_L, false)) {
         Json loop = loopToggled(song);
         if (loop.is_null()) session->editStatus = "No loop to switch: Ctrl+B and Ctrl+E set one.";
@@ -1151,7 +1153,10 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     const float songSheetW = session->showKeys ? 270 * scale : 0;
     ImGui::BeginChild("seqmain", ImVec2(-songSheetW, 0), false, ImGuiWindowFlags_NoNav);
     const app::CurveView::Targets curveTargetsOf = [&](const Lane& lane) { return curveTargets(player.engine().laneColumns(lane.id), lane.instrument, player.engine().registry()); };
-    const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, session->edit ? editor.tick() : -1, follow && playing && !session->edit, session->curveView, curveTargetsOf, session->edit ? app::selectedBlock(doc.project(), session->song, editor.lane(), editor.tick(), app::sequenceRowTicks(doc.project().song)) : app::SequenceBlock());
+    std::map<std::string, app::MinimapLane> minimapLanes;   // what the pictures of the patterns read (only when they are on)
+    if (app::settings().minimapOn)
+      for (const Lane& lane : doc.project().lanes) minimapLanes[lane.id] = {&session->player->engine().laneColumns(lane.id), &session->rows[lane.id]};
+    const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, session->edit ? editor.tick() : -1, follow && playing && !session->edit, session->curveView, curveTargetsOf, session->edit ? app::selectedBlock(doc.project(), session->song, editor.lane(), editor.tick(), app::sequenceRowTicks(doc.project().song)) : app::SequenceBlock(), &minimapLanes);
     if (hit.curve.any) {   // a curve edited: one undo step per gesture, the lane rebuilt in the engine
       doc.apply(std::make_unique<SetCurves>(hit.curve.lane, hit.curve.curves, hit.curve.label), hit.curve.fold);
       const std::vector<std::string> problems = syncLanes(doc, player.engine());
@@ -1387,6 +1392,16 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     colour("Wire colour: stereo", cfg.wireStereo);
     colour("Wire colour: parameter", cfg.wireParam);
     if (ImGui::Checkbox("Control wires are dashed", &cfg.wireDashed)) changed = true;
+    group("Song screen", "The sequence editor.");
+    if (ImGui::Checkbox("Song overview (a strip at the right showing the whole song scaled to fit: click or drag to scroll)", &cfg.seqOverview)) changed = true;
+    if (ImGui::Checkbox("Pattern minimaps (each cell shows a small picture of its pattern)", &cfg.minimapOn)) changed = true;
+    ImGui::BeginDisabled(!cfg.minimapOn);
+    ImGui::Indent(16 * scale);
+    if (ImGui::Checkbox("Note lengths (a thin line from each note to the next)", &cfg.minimapLengths)) changed = true;
+    if (ImGui::Checkbox("Note off and kill (cyan for ===, magenta for ^^^)", &cfg.minimapCaps)) changed = true;
+    if (ImGui::Checkbox("Parameters (a narrow column each at the right edge)", &cfg.minimapParams)) changed = true;
+    ImGui::Unindent(16 * scale);
+    ImGui::EndDisabled();
     group("Editing", "How the cursor moves.");
     if (ImGui::Checkbox("Sequence editor: show pattern names (off: just the two-digit number; H toggles)", &cfg.seqNames)) changed = true;
     if (ImGui::Checkbox("Up and Down wrap round the first and last row", &cfg.rowWrap)) changed = true;

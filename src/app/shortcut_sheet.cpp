@@ -73,6 +73,8 @@ const std::vector<Shortcut>& songShortcuts() {
       {"Ctrl+C / Ctrl+X", "copy / cut the selected block (without one, the pattern under the cursor)"},
       {"Ctrl+V", "paste at the cursor (or where the selection is); a pattern goes back into its own lane as the same pattern, into another lane with the same columns as a copy"},
       {"Ctrl+D", "copy the block to the rows right below it; again for another copy"},
+      {"Ctrl+B, Ctrl+E, Ctrl+L", "start the loop at this row, end it where this row starts; Ctrl+L switches it off and on"},
+      {"L / Shift+L", "the loop on or off / a loop round the pattern under the cursor (again to remove it)"},
       {"Alt+S", "solo the lane under the cursor (the others let go); again to bring everyone back"},
       {"Alt+M", "silence the lane under the cursor whatever its marks say; again to bring it back"},
       {"W", "set a waypoint: remember the arrangement as it is"},

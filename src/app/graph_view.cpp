@@ -458,7 +458,11 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
   // the tile (or a note's edge) was pressed: it is picked and held, ready to be dragged
   const auto pressTile = [&](const GraphNode& n, const Tile& t) {
     if (!(ImGui::IsItemClicked() && hover.node.empty())) return;
-    if (!io.KeyShift && !state.group.count(n.id)) state.group.clear(); state.lassoing = false; state.lastPicked = picked; picked = n.id; state.held = n.id; state.dragFree = false; state.dragMoved = false; state.dragForce = io.KeyShift; state.grabX = io.MousePos.x - t.min.x; state.grabY = io.MousePos.y - t.min.y;
+    if (!io.KeyShift && !state.group.count(n.id)) state.group.clear();
+    state.lassoing = false;
+    state.lastPicked = picked; picked = n.id;
+    state.held = n.id; state.dragFree = false; state.dragMoved = false; state.dragForce = io.KeyShift;
+    state.grabX = io.MousePos.x - t.min.x; state.grabY = io.MousePos.y - t.min.y;
   };
 
   // the tiles themselves

@@ -753,6 +753,17 @@ void testLoop() {
   doc.apply(std::make_unique<wax::SetLoop>(wax::loopWithPoint(doc.project().song, "end", 8, message), message));
   const wax::LoopRange range = wax::loopOf(doc.project().song);
   check(range.on && range.start == 4 && range.end == 8, "Ctrl+B and Ctrl+E set the loop");
+  {   // Shift+L: a loop round one pattern; again takes it away; a pattern that is the whole song needs none
+    bool changed = false;
+    wax::Json round = wax::loopAround(doc.project().song, 16, 16, message, changed);
+    check(changed && round.value("start", -1) == 16 && round.value("end", -1) == 32, "Shift+L: the loop goes round the pattern");
+    wax::Document again(doc.project());
+    again.apply(std::make_unique<wax::SetLoop>(round, message));
+    check(wax::loopAround(again.project().song, 16, 16, message, changed).is_null() && message == "Loop removed.", "Shift+L again removes the loop");
+    check(wax::loopAround(doc.project().song, 0, doc.project().song.length, message, changed).is_null(), "Shift+L on a pattern as long as the song sets no loop");
+    wax::loopAround(doc.project().song, 0, -1, message, changed);
+    check(!changed, "Shift+L with no pattern under the cursor does nothing");
+  }
   wax::Engine engine(doc.project(), 44100);
   engine.sequencer().play(0);
   std::vector<float> l(wax::kEngineBlock), r(wax::kEngineBlock);

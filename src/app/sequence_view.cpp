@@ -82,7 +82,7 @@ float sequenceWidth(const Project& project) {
   return width;
 }
 
-SequenceClick drawSequenceView(const Project& project, const std::string& selectedLane, int playTick, int cursorTick, bool follow, CurveView& curves, const CurveView::Targets& targets, const SequenceBlock& block) {
+SequenceClick drawSequenceView(const Project& project, const std::string& selectedLane, int playTick, int cursorTick, bool follow, CurveView& curves, const CurveView::Targets& targets, const SequenceBlock& block, const std::map<std::string, MinimapLane>* minimap) {
   SequenceClick result;
   const float scale = ImGui::GetStyle().FontScaleDpi;
   if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::GetIO().KeyCtrl && ImGui::GetIO().MouseWheel != 0) {   // Ctrl+wheel: the size of a row, a step a notch
@@ -127,7 +127,7 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
   const float stripW = static_cast<float>(lanesShown) * 8 * scale + 8 * scale;
   const float bodyHeight = viewHeight - headHeight;
   const bool fitsOnScreen = bodyHeight >= rowHeight * static_cast<float>(rows);
-  const bool hasStrip = !fitsOnScreen && lanesShown > 0 && bodyHeight > 40 * scale;
+  const bool hasStrip = settings().seqOverview && !fitsOnScreen && lanesShown > 0 && bodyHeight > 40 * scale;
   const float scrollbarW = ImGui::GetScrollMaxY() > 0 ? ImGui::GetStyle().ScrollbarSize : 0;
   const ImVec2 windowPos = ImGui::GetWindowPos();
   const ImVec2 stripMin(windowPos.x + ImGui::GetWindowWidth() - scrollbarW - stripW - stripPad, windowPos.y + headHeight);
@@ -194,6 +194,12 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
     draw->AddText(ImVec2(origin.x + 2 * scale, y + scale), t % bar16 == 0 ? kText : kDimText, number);
   }
 
+  // the pictures of the patterns, when they are switched on (the lanes' rows and columns come from the caller)
+  MinimapCache minimapCache;
+  MinimapOptions minimapOptions;
+  minimapOptions.lengths = settings().minimapLengths; minimapOptions.caps = settings().minimapCaps; minimapOptions.params = settings().minimapParams;
+  const bool pictures = minimap && settings().minimapOn;
+
   // the lanes
   float left = origin.x + gutter;
   int laneIndex = -1;
@@ -217,6 +223,14 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
       const ImU32 fill = shownPattern ? patternColour(*shownPattern, selected ? 70 : 50) : blockFill;   // the pattern's own colour
       draw->AddRectFilled(ImVec2(left + 2 * scale, y), ImVec2(left + w - 2 * scale, y + rowHeight), fill);
       draw->AddLine(ImVec2(left + 2 * scale, y), ImVec2(left + 2 * scale, y + rowHeight), blockEdge);
+      if (pictures) {
+        const auto source = minimap->find(lane.id);
+        if (source != minimap->end()) {
+          draw->PushClipRect(ImVec2(left + 2 * scale, y), ImVec2(left + w - 2 * scale, y + rowHeight), true);
+          drawMinimap(draw, lane.id, source->second, minimapCache, t0, cell, ImVec2(left + 2 * scale, y), w - 4 * scale, rowHeight, minimapOptions);
+          draw->PopClipRect();
+        }
+      }
       if (starts) {
         draw->AddLine(ImVec2(left + 2 * scale, y), ImVec2(left + w - 2 * scale, y), blockEdge);
         if (const Pattern* pattern = patternOf(lane, shown->pattern)) {

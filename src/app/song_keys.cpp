@@ -7,7 +7,9 @@
 #include <imgui.h>
 
 #include "app/config.h"
+#include "edit/sync.h"
 #include "seq/cells.h"
+#include "seq/loop.h"
 
 namespace wax::app {
 
@@ -120,6 +122,22 @@ void songCursorKeys(SongEdit& state, SongKeysEnv& env) {
         return true;
       };
       const auto pressed = [&](ImGuiKey key) { return ImGui::IsKeyPressed(key, true); };
+      if (ImGui::IsKeyPressed(ImGuiKey_L, false)) {   // L: the loop on or off; Shift+L: a loop round the pattern under the cursor
+        Json loop;
+        std::string message;
+        bool changed = true;
+        if (io.KeyShift) {
+          const Placement* at = seq::placementAt(*current, rowStart);
+          const Pattern* pattern = at ? seq::patternOf(*current, at->pattern) : nullptr;
+          loop = loopAround(song, at ? at->start : 0, at && pattern ? std::min(at->length, static_cast<int>(pattern->rows.size())) : -1, message, changed);
+        } else {
+          loop = loopToggled(song);
+          changed = !loop.is_null();
+          message = changed ? (loop.value("off", false) ? "Loop off (its points are kept)." : "Loop on.") : "No loop to switch: Ctrl+B and Ctrl+E set one.";
+        }
+        if (changed) { doc.apply(std::make_unique<SetLoop>(std::move(loop), message)); syncLoop(doc, engine); }
+        status = message;
+      }
       const SequenceBlock block = selectedBlock(doc.project(), state, laneId, tick, cell);
       const bool clearing = block.first >= 0 && (pressed(ImGuiKey_Delete) || pressed(ImGuiKey_Backspace));
       if (clearing) {   // the patterns that start inside the block go (they stay in the lanes' lists)

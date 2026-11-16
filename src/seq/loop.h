@@ -23,4 +23,8 @@ Json loopWithPoint(const Song& song, const std::string& which, int tick, std::st
 // The loop switched off or on again (null when no loop is set).
 Json loopToggled(const Song& song);
 
+// Shift+L: the loop set round one placed pattern (`start`, `length` in ticks; length < 0: no pattern under the cursor). Again on the same
+// pattern takes the loop away. Returns what song.loop becomes (null: none) and sets `changed` false when nothing is to be done.
+Json loopAround(const Song& song, int start, int length, std::string& message, bool& changed);
+
 }  // namespace wax

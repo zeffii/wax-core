@@ -40,4 +40,16 @@ Json loopToggled(const Song& song) {
   return loop;
 }
 
+Json loopAround(const Song& song, int start, int length, std::string& message, bool& changed) {
+  changed = true;
+  if (length < 0) { changed = false; message = "No pattern under the cursor to loop."; return Json(); }
+  const LoopRange range = loopOf(song);
+  const bool has = song.raw.is_object() && song.raw.contains("loop") && song.raw["loop"].is_object();
+  const int from = std::max(0, start), to = std::min(song.length, start + length);
+  if (has && range.on && range.start == from && range.end == to) { message = "Loop removed."; return Json(); }
+  if (from == 0 && to == song.length) { message = "That pattern is the whole song: no loop needed."; return Json(); }
+  message = "Loop set round the pattern (" + std::to_string(from) + " to " + std::to_string(to) + ").";
+  return Json{{"start", from}, {"end", to}};
+}
+
 }  // namespace wax

@@ -24,6 +24,9 @@ struct Settings {
   float patternText = 1.0f;    // the Pattern grid's text size, as a multiple of the normal size
   bool seqNames = false;       // the Song screen's pattern cells show the pattern's name after its number (off: just the two-digit number; H toggles)
   bool hideEmpty = false;      // the Pattern screen leaves out columns with nothing in them
+  bool seqOverview = true;     // the Song screen's strip at the right edge showing the whole song scaled to fit
+  bool minimapOn = false;      // each cell of the Song screen shows a small picture of its pattern
+  bool minimapLengths = true, minimapCaps = true, minimapParams = true;   // the picture's note lengths, note off / cut marks, parameter strip
   bool tintPatterns = true;    // the Pattern screen tints each pattern's rows with the pattern's colour
   // editing (the web's rowWrap and laneWrap): Up/Down wrap round the first and last row; Left/Right go past the last column to the next lane
   // and, with laneWrap, from the last lane back to the first
