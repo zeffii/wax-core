@@ -4,6 +4,7 @@
 #pragma once
 
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -57,6 +58,7 @@ public:
   bool sendData(const std::string& instrument, const std::string& nodeId, Json data);   // false when the queue is full: try again later
 
 private:
+  std::set<std::string> samplesSent_;   // instrument, node, sample and slot of each sample already given to the runtime
   ParamRegistry registry_;
   SpscQueue<std::shared_ptr<void>, 64> sent_, retired_;
   GraphRuntime runtime_;

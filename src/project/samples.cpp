@@ -1,5 +1,6 @@
 #include "project/samples.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -54,7 +55,69 @@ bool boolOr(const Json& j, const char* key, bool fallback) {
   return j.contains(key) && j[key].is_boolean() ? j[key].get<bool>() : fallback;
 }
 
+std::string toBase64(const std::vector<std::uint8_t>& bytes) {
+  static const char* const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::string out;
+  for (std::size_t i = 0; i < bytes.size(); i += 3) {
+    const std::uint32_t chunk = (static_cast<std::uint32_t>(bytes[i]) << 16) | (i + 1 < bytes.size() ? static_cast<std::uint32_t>(bytes[i + 1]) << 8 : 0) | (i + 2 < bytes.size() ? bytes[i + 2] : 0);
+    out += alphabet[(chunk >> 18) & 63];
+    out += alphabet[(chunk >> 12) & 63];
+    out += i + 1 < bytes.size() ? alphabet[(chunk >> 6) & 63] : '=';
+    out += i + 2 < bytes.size() ? alphabet[chunk & 63] : '=';
+  }
+  return out;
+}
+
+std::string encodeChannel(const std::vector<float>& channel) {
+  std::vector<std::uint8_t> bytes;
+  bytes.reserve(channel.size() * 2);
+  for (const float v : channel) {
+    const std::int16_t i = static_cast<std::int16_t>(std::lround(std::min(1.0f, std::max(-1.0f, v)) * 32767.0f));
+    bytes.push_back(static_cast<std::uint8_t>(static_cast<std::uint16_t>(i) & 0xff));
+    bytes.push_back(static_cast<std::uint8_t>((static_cast<std::uint16_t>(i) >> 8) & 0xff));
+  }
+  return toBase64(bytes);
+}
+
 }  // namespace
+
+bool isPoolSample(const std::string& id) {
+  if (id.size() != 5 || id.compare(0, 3, "tap") != 0) return false;
+  const int n = (id[3] - '0') * 10 + (id[4] - '0');
+  return id[3] >= '0' && id[3] <= '9' && id[4] >= '0' && id[4] <= '9' && n >= 1 && n <= 16;
+}
+
+std::string sampleIdFromName(const std::string& fileName) {
+  std::string name = fileName;
+  const std::size_t dot = name.rfind('.');
+  if (dot != std::string::npos && dot + 1 < name.size()) name = name.substr(0, dot);   // (the extension: a last dot with something after it)
+  std::string id;
+  bool gap = false;
+  for (const char c : name) {
+    const bool plain = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
+    if (plain) { if (gap) id += '_'; gap = false; id += c; } else gap = true;
+  }
+  if (gap) id += '_';
+  if (id.size() > 24) id.resize(24);
+  if (id.empty()) id = "sample";
+  if (id.find_first_not_of("0123456789") == std::string::npos) id = "_" + id;   // an all-digit id would sort numerically
+  return id;
+}
+
+std::string uniqueSampleId(const Json& samples, const std::string& base) {
+  std::string id = base;
+  for (int i = 2; samples.is_object() && samples.contains(id); i++) id = base + std::to_string(i);
+  return id;
+}
+
+Json encodeSample(double rate, const std::vector<float>& left, const std::vector<float>& right) {
+  Json out = Json::object();
+  out["rate"] = rate;
+  out["encoding"] = "pcm16";
+  out["data"] = encodeChannel(left);
+  if (!right.empty()) out["right"] = encodeChannel(right);
+  return out;
+}
 
 std::map<std::string, std::shared_ptr<const SampleMessage>> decodeSamples(const Json& samples) {
   std::map<std::string, std::shared_ptr<const SampleMessage>> out;

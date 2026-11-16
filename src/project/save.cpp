@@ -1,4 +1,5 @@
 #include "project/save.h"
+#include "project/samples.h"
 #include "core/js_math.h"
 
 #include <cstdio>
@@ -56,6 +57,11 @@ std::string serializeProject(const Project& project) {
   Json lanes = Json::array();
   for (const Lane& lane : project.lanes) lanes.push_back(laneJson(lane));
   out["lanes"] = std::move(lanes);
+  if (project.samples.is_object()) {   // the samples as edited (the tap pool's slots are not kept, as in the web app)
+    Json samples = Json::object();
+    for (const auto& [id, sample] : project.samples.items()) if (!isPoolSample(id)) samples[id] = sample;
+    out["samples"] = std::move(samples);
+  }
   // instruments taken away while editing (with their lane) leave the file too
   if (out.contains("instruments") && out["instruments"].is_object()) {
     std::vector<std::string> gone;

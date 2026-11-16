@@ -9,7 +9,7 @@ namespace wax::app {
 
 namespace {
 
-struct MachineKind { const char* kind; const char* label; bool needsSample; const char* json; };
+struct MachineKind { const char* kind; const char* label; bool needsSample; const char* sampleNode; bool allSamples; const char* json; };
 struct MachineLeaf { const char* path; const char* kind; const char* name; };
 
 #include "app/machine_table.inc"
@@ -39,7 +39,8 @@ const std::vector<MachineNode>& machineTree() {
       machine.disabled = true;
       for (const MachineKind& k : kMachineKinds) {
         if (machine.kind != k.kind) continue;
-        machine.disabled = k.needsSample;
+        machine.needsSample = k.needsSample;
+        machine.disabled = false;
         const Json definition = Json::parse(k.json);
         if (definition.contains("graph") && definition["graph"].contains("nodes")) {   // a machine whose nodes are not in this engine yet is not offered
           for (const Json& node : definition["graph"]["nodes"]) if (!builtinNodes().find(node.value("type", std::string()))) machine.disabled = true;
@@ -52,8 +53,17 @@ const std::vector<MachineNode>& machineTree() {
   return tree;
 }
 
-Json machineJson(const std::string& kind) {
-  for (const MachineKind& k : kMachineKinds) if (kind == k.kind) return Json::parse(k.json);
+Json machineJson(const std::string& kind, const std::vector<std::string>& sampleIds) {
+  for (const MachineKind& k : kMachineKinds) {
+    if (kind != k.kind) continue;
+    Json instrument = Json::parse(k.json);
+    if (k.needsSample && k.sampleNode[0] && !sampleIds.empty()) {
+      Json samples = Json::object();
+      if (k.allSamples) samples[k.sampleNode] = sampleIds; else samples[k.sampleNode] = sampleIds.front();
+      instrument["samples"] = samples;
+    }
+    return instrument;
+  }
   return Json();
 }
 

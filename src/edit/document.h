@@ -468,6 +468,19 @@ private:
   std::string lane_;
 };
 
+// A sample added to the project's pool (`sample` as the file keeps it: see encodeSample). Undo takes it away again.
+class AddSample final : public Edit {
+public:
+  AddSample(std::string id, Json sample) : id_(std::move(id)), sample_(std::move(sample)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Load sample " + id_; }
+
+private:
+  std::string id_;
+  Json sample_;
+};
+
 // An empty lane (at the end) that plays an instrument the song already has.
 class AddLane final : public Edit {
 public:

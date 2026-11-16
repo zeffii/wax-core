@@ -15,7 +15,7 @@ namespace wax::app {
 // Opens the popup at the mouse.
 void openMachineTree();
 
-// Draws the popup if it is open; returns the kind picked ("" while nothing is).
-std::string drawMachineTree();
+// Draws the popup if it is open; returns the kind picked ("" while nothing is). Machines that play samples are greyed until the project has one.
+std::string drawMachineTree(bool haveSamples);
 
 }  // namespace wax::app

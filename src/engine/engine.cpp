@@ -86,6 +86,7 @@ Engine::Engine(const Project& project, double sampleRate, int threads)
         auto message = std::make_shared<SampleMessage>(*found->second);
         message->slot = static_cast<int>(slot);
         runtime_.sendSample(instrument.id, node.id, message);
+        samplesSent_.insert(instrument.id + '\0' + node.id + '\0' + ids[slot] + '\0' + std::to_string(slot));
       }
     }
   }
@@ -160,6 +161,7 @@ bool Engine::sendLane(const Project& project, const std::string& laneId) {
 
 void Engine::applySentLanes() {
   runtime_.applyGraphs();
+  runtime_.applySamples();   // (after the graphs: a rebuilt machine is given its samples)
   runtime_.applyData();
   std::shared_ptr<void> built;
   while (sent_.pop(built)) {
@@ -176,9 +178,23 @@ std::string Engine::sendGraph(const Project& project, const std::string& instrum
   for (const Instrument& instrument : project.instruments) {
     if (instrument.id != instrumentId) continue;
     try {
-      auto compiled = std::make_shared<const CompiledGraph>(
-          compileGraph(graphWithSamplerStereo(instrument, decodeSamples(project.samples)), instrument.id, builtinNodes(), registry_));
-      return runtime_.sendGraph(std::move(compiled)) ? std::string() : std::string("busy, try again");
+      const auto samples = decodeSamples(project.samples);
+      auto compiled = std::make_shared<const CompiledGraph>(compileGraph(graphWithSamplerStereo(instrument, samples), instrument.id, builtinNodes(), registry_));
+      if (!runtime_.sendGraph(std::move(compiled))) return "busy, try again";
+      for (const GraphNode& node : instrument.graph.nodes) {   // the samples each node plays, after the graph (they are applied in this order)
+        const std::vector<std::string> ids = sampleSlots(instrument, node.id);
+        for (std::size_t slot = 0; slot < ids.size(); slot++) {
+          const auto found = samples.find(ids[slot]);
+          if (found == samples.end()) continue;
+          const std::string key = instrument.id + '\0' + node.id + '\0' + ids[slot] + '\0' + std::to_string(slot);   // sent once: a rebuilt machine is given them again by the runtime
+          if (samplesSent_.count(key)) continue;
+          auto message = std::make_shared<SampleMessage>(*found->second);
+          message->slot = static_cast<int>(slot);
+          if (!runtime_.queueSample(instrument.id, node.id, message)) return "busy, try again";
+          samplesSent_.insert(key);
+        }
+      }
+      return std::string();
     } catch (const std::exception& e) {
       return e.what();
     }

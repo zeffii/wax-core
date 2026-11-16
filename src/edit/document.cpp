@@ -894,6 +894,15 @@ void DeleteRow::revert(Project& project) {
   pattern.rows.insert(pattern.rows.begin() + row_, removed_);
 }
 
+void AddSample::apply(Project& project) {
+  if (!project.samples.is_object()) project.samples = Json::object();
+  project.samples[id_] = sample_;
+}
+
+void AddSample::revert(Project& project) {
+  if (project.samples.is_object()) project.samples.erase(id_);
+}
+
 void SetCurves::apply(Project& project) {
   for (Lane& lane : project.lanes) {
     if (lane.id != lane_) continue;

@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "engine/engine.h"
+#include "live/preview.h"
 #include "rtmidi/RtMidi.h"
 
 namespace wax {
@@ -57,6 +58,7 @@ public:
 
   LiveRing& ring() { return ring_; }
   Engine& engine() { return engine_; }
+  Preview& preview() { return preview_; }   // a sound file heard over the song
   void setInstrument(const std::string& id) { instrument_ = id; }   // from the terminal or the window, between notes
   double peak() const { return peak_.load(); }
   // For a window: what the audio thread last saw (read from any thread).
@@ -78,9 +80,11 @@ public:
       pos_ += take;
       done += take;
     }
+    preview_.mixInto(out, frames, rate_);
   }
 
 private:
+  Preview preview_;
   void renderBlock() {
     engine_.applySentLanes();   // lanes edited in the window start to play from this block
     LiveCommand c;

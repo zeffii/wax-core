@@ -13,6 +13,7 @@
 #include "engine/offline.h"
 #include "edit/cell_editor.h"
 #include "app/machines.h"
+#include "project/samples.h"
 #include "edit/document.h"
 #include "edit/presets.h"
 #include "seq/loop.h"
@@ -801,6 +802,36 @@ void testAddInstrument() {
   std::printf("ok: add instrument\n");
 }
 
+// A sample loaded while the song plays reaches a sampler added at the same time: a note on it sounds.
+void testLiveSampler() {
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax"));
+  wax::Engine engine(doc.project(), 44100);
+  std::vector<float> tone;
+  for (int i = 0; i < 20000; i++) tone.push_back(0.8f * std::sin(i * 0.1f));
+  doc.apply(std::make_unique<wax::AddSample>("probe", wax::encodeSample(44100, tone, {})));
+  doc.apply(std::make_unique<wax::AddInstrument>("sampler", wax::app::machineJson("sampler", {"probe"}), "sampler"));
+  check(engine.sendGraph(doc.project(), "sampler").empty(), "the sampler compiles while the song plays");
+  check(engine.sendLane(doc.project(), "sampler"), "its lane is sent");
+  engine.applySentLanes();
+  std::vector<float> l(wax::kEngineBlock), r(wax::kEngineBlock);
+  const auto heard = [&](int blocks) {   // the song is not playing: only a note played now can be heard
+    double sum = 0;
+    for (int b = 0; b < blocks; b++) {
+      engine.sequencer().process(l.data(), r.data(), wax::kEngineBlock);
+      for (int i = 0; i < wax::kEngineBlock; i++) sum += std::abs(l[i]) + std::abs(r[i]);
+    }
+    return sum;
+  };
+  check(heard(10) == 0, "nothing sounds before a note");
+  wax::NoteEvent on;
+  on.type = wax::NoteType::On;
+  on.note = 60;
+  on.vel = 1;
+  engine.runtime().note("sampler", on);
+  check(heard(60) > 1.0, "a note on the new sampler sounds the sample that was loaded with it");
+  std::printf("ok: live sampler\n");
+}
+
 void testLaneEdits() {
   wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax"));
   const auto ids = [&] { std::string out; for (const wax::Lane& l : doc.project().lanes) out += l.id + ","; return out; };
@@ -1107,6 +1138,38 @@ void testCurveDocument() {
   std::printf("ok: curves in a document\n");
 }
 
+// Samples loaded into a project: named as the web app names them, kept as 16-bit PCM in the file, given to the machines that play them.
+void testSampleLoading() {
+  check(wax::sampleIdFromName("My Kick (01).wav") == "My_Kick_01_" && wax::sampleIdFromName("808.wav") == "_808" && wax::sampleIdFromName("...") == "_" && wax::sampleIdFromName(".wav") == "sample" && wax::sampleIdFromName("") == "sample", "a file name becomes an id");
+  check(wax::sampleIdFromName("a_very_long_sample_name_that_goes_on_and_on.wav").size() == 24, "an id is at most 24 characters");
+  wax::Json taken = wax::Json::object();
+  taken["kick"] = wax::Json::object();
+  taken["kick2"] = wax::Json::object();
+  check(wax::uniqueSampleId(taken, "kick") == "kick3" && wax::uniqueSampleId(taken, "snare") == "snare", "a taken id counts up");
+  check(wax::isPoolSample("tap01") && wax::isPoolSample("tap16") && !wax::isPoolSample("tap17") && !wax::isPoolSample("tap00") && !wax::isPoolSample("tape"), "the tap pool's slots");
+  std::vector<float> left, right;
+  for (int i = 0; i < 1000; i++) { left.push_back(std::sin(i * 0.05f) * 0.8f); right.push_back(std::cos(i * 0.03f) * 0.5f); }
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/cloves.wax"));
+  doc.apply(std::make_unique<wax::AddSample>("probe", wax::encodeSample(48000, left, right)));
+  const wax::Project reread = wax::parseProject(wax::serializeProject(doc.project()));
+  const auto decoded = wax::decodeSamples(reread.samples);
+  check(decoded.count("probe") == 1, "a loaded sample is saved with the song");
+  const auto& probe = *decoded.at("probe");
+  check(probe.rate == 48000 && probe.data.size() == 1000 && probe.right.size() == 1000, "its rate and both channels come back");
+  double worst = 0;
+  for (int i = 0; i < 1000; i++) worst = std::max({worst, std::abs(static_cast<double>(probe.data[i]) - left[i]), std::abs(static_cast<double>(probe.right[i]) - right[i])});
+  check(worst < 1.0 / 32767 + 1e-6, "16-bit PCM keeps it to within one step");
+  wax::Json mono = wax::encodeSample(44100, left, {});
+  check(!mono.contains("right"), "a mono sample has one channel");
+  doc.undo();
+  check(!doc.project().samples.contains("probe"), "undo takes the sample out again");
+  const wax::Json sampler = wax::app::machineJson("sampler", {"probe", "other"});
+  check(sampler["samples"]["sampler"] == "probe", "a sampler is given the first sample");
+  const wax::Json tracker = wax::app::machineJson("modchan", {"probe", "other"});
+  check(tracker["samples"]["ch"].size() == 2, "a MOD channel is given them all, as its slots");
+  std::printf("ok: sample loading\n");
+}
+
 void testPresets() {
   wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/cloves.wax"));
   const wax::Instrument& first = doc.project().instruments[1];
@@ -1252,6 +1315,7 @@ int main() {
   testLoop();
   testPlacePattern();
   testAddInstrument();
+  testLiveSampler();
   testLaneEdits();
   testPatternRenameClone();
   testInsertSilence();
@@ -1262,6 +1326,7 @@ int main() {
   testInstrumentManage();
   testCurveEdit();
   testCurveDocument();
+  testSampleLoading();
   testPresets();
   testGraphSaved();
   testExposePort();

@@ -7,6 +7,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <filesystem>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -25,6 +26,7 @@
 #include "app/sequence_view.h"
 #include "app/envelope_window.h"
 #include "app/config.h"
+#include "app/sample_browser.h"
 #include "app/curve_view.h"
 #include "app/dx_window.h"
 #include "app/graph_view.h"
@@ -53,6 +55,8 @@
 #include "live/player.h"
 #include "engine/offline.h"
 #include "project/project.h"
+#include "io/wav.h"
+#include "project/samples.h"
 
 namespace {
 
@@ -97,6 +101,7 @@ struct Session {
   std::unique_ptr<RtMidiIn> midi;
   std::string midiName = "none";
   std::string keyjazzInstrument;
+  app::SampleBrowserState sampleBrowser;   // the Samples tab: the folder shown and the file picked
   app::CurveView curveView;   // the lane curves drawn over the Song screen: the one each lane shows, what is dragged
   std::vector<std::string> playable;                                       // the machines a keyboard can play
   std::map<std::string, std::vector<std::vector<std::string>>> rows;      // lane id -> flattened rows
@@ -588,7 +593,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       if (session->screen == Screen::Instrument) session->browserTab = 1;
       else if (session->screen == Screen::Song || session->screen == Screen::Pattern) session->browserTab = 0;
     }
-    const bool hasOptions = session->screen == Screen::Song || session->screen == Screen::Pattern || session->screen == Screen::Instrument;
+    const bool hasOptions = (session->screen == Screen::Song || session->screen == Screen::Pattern || session->screen == Screen::Instrument) && session->browserTab != 2;   // (the Samples tab takes the whole panel)
     const float panelH = ImGui::GetContentRegionAvail().y;
     float optionsH = hasOptions ? (session->browserOptions > 0 ? session->browserOptions * scale : panelH * 0.5f) : 0.0f;
     optionsH = std::clamp(optionsH, 0.0f, std::max(0.0f, panelH - 120 * scale));
@@ -600,8 +605,33 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       for (const Instrument& inst : doc.project().instruments) {
         if (app::textButton(inst.id.c_str(), inst.id == session->instrument)) session->instrument = inst.id;
       }
-    } else {
-      ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "samples are not ported yet");
+    } else {   // the project's samples, then the folders of the computer to load more from
+      const ImVec4 dim = ImGui::ColorConvertU32ToFloat4(app::kDimText);
+      ImGui::TextColored(dim, "samples in this song");
+      ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 0.85f);
+      bool any = false;
+      if (doc.project().samples.is_object())
+        for (const auto& [id, sample] : doc.project().samples.items()) {
+          if (isPoolSample(id)) continue;
+          any = true;
+          const double bytes = sample.value("data", std::string()).size() * 0.75, perFrame = sample.value("encoding", std::string("pcm16")) == "pcm16" ? 2.0 : 4.0;
+          ImGui::Text("%-24s %5.2fs %s", id.c_str(), bytes / perFrame / std::max(1.0, sample.value("rate", 44100.0)), sample.contains("right") ? "stereo" : "mono");
+        }
+      if (!any) ImGui::TextColored(dim, "none yet: pick a file below");
+      ImGui::PopFont();
+      ImGui::Separator();
+      const app::SampleBrowserResult picked = app::drawSampleBrowser(session->sampleBrowser, player.preview(), std::filesystem::path(options.path).parent_path(), 10);
+      if (picked.load) {
+        try {
+          const StereoAudio audio = readWav(picked.file.string());
+          const bool stereo = audio.left != audio.right;
+          const std::string id = uniqueSampleId(doc.project().samples, sampleIdFromName(picked.file.filename().string()));
+          doc.apply(std::make_unique<AddSample>(id, encodeSample(audio.sampleRate, audio.left, stereo ? audio.right : std::vector<float>())));
+          session->editStatus = "Loaded " + id + ". Add a Sampler from Shift+I to play it.";
+        } catch (const std::exception& e) {
+          session->editStatus = e.what();
+        }
+      }
     }
     ImGui::EndChild();
     if (hasOptions) {   // the bar that sets the height of the options, then the options
@@ -1140,8 +1170,10 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   // The machine tree: a new instrument of the kind picked, with a blank lane of its own
   if (session->wantTree) { session->wantTree = false; app::openMachineTree(); }
   {
-    const std::string kind = app::drawMachineTree();
-    const Json definition = kind.empty() ? Json() : app::machineJson(kind);
+    std::vector<std::string> sampleIds;   // the project's own samples (not the tap pool's slots): what a machine that plays samples is given
+    if (doc.project().samples.is_object()) for (const auto& [id, sample] : doc.project().samples.items()) if (!isPoolSample(id)) sampleIds.push_back(id);
+    const std::string kind = app::drawMachineTree(!sampleIds.empty());
+    const Json definition = kind.empty() ? Json() : app::machineJson(kind, sampleIds);
     if (!definition.is_null()) {
       std::vector<std::string> instrumentIds, laneIds;
       for (const Instrument& i : doc.project().instruments) instrumentIds.push_back(i.id);

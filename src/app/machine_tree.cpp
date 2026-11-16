@@ -60,7 +60,7 @@ void openMachineTree() {
   ImGui::OpenPopup("machinetree");
 }
 
-std::string drawMachineTree() {
+std::string drawMachineTree(bool haveSamples) {
   std::string picked;
   const float scale = ImGui::GetStyle().FontScaleDpi;
   ImGui::PushStyleColor(ImGuiCol_PopupBg, kTreeBg);
@@ -83,7 +83,7 @@ std::string drawMachineTree() {
     const VisibleRow& row = rows[static_cast<std::size_t>(i)];
     if (!row.node->children.empty()) {
       if (openGroups().count(row.node->path)) openGroups().erase(row.node->path); else openGroups().insert(row.node->path);
-    } else if (!row.node->disabled) {
+    } else if (!row.node->disabled && (haveSamples || !row.node->needsSample)) {
       lastPicked() = row.node->path;
       picked = row.node->kind;
     }
@@ -125,7 +125,7 @@ std::string drawMachineTree() {
     ImGui::PopID();
     if (ImGui::IsItemHovered() && (io.MouseDelta.x != 0 || io.MouseDelta.y != 0)) cursor = i;
     if (ImGui::IsItemClicked()) { cursor = i; activate(i); }
-    const ImU32 ink = i == cursor ? kTreeDark : withAlpha(kTreeInk, row.node->disabled ? 102 : 255);
+    const ImU32 ink = i == cursor ? kTreeDark : withAlpha(kTreeInk, (row.node->disabled || (row.node->needsSample && !haveSamples)) ? 102 : 255);
     const ImU32 guide = i == cursor ? kTreeDark : kTreeGuide;
     const float midY = at.y + lineH / 2;
     for (std::size_t g = 0; g < row.guides.size(); g++) {

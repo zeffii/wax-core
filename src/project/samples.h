@@ -21,4 +21,16 @@ std::vector<std::string> sampleSlots(const Instrument& instrument, const std::st
 // A copy of the instrument's graph where each sampler node is `stereo` when any of its samples has two channels.
 Graph graphWithSamplerStereo(const Instrument& instrument, const std::map<std::string, std::shared_ptr<const SampleMessage>>& samples);
 
+// The tap pool's slots (tap01 to tap16): not samples of the user's.
+bool isPoolSample(const std::string& id);
+
+// A file name made into a sample id: no extension, letters, digits, _ and - only, at most 24 characters (a name of digits only gets a leading _).
+std::string sampleIdFromName(const std::string& fileName);
+
+// The id for a new sample: `base`, then base2, base3 ... the first the project does not have.
+std::string uniqueSampleId(const Json& samples, const std::string& base);
+
+// A sample as the project file keeps it: 16-bit PCM, base64. `right` empty: a mono sample.
+Json encodeSample(double rate, const std::vector<float>& left, const std::vector<float>& right);
+
 }  // namespace wax

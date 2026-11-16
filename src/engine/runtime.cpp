@@ -855,6 +855,20 @@ void GraphRuntime::giveData(Instrument& inst, const std::string& nodeId, const J
   }
 }
 
+bool GraphRuntime::queueSample(const std::string& instrument, const std::string& nodeId, std::shared_ptr<const SampleMessage> message) {
+  return sampleSent_.push(SampleQueued{instrument, nodeId, std::move(message)});
+}
+
+void GraphRuntime::applySamples() {
+  SampleQueued queued;
+  while (sampleSent_.pop(queued)) {
+    const std::string key = queued.instrument + '\0' + queued.node + '\0' + std::to_string(queued.message->slot);
+    std::shared_ptr<const SampleMessage> old = samples_.count(key) ? samples_[key] : nullptr;
+    sendSample(queued.instrument, queued.node, std::move(queued.message));
+    if (old) sampleRetired_.push(std::move(old));   // freed by the window thread (collectRetiredData)
+  }
+}
+
 bool GraphRuntime::sendData(const std::string& instrument, const std::string& nodeId, std::shared_ptr<const Json> data) {
   return dataSent_.push(DataMessage{instrument, nodeId, std::move(data)});
 }
@@ -875,6 +889,8 @@ void GraphRuntime::collectRetiredData() {
   while (graphRetired_.pop(oldGraph)) oldGraph.reset();
   std::shared_ptr<const Json> old;
   while (dataRetired_.pop(old)) old.reset();
+  std::shared_ptr<const SampleMessage> oldSample;
+  while (sampleRetired_.pop(oldSample)) oldSample.reset();
 }
 
 float GraphRuntime::takeLevel(const std::string& instrument) {

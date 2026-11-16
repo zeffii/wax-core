@@ -71,6 +71,9 @@ public:
 
   // A sample for one node (every copy of it): the sampler's. Kept, to be sent again when the instrument is rebuilt.
   void sendSample(const std::string& instrument, const std::string& nodeId, std::shared_ptr<const SampleMessage> message);
+  // The same from the window thread while the audio runs: queued, and given to the node at the start of a block (applySamples). False when the queue is full.
+  bool queueSample(const std::string& instrument, const std::string& nodeId, std::shared_ptr<const SampleMessage> message);
+  void applySamples();
 
   // Kill (the ^^^ cell): the instrument fades out quickly, is reset, and is not run until its next note-on.
   void kill(const std::string& instrument);
@@ -145,6 +148,9 @@ private:
   struct DataMessage { std::string instrument, node; std::shared_ptr<const Json> data; };
   SpscQueue<std::shared_ptr<const CompiledGraph>, 8> graphSent_, graphRetired_;
   SpscQueue<DataMessage, 64> dataSent_;
+  struct SampleQueued { std::string instrument, node; std::shared_ptr<const SampleMessage> message; };
+  SpscQueue<SampleQueued, 64> sampleSent_;
+  SpscQueue<std::shared_ptr<const SampleMessage>, 64> sampleRetired_;
   SpscQueue<std::shared_ptr<const Json>, 64> dataRetired_;
   std::map<std::string, std::shared_ptr<const Json>> datas_;   // the latest data sent for each node (audio thread), put back when an instrument is rebuilt
   void giveData(Instrument& inst, const std::string& nodeId, const Json& data);
