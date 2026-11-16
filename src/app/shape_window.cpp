@@ -57,6 +57,119 @@ std::vector<double> pointsOf(const GraphNode& node, const char* key, int count, 
 
 struct Preset { const char* name; std::function<std::vector<double>()> make; };
 
+// The delay's taps (data.taps, a flat list [time, level, pan, ...] with time a fraction of the delay's length): a stem for each tap (time along,
+// level as height; the part right of 1 is where the feedback repeats them) and below it a dot for its pan. Click empty space to add a tap, drag a
+// stem to move it, drag a pan dot up or down, double-click a stem to remove it (a pan dot: to centre it).
+bool drawTaps(ShapeWindow& window, Document& doc, const GraphNode& node) {
+  constexpr int kMaxTaps = 16;
+  constexpr double kSpan = 1.5;
+  struct Tap { double t, l, p; };
+  const float scale = ImGui::GetStyle().FontScaleDpi;
+  ImGui::SetNextWindowSize(ImVec2(440 * scale, 260 * scale), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowPos(ImVec2(240 * scale, 120 * scale), ImGuiCond_FirstUseEver);
+  const std::string title = "Taps  " + window.instrument + "." + window.node + "###shape";
+  bool changed = false;
+  if (ImGui::Begin(title.c_str(), &window.open, ImGuiWindowFlags_NoSavedSettings)) {
+    std::vector<Tap> taps;
+    std::vector<double> flat;
+    if (node.data.is_object() && node.data.contains("taps") && node.data["taps"].is_array())
+      for (const auto& v : node.data["taps"]) flat.push_back(v.is_number() ? v.get<double>() : 0.0);
+    if (flat.size() < 3) for (int i = 0; i < 6; i++) { flat.push_back((i + 1) / 6.0); flat.push_back(std::round(std::pow(0.7, i) * 1000) / 1000); flat.push_back(i % 2 ? 0.6 : -0.6); }
+    for (std::size_t i = 0; i + 2 < flat.size() && taps.size() < kMaxTaps; i += 3) taps.push_back({std::clamp(flat[i], 0.001, 1.0), std::clamp(flat[i + 1], 0.0, 1.0), std::clamp(flat[i + 2], -1.0, 1.0)});
+    const auto emit = [&](const std::vector<Tap>& list, bool fold) {
+      Json out = Json::array();
+      for (const Tap& k : list) { out.push_back(std::round(k.t * 10000) / 10000); out.push_back(std::round(k.l * 1000) / 1000); out.push_back(std::round(k.p * 1000) / 1000); }
+      doc.apply(std::make_unique<SetNodeData>(window.instrument, window.node, "taps", out, "taps"), fold);
+      changed = true;
+    };
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 size(ImGui::GetContentRegionAvail().x, std::max(100.0f * scale, ImGui::GetContentRegionAvail().y - 34 * scale));
+    const ImVec2 min = ImGui::GetCursorScreenPos(), max(min.x + size.x, min.y + size.y);
+    ImGui::InvisibleButton("taps", size);
+    const float pad = 8 * scale, levelTop = min.y + 18 * scale, levelH = (size.y - 18 * scale) * 0.7f, panTop = levelTop + levelH + 10 * scale, panH = max.y - panTop;
+    const float plotW = size.x - 2 * pad;
+    const auto xOf = [&](double t) { return min.x + pad + static_cast<float>(t / kSpan) * plotW; };
+    const auto yLevel = [&](double l) { return levelTop + levelH - static_cast<float>(l) * levelH; };
+    const auto yPan = [&](double p) { return panTop + static_cast<float>((p + 1) / 2) * panH; };
+    const ImVec2 mouse = ImGui::GetIO().MousePos;
+
+    // the tap nearest the mouse, in the lane it is over
+    int nearest = -1, lane = 0;
+    float best = 10 * scale;
+    for (std::size_t i = 0; i < taps.size(); i++) {
+      const float dx = std::fabs(xOf(taps[i].t) - mouse.x);
+      if (mouse.y >= levelTop - 6 * scale && mouse.y <= levelTop + levelH + 6 * scale) {
+        const float d = std::hypot(dx, std::fabs(mouse.y - yLevel(taps[i].l)) * 0.35f);
+        if (d < best && mouse.y <= yLevel(0) + 6 * scale) { best = d; nearest = static_cast<int>(i); lane = 1; }
+      } else if (mouse.y >= panTop - 6 * scale && mouse.y <= max.y + 6 * scale) {
+        const float d = std::hypot(dx, mouse.y - yPan(taps[i].p));
+        if (d < best) { best = d; nearest = static_cast<int>(i); lane = 2; }
+      }
+    }
+    const auto move = [&](Tap& k, int where) {
+      if (where == 1) { k.t = std::clamp(static_cast<double>((mouse.x - min.x - pad) / plotW) * kSpan, 0.001, 1.0); k.l = std::clamp(static_cast<double>((levelTop + levelH - mouse.y) / levelH), 0.0, 1.0); }
+      else k.p = std::clamp(static_cast<double>((mouse.y - panTop) / panH) * 2 - 1, -1.0, 1.0);
+    };
+    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && nearest >= 0) {   // remove a tap (a pan dot: centre it)
+      if (lane == 2) taps[static_cast<std::size_t>(nearest)].p = 0;
+      else if (taps.size() > 1) taps.erase(taps.begin() + nearest);
+      window.grabTap = -1;
+      emit(taps, false);
+    } else if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+      if (nearest < 0 && mouse.y >= levelTop && mouse.y <= levelTop + levelH && taps.size() < kMaxTaps) {   // empty space in the level lane: a new tap
+        taps.push_back({0.5, 0.5, 0});
+        nearest = static_cast<int>(taps.size()) - 1; lane = 1;
+        move(taps.back(), 1);
+        emit(taps, false);
+        window.dragging = true;
+      }
+      window.grabTap = nearest; window.grabLane = lane;
+      if (nearest >= 0 && !window.dragging) window.dragging = false;
+    } else if (window.grabTap >= 0 && window.grabTap < static_cast<int>(taps.size()) && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+      move(taps[static_cast<std::size_t>(window.grabTap)], window.grabLane);
+      emit(taps, window.dragging);
+      window.dragging = true;
+    } else { window.grabTap = -1; window.dragging = false; }
+
+    for (int q = 0; q <= 4; q++) dl->AddLine(ImVec2(std::round(xOf(q / 4.0)) + 0.5f, levelTop), ImVec2(std::round(xOf(q / 4.0)) + 0.5f, max.y), textAlpha(q == 0 || q == 4 ? 100 : 38));
+    dl->AddRectFilled(ImVec2(xOf(1) + 1, levelTop), ImVec2(xOf(kSpan), max.y), textAlpha(18));   // the feedback area
+    dl->AddText(ImVec2(min.x + pad, min.y + 2 * scale), textAlpha(140), "0");
+    dl->AddText(ImVec2(xOf(1) + 6 * scale, min.y + 2 * scale), textAlpha(140), "repeats");
+    for (std::size_t i = 0; i < taps.size(); i++) {
+      const float f = static_cast<float>((taps[i].p + 1) / 2);
+      const ImU32 colour = IM_COL32(static_cast<int>(60 + 180 * f), 150, static_cast<int>(230 - 180 * f), 255);
+      const bool hot = static_cast<int>(i) == nearest || static_cast<int>(i) == window.grabTap;
+      const float x = std::round(xOf(taps[i].t)) + 0.5f;
+      dl->AddLine(ImVec2(x, yLevel(0)), ImVec2(x, yLevel(taps[i].l)), colour, hot ? 3.0f : 2.0f);
+      dl->AddCircleFilled(ImVec2(x, yLevel(taps[i].l)), (hot ? 5 : 3.5f) * scale, colour);
+      dl->AddCircleFilled(ImVec2(x, yPan(taps[i].p)), (hot ? 5 : 3.5f) * scale, colour);
+      for (int k = 1; k * taps[i].t < kSpan - 1e-9 && k < 4; k++) {   // where the feedback repeats it, fading
+        const float rx = xOf(taps[i].t * (k + 1) > kSpan ? kSpan : taps[i].t * (k + 1));
+        if (taps[i].t * (k + 1) > kSpan) break;
+        dl->AddLine(ImVec2(rx, yLevel(0)), ImVec2(rx, yLevel(taps[i].l * std::pow(0.5, k))), withAlpha(colour, 90), 1.0f);
+      }
+    }
+    struct Preset { const char* name; std::vector<Tap> taps; };
+    std::vector<Tap> even, pingpong, accel, random;
+    for (int i = 0; i < 8; i++) even.push_back({(i + 1) / 8.0, std::pow(0.75, i), i % 2 ? 0.7 : -0.7});
+    for (int i = 0; i < 6; i++) pingpong.push_back({(i + 1) / 6.0, std::pow(0.8, i), i % 2 ? 1.0 : -1.0});
+    for (int i = 0; i < 10; i++) accel.push_back({std::pow((i + 1) / 10.0, 1.8), std::pow(0.85, i) * 0.9, std::sin(i * 1.9) * 0.8});
+    const int count = 5 + std::rand() % 8;
+    for (int i = 0; i < count; i++) random.push_back({0.05 + 0.95 * std::rand() / RAND_MAX, 0.2 + 0.8 * std::rand() / RAND_MAX, 2.0 * std::rand() / RAND_MAX - 1});
+    std::vector<Tap> standard;
+    for (int i = 0; i < 6; i++) standard.push_back({(i + 1) / 6.0, std::round(std::pow(0.7, i) * 1000) / 1000, i % 2 ? 0.6 : -0.6});
+    const Preset presets[] = {{"even", even}, {"ping-pong", pingpong}, {"accel", accel}, {"random", random}, {"default", standard}};
+    for (const Preset& preset : presets) {
+      if (textButton(preset.name)) emit(preset.taps, false);
+      ImGui::SameLine(0, 14 * scale);
+    }
+    ImGui::NewLine();
+  }
+  ImGui::End();
+  return changed;
+}
+
 // The additive synth's levels: one bar per partial (32), the fundamental on the left, each from 0 to 1 (data.spectrum).
 bool drawSpectrum(ShapeWindow& window, Document& doc, const GraphNode& node) {
   constexpr int kHarmonics = 32;
@@ -123,7 +236,7 @@ bool drawSpectrum(ShapeWindow& window, Document& doc, const GraphNode& node) {
 
 }  // namespace
 
-bool hasShape(const std::string& nodeType) { return isWave(nodeType) || nodeType == "waveshaper" || nodeType == "addsynth"; }
+bool hasShape(const std::string& nodeType) { return isWave(nodeType) || nodeType == "waveshaper" || nodeType == "addsynth" || nodeType == "shiva"; }
 
 void showShape(ShapeWindow& window, const std::string& instrument, const std::string& node) {
   window.open = true; window.instrument = instrument; window.node = node; window.dragging = false; window.lastIndex = -1;
@@ -134,6 +247,7 @@ bool drawShapeWindow(ShapeWindow& window, Document& doc) {
   const GraphNode* node = findNode(doc.project(), window.instrument, window.node);
   if (!node || !hasShape(node->type)) { window.open = false; return false; }
   if (node->type == "addsynth") return drawSpectrum(window, doc, *node);
+  if (node->type == "shiva") return drawTaps(window, doc, *node);
   const bool wave = isWave(node->type);
   const char* key = wave ? "wave" : "curve";
   const int count = wave ? kWavePoints : kCurvePoints;

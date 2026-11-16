@@ -210,3 +210,5 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 
 - Spectrum bars for the additive synth ("draw spectrum", 32 partials, presets saw/square/triangle/organ/hollow/formant/sine) share the window below.
 - Wave and curve drawing window (`app/shape_window`): "draw wave" on an oscillator (one cycle of 128 points, data.wave) and "draw curve" on a waveshaper (129 points, data.curve, optional symmetric): drag on the pad, presets, and for the wave smooth/flip/reverse/mirror/random; one SetNodeData per change, a drag is one undo. Not yet: the FM synth's per-operator waves, westcoast's drawn wave, spectrum (addsynth), taps (delay), chord names, wavetable, genexpr code, and the web's other per-node views.
+
+- Tap view for the delay ("edit taps", `drawTaps` in shape_window.cpp): level stems and pan dots, click empty space to add (up to 16), drag to move, double-click to remove/centre, presets even/ping-pong/accel/random/default; the comb response curve of the web's view is not drawn.

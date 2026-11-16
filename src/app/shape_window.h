@@ -16,6 +16,7 @@ struct ShapeWindow {
   bool dragging = false;
   int lastIndex = -1;      // the point last painted in this drag
   double lastValue = 0;
+  int grabTap = -1, grabLane = 0;   // taps: the tap held and its lane (1 level and time, 2 pan)
   bool symmetric = false;  // curve: the left half mirrors the right through the origin
 };
 
