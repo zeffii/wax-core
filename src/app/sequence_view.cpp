@@ -82,7 +82,7 @@ float sequenceWidth(const Project& project) {
   return width;
 }
 
-SequenceClick drawSequenceView(const Project& project, const std::string& selectedLane, int playTick, int cursorTick, int pickedTick, bool follow, CurveView& curves, const CurveView::Targets& targets, const SequenceBlock& block, const std::map<std::string, MinimapLane>* minimap) {
+SequenceClick drawSequenceView(const Project& project, const std::string& selectedLane, int playTick, int cursorTick, int pickedTick, bool follow, CurveView& curves, const CurveView::Targets& targets, const SequenceBlock& block, const std::map<std::string, MinimapLane>* minimap, float playFrac) {
   SequenceClick result;
   const float scale = ImGui::GetStyle().FontScaleDpi;
   if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::GetIO().KeyCtrl && ImGui::GetIO().MouseWheel != 0) {   // Ctrl+wheel: the size of a row, a step a notch
@@ -190,7 +190,6 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
     const int t = r * cell;
     char number[16];
     std::snprintf(number, sizeof number, "%04d", t);
-    if (playTick >= t && playTick < t + cell) draw->AddRectFilled(ImVec2(origin.x, y), ImVec2(origin.x + totalWidth, y + rowHeight), kPlayRow);
     draw->AddText(ImVec2(origin.x + 2 * scale, y + scale), t % bar16 == 0 ? kText : kDimText, number);
   }
 
@@ -265,6 +264,11 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
 
   if (!overStrip) result.curve = curves.interact(targets);
 
+  if (playTick >= 0) {   // the playhead: a thin red line across the lanes, moving smoothly down through the rows as the song plays
+    const float y = origin.y + headHeight + (static_cast<float>(playTick) + std::clamp(playFrac, 0.0f, 1.0f)) / static_cast<float>(cell) * rowHeight;
+    draw->AddLine(ImVec2(origin.x, y), ImVec2(origin.x + totalWidth, y), IM_COL32(230, 60, 60, 255), 1.0f);
+  }
+
   // the head, drawn last and held at the top of the view
   const float headTop = origin.y + scrollY;
   draw->AddRectFilled(ImVec2(origin.x, headTop), ImVec2(origin.x + totalWidth, headTop + headHeight), ImGui::GetColorU32(ImGuiCol_ChildBg) | 0xFF000000);
@@ -278,6 +282,9 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
     }
     draw->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.85f, ImVec2(left + 4 * scale, headTop + 3 * scale), lane.id == selectedLane ? kAccent : kDimText, lane.id.c_str());   // a small face, so names fit the lane
     draw->PopClipRect();
+    // a lane that does not sound steps back: a little where another lane is soloed, a tenth where it is muted; the whole column, head included
+    const int stepBack = lane.silenced ? 26 : lane.soloMuted ? 80 : 0;
+    if (stepBack > 0) draw->AddRectFilled(ImVec2(left, headTop), ImVec2(left + w, origin.y + headHeight + rowHeight * static_cast<float>(rows)), withAlpha(ImGui::GetColorU32(ImGuiCol_ChildBg), stepBack));
     left += w;
   }
   draw->AddLine(ImVec2(origin.x, headTop + headHeight - 1), ImVec2(origin.x + totalWidth, headTop + headHeight - 1), kLine);

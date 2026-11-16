@@ -30,7 +30,6 @@ void applyColours() {
   kWarm = t.light ? IM_COL32(190, 110, 20, 255) : IM_COL32(226, 164, 74, 255);
   kBeatRow = withAlpha(kText, 10);
   kBarRow = withAlpha(kText, 22);
-  kPlayRow = withAlpha(kAccent, 70);
   kCursorCell = withAlpha(pack(t.hi), 90);
 
   ImVec4* c = ImGui::GetStyle().Colors;

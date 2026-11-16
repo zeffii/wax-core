@@ -18,7 +18,7 @@ bool setThemeByName(const char* name);
 
 // The colours of the theme, for the views.
 inline ImU32 kBg, kText, kPanel, kField, kLine, kSoft, kDimText, kAccent, kWarm, kHiFg;
-inline ImU32 kBeatRow, kBarRow, kPlayRow, kCursorCell;
+inline ImU32 kBeatRow, kBarRow, kCursorCell;
 
 inline ImU32 withAlpha(ImU32 c, int alpha) { return (c & 0x00FFFFFFu) | (static_cast<ImU32>(alpha < 0 ? 0 : alpha > 255 ? 255 : alpha) << 24); }
 inline ImU32 textAlpha(int a) { return withAlpha(kText, a); }
