@@ -575,6 +575,10 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       const ImVec2 d(state.response.list[i].pos.x - io.MousePos.x, state.response.list[i].pos.y - io.MousePos.y);
       if (std::sqrt(d.x * d.x + d.y * d.y) < best) { best = std::sqrt(d.x * d.x + d.y * d.y); state.responseDrag = static_cast<int>(i); state.responseFresh = true; onHandle = true; }
     }
+    if (state.responseDrag >= 0 && state.response.list[static_cast<std::size_t>(state.responseDrag)].param == "@draw") {   // a drawing's title: open the drawings window
+      state.openDrawings = state.response.list[static_cast<std::size_t>(state.responseDrag)].node;
+      state.responseDrag = -1;
+    }
   }
   const bool idle = state.wiring.empty() && state.wiringIn.empty() && !state.rewire.active && !onHandle;
   if (idle && windowHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {

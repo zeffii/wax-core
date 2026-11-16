@@ -19,6 +19,7 @@
 namespace wax::app {
 
 struct GraphViewState {
+  std::string openDrawings;              // set when a drawing in a picture was clicked: the host opens the node's drawings window and clears it
   std::function<std::shared_ptr<SpectrumProbe>(const std::string& instrument, const std::string& node)> probeOf;   // set by the host: the live pictures
   std::string noteEditing;               // the note whose text is being typed
   std::vector<char> noteBuffer = std::vector<char>(8192, 0);   // ...and the text so far

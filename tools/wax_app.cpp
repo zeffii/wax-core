@@ -1306,6 +1306,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     session->graphView.dockMin = session->panel.dock.min; session->graphView.dockMax = session->panel.dock.max;
     session->graphView.probeOf = [&](const std::string& instrument, const std::string& node) { return session->player->engine().runtime().probe(instrument, node); };
     app::drawGraphView(session->graphView, doc, laneInstrument, session->panel.node, 0);
+    if (!session->graphView.openDrawings.empty()) session->panel.drawNode = std::exchange(session->graphView.openDrawings, std::string());
     const ImVec2 graphMin = ImGui::GetWindowPos(), graphMax(graphMin.x + ImGui::GetWindowWidth(), graphMin.y + ImGui::GetWindowHeight());
     ImGui::EndChild();
     const bool panelChanged = app::drawParamPanel(session->panel, doc, player.engine(), laneInstrument, graphMin, graphMax);   // the parameters float over the graph

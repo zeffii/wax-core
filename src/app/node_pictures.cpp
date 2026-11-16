@@ -789,7 +789,7 @@ void drawPulsarTrain(ImDrawList* dl, ImFont* font, const GraphNode& node, const 
 
 // ---- the drawn drums (drum synth 2, hi-hat 2): their drawings and the hit they make, from the node's own code ----
 
-void drawDrawnHit(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale) {
+void drawDrawnHit(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale, ResponseHandles& handles) {
   const bool hat = node.type == "hat2";
   struct Row { const char* key; const char* title; ImU32 colour; double ms; };
   const auto v = [&](const char* name) { return valueOf(node, type, name); };
@@ -804,6 +804,9 @@ void drawDrawnHit(ImDrawList* dl, ImFont* font, const GraphNode& node, const Nod
   for (const Row& row : rows) {   // the drawings, with how long each takes
     const bezier::Table table = bezier::envelopeTable(bezier::drawingOf(&node.data, row.key, defaultDrawing(node.type, row.key)));
     dl->AddText(font, f.size, ImVec2(f.x0 + pad, y), textAlpha(190), row.title);
+    const float titleW = ImGui::CalcTextSize(row.title).x * f.size / ImGui::GetFontSize();
+    dl->AddText(font, f.size * 0.9f, ImVec2(f.x0 + pad + titleW + 8 * scale, y + 1 * scale), withAlpha(row.colour, 150), "click to draw");
+    handles.list.push_back({node.id, "@draw", 0, ImVec2(f.x0 + pad + titleW / 2, y + f.size / 2), 0, 0, 1, 1});   // opens the drawings window
     std::snprintf(text, sizeof text, "%d ms", static_cast<int>(std::lround(row.ms)));
     dl->AddText(font, f.size, ImVec2(f.x0 + f.w - pad - ImGui::CalcTextSize(text).x * f.size / ImGui::GetFontSize(), y), textAlpha(150), text);
     const float top = y + 14 * scale, h = rowH - 20 * scale;
@@ -849,9 +852,9 @@ float drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const
   else if (node.type == "rotary") drawRotary(dl, font, node, type, frameFor(dl, font, node.id + " cabinet", 300, 190, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "kaleidoscope") drawKaleidoscope(dl, font, node, type, frameFor(dl, font, node.id + " band", 460, 270, tileMin, tileMax, areaMin, areaMax, scale), scale, handles, timing);
   else if (node.type == "drumsynth") drawDrum(dl, font, node, type, frameFor(dl, font, node.id + " hit", 360, 372, tileMin, tileMax, areaMin, areaMax, scale), scale);
-  else if (node.type == "drumsynth2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", 360, 22 + 3 * 56 + 84, tileMin, tileMax, areaMin, areaMax, scale), scale);
+  else if (node.type == "drumsynth2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", 360, 22 + 3 * 56 + 84, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "pulsar" || node.type == "pulsetrain") drawPulsarTrain(dl, font, node, type, frameFor(dl, font, node.id + " pulse train", 360, 130, tileMin, tileMax, areaMin, areaMax, scale), scale);
-  else if (node.type == "hat2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", 360, 22 + 2 * 56 + 2 * 80 + 6, tileMin, tileMax, areaMin, areaMax, scale), scale);
+  else if (node.type == "hat2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", 360, 22 + 2 * 56 + 2 * 80 + 6, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   return gBelow;
 }
 
