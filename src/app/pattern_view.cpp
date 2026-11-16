@@ -51,7 +51,11 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
   // The gap between two columns is one character: half of it as padding on each side.
   const float charWidth = ImGui::CalcTextSize("0").x;
   ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(charWidth / 2, ImGui::GetStyle().CellPadding.y));
-  const bool began = ImGui::BeginTable("pattern", columns + 1, tableFlags, ImVec2(0, std::max(60.0f, ImGui::GetContentRegionAvail().y - infoHeight)));
+  // One table per set of lanes: ImGui keeps a column's width by its index, so one table id for every layout (a lane on its own in solo-edit,
+  // then all lanes again) would hand the old widths to the wrong columns.
+  std::string tableId = "pattern";
+  for (const PatternLane& lane : lanes) tableId += "/" + lane.id;
+  const bool began = ImGui::BeginTable(tableId.c_str(), columns + 1, tableFlags, ImVec2(0, std::max(60.0f, ImGui::GetContentRegionAvail().y - infoHeight)));
   ImGui::PopStyleVar();
   if (!began) return result;
   // no highlight under the mouse: the cursor cell is the only marked cell, the pointer needs no shadow
