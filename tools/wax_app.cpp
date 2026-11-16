@@ -1187,7 +1187,9 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     app::drawGraphView(session->graphView, doc, laneInstrument, session->panel.node, 0);
     const ImVec2 graphMin = ImGui::GetWindowPos(), graphMax(graphMin.x + ImGui::GetWindowWidth(), graphMin.y + ImGui::GetWindowHeight());
     ImGui::EndChild();
-    if (app::drawParamPanel(session->panel, doc, player.engine(), laneInstrument, graphMin, graphMax)) {   // the parameters float over the graph
+    const bool panelChanged = app::drawParamPanel(session->panel, doc, player.engine(), laneInstrument, graphMin, graphMax);   // the parameters float over the graph
+    const bool dockChanged = app::drawExposedDock(session->panel, doc, player.engine(), laneInstrument, graphMin, graphMax);   // the exposed ones at its left
+    if (panelChanged || dockChanged) {
       syncParams(doc, player.engine());
       const std::vector<std::string> graphProblems = syncGraphs(doc, player.engine()), laneProblems = syncLanes(doc, player.engine());
       session->editStatus = !graphProblems.empty() ? graphProblems.front() : !laneProblems.empty() ? laneProblems.front() : std::string();

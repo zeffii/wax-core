@@ -192,3 +192,5 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 - Build note: always check the build's exit status; an earlier run grepped the log for the wrong pattern and tests ran on a stale binary. Fixed: document.cpp helper order, graph_view.cpp include, the node_help.cpp target.
 
 - Pattern editor column widths are fixed from every row (heading or widest cell), so they no longer change while scrolling. A song without a master machine gets BPM/Swg/TPB/Vol columns only; the limiter's and carve stage's columns appear when exposed from the parameter panel (saved masters keep what they saved).
+
+- Exposed-parameter dock (`drawExposedDock`, param_panel.cpp): a window at the graph's left with a row per exposed column of the machine (named by its label, same bars/menus as the parameter panel via the shared `drawRow`); shown only when something is exposed. Still to do: keys into the docks, pin/float copies for other machines.

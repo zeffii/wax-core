@@ -58,69 +58,21 @@ std::string cellHex(const ParamSpec& spec, bool log, double value, int digits) {
   return text;
 }
 
-bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine, const std::string& instrumentId, ImVec2 areaMin, ImVec2 areaMax) {
+// One row of a panel at the cursor: the parameter's name (or `label`), then its bar. `wired`: a wire drives it. Returns true when the value changed.
+bool drawRow(ParamPanelState& state, Document& doc, const Engine& engine, const Instrument* instrument, const std::string& instrumentId,
+             const GraphNode* picked, const ParamSpec& spec, const std::string& label, bool dim, float total, float nameW) {
   const float scale = ImGui::GetStyle().FontScaleDpi;
-  const Instrument* instrument = findInstrument(doc.project(), instrumentId);
-  if (state.instrument != instrumentId) { state.instrument = instrumentId; state.node.clear(); state.dragging = false; }
-  const NodeRegistry& types = builtinNodes();
-  if (!state.open) return false;
-
-  const GraphNode* picked = nullptr;
-  const NodeType* type = nullptr;
-  if (instrument) {
-    for (const GraphNode& node : instrument->graph.nodes) {
-      const NodeType* t = types.find(node.type);
-      if (!t || t->params.empty()) continue;
-      if (!picked) { picked = &node; type = t; }
-      if (node.id == state.node) { picked = &node; type = t; }
-    }
-  }
-  if (picked) state.node = picked->id;
-
-  // the window: first at the top right of the graph, then wherever the user puts it
-  const float width = kNormalWidth * 1.25f * scale;
-  if (!state.placed) {
-    ImGui::SetNextWindowPos(ImVec2(std::max(areaMin.x, areaMax.x - width - 12 * scale), areaMin.y + 12 * scale), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(width, std::min(areaMax.y - areaMin.y - 24 * scale, 380 * scale)), ImGuiCond_Always);
-  }
-  const std::string title = picked ? picked->id + "  " + picked->type + "###params" : "no parameters###params";
-  ImGui::PushStyleColor(ImGuiCol_TitleBg, colour(kAccent));
-  ImGui::PushStyleColor(ImGuiCol_TitleBgActive, colour(kAccent));
-  ImGui::PushStyleColor(ImGuiCol_Text, colour(kHiFg));
-  const bool visible = ImGui::Begin(title.c_str(), &state.open, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings);
-  ImGui::PopStyleColor(3);
-  state.placed = true;
-  bool changed = false;
-  if (!visible || !picked || !instrument) {
-    if (visible && !picked) ImGui::TextColored(colour(kDimText), "no parameters");
-    ImGui::End();
-    return false;
-  }
-  ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 0.85f);   // a small face: more rows fit
-
-  if (!drawingsOf(picked->type).empty() && textButton("draw envelopes")) state.drawNode = picked->id;
-  if (picked->type == "dvii" && textButton("edit voice")) state.dxNode = picked->id;
-
-  std::set<std::string> wired;   // parameters a wire drives
-  for (const Connection& c : instrument->graph.connections) {
-    const std::string prefix = picked->id + ".@";
-    if (c.to.rfind(prefix, 0) == 0) wired.insert(c.to.substr(prefix.size()));
-  }
-
   const float rowH = ImGui::GetTextLineHeight() + 3 * scale;
-  const float total = ImGui::GetContentRegionAvail().x;
-  const float nameW = std::clamp(total * 0.36f, 52 * scale, 160 * scale);
   ImDrawList* dl = ImGui::GetWindowDrawList();
-  for (const ParamSpec& spec : type->params) {
-    if (spec.name == "bypass") continue;
+  bool changed = false;
+  {
     const std::string address = instrumentId + "." + picked->id + "." + spec.name;
     const double value = engine.registry().slotOf(address) >= 0 ? engine.registry().get(address) : picked->param(spec.name, spec.def);
-    const bool dim = wired.count(spec.name) > 0;
     const ImVec2 p = ImGui::GetCursorScreenPos();
     const ImVec2 barMin(p.x + nameW, p.y + 1), barMax(p.x + total, p.y + rowH - 1);
 
     // the name, as many characters as fit
-    std::string name = spec.name;
+    std::string name = label;
     while (name.size() > 1 && ImGui::CalcTextSize(name.c_str()).x > nameW - 6 * scale) name.pop_back();
     const Exposed* shownAs = nullptr;   // the pattern column this parameter is, if any
     for (const Exposed& e : instrument->exposed) if (e.node == picked->id && e.param == spec.name) shownAs = &e;
@@ -140,6 +92,7 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
       ImGui::PopTextWrapPos();
       ImGui::EndTooltip();
     }
+    ImGui::PushID(picked->id.c_str());
     ImGui::PushID(spec.name.c_str());
     ImGui::SetCursorScreenPos(barMin);
     ImGui::InvisibleButton("bar", ImVec2(barMax.x - barMin.x, barMax.y - barMin.y));
@@ -207,10 +160,116 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
       ImGui::EndPopup();
     }
     ImGui::PopID();
+    ImGui::PopID();
     ImGui::SetCursorScreenPos(ImVec2(p.x, p.y + rowH));
     ImGui::Dummy(ImVec2(1, 0));
   }
+  return changed;
+}
+
+bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine, const std::string& instrumentId, ImVec2 areaMin, ImVec2 areaMax) {
+  const float scale = ImGui::GetStyle().FontScaleDpi;
+  const Instrument* instrument = findInstrument(doc.project(), instrumentId);
+  if (state.instrument != instrumentId) { state.instrument = instrumentId; state.node.clear(); state.dragging = false; }
+  const NodeRegistry& types = builtinNodes();
+  if (!state.open) return false;
+
+  const GraphNode* picked = nullptr;
+  const NodeType* type = nullptr;
+  if (instrument) {
+    for (const GraphNode& node : instrument->graph.nodes) {
+      const NodeType* t = types.find(node.type);
+      if (!t || t->params.empty()) continue;
+      if (!picked) { picked = &node; type = t; }
+      if (node.id == state.node) { picked = &node; type = t; }
+    }
+  }
+  if (picked) state.node = picked->id;
+
+  // the window: first at the top right of the graph, then wherever the user puts it
+  const float width = kNormalWidth * 1.25f * scale;
+  if (!state.placed) {
+    ImGui::SetNextWindowPos(ImVec2(std::max(areaMin.x, areaMax.x - width - 12 * scale), areaMin.y + 12 * scale), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(width, std::min(areaMax.y - areaMin.y - 24 * scale, 380 * scale)), ImGuiCond_Always);
+  }
+  const std::string title = picked ? picked->id + "  " + picked->type + "###params" : "no parameters###params";
+  ImGui::PushStyleColor(ImGuiCol_TitleBg, colour(kAccent));
+  ImGui::PushStyleColor(ImGuiCol_TitleBgActive, colour(kAccent));
+  ImGui::PushStyleColor(ImGuiCol_Text, colour(kHiFg));
+  const bool visible = ImGui::Begin(title.c_str(), &state.open, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings);
+  ImGui::PopStyleColor(3);
+  state.placed = true;
+  bool changed = false;
+  if (!visible || !picked || !instrument) {
+    if (visible && !picked) ImGui::TextColored(colour(kDimText), "no parameters");
+    ImGui::End();
+    return false;
+  }
+  ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 0.85f);   // a small face: more rows fit
+
+  if (!drawingsOf(picked->type).empty() && textButton("draw envelopes")) state.drawNode = picked->id;
+  if (picked->type == "dvii" && textButton("edit voice")) state.dxNode = picked->id;
+
+  std::set<std::string> wired;   // parameters a wire drives
+  for (const Connection& c : instrument->graph.connections) {
+    const std::string prefix = picked->id + ".@";
+    if (c.to.rfind(prefix, 0) == 0) wired.insert(c.to.substr(prefix.size()));
+  }
+
+  const float rowH = ImGui::GetTextLineHeight() + 3 * scale;
+  const float total = ImGui::GetContentRegionAvail().x;
+  const float nameW = std::clamp(total * 0.36f, 52 * scale, 160 * scale);
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  for (const ParamSpec& spec : type->params) {
+    if (spec.name == "bypass") continue;
+    if (drawRow(state, doc, engine, instrument, instrumentId, picked, spec, spec.name, wired.count(spec.name) > 0, total, nameW)) changed = true;
+  }
   ImGui::PopFont();
+  ImGui::End();
+  return changed;
+}
+
+}  // namespace wax::app
+
+namespace wax::app {
+
+bool drawExposedDock(ParamPanelState& state, Document& doc, const Engine& engine, const std::string& instrumentId, ImVec2 areaMin, ImVec2 areaMax) {
+  const float scale = ImGui::GetStyle().FontScaleDpi;
+  const Instrument* instrument = findInstrument(doc.project(), instrumentId);
+  if (!instrument || instrument->exposed.empty()) return false;
+  const NodeRegistry& types = builtinNodes();
+
+  const float width = kNormalWidth * 1.1f * scale;
+  if (!state.exposedPlaced) {
+    ImGui::SetNextWindowPos(ImVec2(areaMin.x + 12 * scale, areaMin.y + 12 * scale), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(width, std::min(areaMax.y - areaMin.y - 24 * scale, 300 * scale)), ImGuiCond_Always);
+  }
+  ImGui::PushStyleColor(ImGuiCol_TitleBg, colour(kAccent));
+  ImGui::PushStyleColor(ImGuiCol_TitleBgActive, colour(kAccent));
+  ImGui::PushStyleColor(ImGuiCol_Text, colour(kHiFg));
+  const bool visible = ImGui::Begin("exposed###exposed", nullptr, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings);
+  ImGui::PopStyleColor(3);
+  state.exposedPlaced = true;
+  bool changed = false;
+  if (visible) {
+    ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 0.85f);
+    const float total = ImGui::GetContentRegionAvail().x;
+    const float nameW = std::clamp(total * 0.36f, 52 * scale, 160 * scale);
+    for (const Exposed& e : instrument->exposed) {   // a row for each column the machine's patterns have
+      const GraphNode* node = nullptr;
+      for (const GraphNode& n : instrument->graph.nodes) if (n.id == e.node) node = &n;
+      const NodeType* type = node ? types.find(node->type) : nullptr;
+      if (!type) continue;
+      for (const ParamSpec& spec : type->params) {
+        if (spec.name != e.param) continue;
+        const std::string wiredTo = node->id + ".@" + spec.name;
+        bool wired = false;
+        for (const Connection& c : instrument->graph.connections) if (c.to == wiredTo) wired = true;
+        if (drawRow(state, doc, engine, instrument, instrumentId, node, spec, e.label.empty() ? spec.name : e.label, wired, total, nameW)) changed = true;
+      }
+    }
+    ImGui::PopFont();
+  }
   ImGui::End();
   return changed;
 }

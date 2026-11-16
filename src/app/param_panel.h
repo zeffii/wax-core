@@ -19,6 +19,7 @@ struct ParamPanelState {
   std::string dxNode;       // set when the user asked for the DX loader of this node
   bool dragging = false;    // a drag is in progress: its steps are one undo
   bool placed = false;      // the window has been put at the graph's corner once; after that it stays where the user left it
+  bool exposedPlaced = false;   // the exposed dock has been put at the graph's left once
   bool open = true;         // the window is shown (the close button hides it; the Instrument screen's tab brings it back)
 };
 
@@ -26,5 +27,9 @@ struct ParamPanelState {
 // Changes go through `doc` as SetParam edits (and SetExposed, SetExposedBits, SetPort); the caller then runs syncParams, syncLanes and
 // syncGraphs. Returns true when a parameter changed.
 bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine, const std::string& instrument, ImVec2 areaMin, ImVec2 areaMax);
+
+// The exposed-parameter dock, at the left of the graph: a row for each column the machine's patterns have (named by the column's label), the
+// same bars as the parameter panel. Shown only when something is exposed. Returns true when a parameter changed.
+bool drawExposedDock(ParamPanelState& state, Document& doc, const Engine& engine, const std::string& instrument, ImVec2 areaMin, ImVec2 areaMax);
 
 }  // namespace wax::app
