@@ -120,12 +120,13 @@ bool drawRow(ParamPanelState& state, Document& doc, const Engine& engine, const 
 
     // the name, as many characters as fit
     std::string name = label;
-    while (name.size() > 1 && ImGui::CalcTextSize(name.c_str()).x > nameW - 6 * scale) name.pop_back();
+    const float gap = ImGui::CalcTextSize("M").x * 0.5f;   // the marker of the row the keys act on stands half a character clear of the name
+    while (name.size() > 1 && ImGui::CalcTextSize(name.c_str()).x > nameW - 6 * scale - gap) name.pop_back();
     const Exposed* shownAs = nullptr;   // the pattern column this parameter is, if any
     for (const Exposed& e : instrument->exposed) if (e.node == picked->id && e.param == spec.name) shownAs = &e;
     const bool hasPort = std::find(picked->ports.begin(), picked->ports.end(), spec.name) != picked->ports.end();
-    dl->AddText(ImVec2(p.x + 2 * scale + (hasPort ? 7 * scale : 0), p.y + 1.5f * scale), kDimText, name.c_str());
-    if (hasPort) dl->AddCircleFilled(ImVec2(p.x + 4 * scale, p.y + rowH * 0.5f), 2.5f * scale, kAccent);   // a dot: it has a port
+    dl->AddText(ImVec2(p.x + 2 * scale + gap + (hasPort ? 7 * scale : 0), p.y + 1.5f * scale), kDimText, name.c_str());
+    if (hasPort) dl->AddCircleFilled(ImVec2(p.x + 4 * scale + gap, p.y + rowH * 0.5f), 2.5f * scale, kAccent);   // a dot: it has a port
 
     if (ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(p, ImVec2(p.x + nameW, p.y + rowH)) && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {   // the web's "?" hint: on the name
       const std::string hint = paramHint(picked->type, spec.name);
@@ -179,12 +180,6 @@ bool drawRow(ParamPanelState& state, Document& doc, const Engine& engine, const 
     dl->AddRectFilled(barMin, ImVec2(x, barMax.y), accentAlpha(dim ? 20 : 48));
     dl->AddRectFilled(ImVec2(std::min(x, barMax.x - 2 * scale), barMin.y), ImVec2(std::min(x, barMax.x - 2 * scale) + 2 * scale, barMax.y), dim ? kDimText : kAccent);
     dl->AddText(ImVec2(barMin.x + 4 * scale, p.y + 1.5f * scale), dim ? kDimText : kText, displayValue(picked->type, spec, shown).c_str());
-    if (shownAs) {   // the pattern column: its label and the hex its cell holds for this value, at the right of the bar
-      const int digits = shownAs->bits == 16 ? 4 : shownAs->bits == 4 ? 1 : 2;
-      const std::string tag = shownAs->label + " " + cellHex(spec, shownAs->log, shown, digits);
-      dl->AddText(ImVec2(barMax.x - ImGui::CalcTextSize(tag.c_str()).x - 4 * scale, p.y + 1.5f * scale), kAccent, tag.c_str());
-    }
-
     if (keys && keys->menu) ImGui::OpenPopup("rowmenu");   // Enter on the chosen row
     if (marked) dl->AddRectFilled(ImVec2(p.x, p.y + 1), ImVec2(p.x + 2 * scale, p.y + rowH - 1), kAccent);   // the row the keys act on
     if (ImGui::BeginPopupContextItem("rowmenu")) {

@@ -117,9 +117,14 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
 
   ImGui::BeginChild("graph", ImVec2(0, height), false, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoNav);
   ImDrawList* dl = ImGui::GetWindowDrawList();
-  const ImVec2 origin = ImGui::GetCursorScreenPos();
   const ImGuiIO& io = ImGui::GetIO();
   const bool windowHovered = ImGui::IsWindowHovered();
+  if (windowHovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 0)) {   // the middle button pans the whole graph, as in the web app (the view moves, not the tiles)
+    state.pan.x += io.MouseDelta.x;
+    state.pan.y += io.MouseDelta.y;
+    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+  }
+  const ImVec2 origin(ImGui::GetCursorScreenPos().x + state.pan.x, ImGui::GetCursorScreenPos().y + state.pan.y);
   ImFont* font = ImGui::GetFont();
   const float nameSize = 11 * scale, labelSize = 10 * scale;
   auto textWidth = [&](float size, const char* s) { return font->CalcTextSizeA(size, FLT_MAX, 0, s).x; };
@@ -619,11 +624,6 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     }
   }
 
-  if (windowHovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 0)) {   // the middle button pans the whole graph, as in the web app
-    ImGui::SetScrollX(ImGui::GetScrollX() - io.MouseDelta.x);
-    ImGui::SetScrollY(ImGui::GetScrollY() - io.MouseDelta.y);
-    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
-  }
   // dragging the held tile; it lands on the grid unless Ctrl is held
   if (!state.held.empty()) {
     if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { state.dragFree = true; state.message = "Moving " + state.held + " only: its wires stay as they are"; }

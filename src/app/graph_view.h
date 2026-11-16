@@ -15,6 +15,7 @@
 namespace wax::app {
 
 struct GraphViewState {
+  ImVec2 pan = ImVec2(0, 0);   // how far the middle button has moved the view
   std::string held;          // the tile being dragged
   float grabX = 0, grabY = 0;   // where on the tile it was taken
   std::string wiring;        // "node.port": a new wire is being pulled from this output

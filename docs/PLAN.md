@@ -246,3 +246,4 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 - Alt+S solo / Alt+M silence the cursor lane (Song and Pattern screens), S button beside M in the mixer; solo is transient (Lane::solo/soloMuted, Document::toggleSolo, mask value 3).
 - Song screen blocks: Ctrl+C/X/V/D (capture/placeClip in sequence_ops: same lane = same pattern, other lane with equal columns = copy; duplicate copies below and moves the selection). Fixed MSVC C4996 (u8path).
 - Tidy: the Song screen keyboard moved out of tools/wax_app.cpp into src/app/song_keys.{h,cpp} (SongEdit state, songCursorKeys, songBlockKeys, laneSoloKeys, glueBlock); wax_app.cpp is down by ~270 lines. New keyboard features go there.
+- Graph view: middle-button drag pans the view (GraphViewState::pan; the tiles stay put). Parameter panel: the active-row marker stands half a character clear of the name, and the pattern-column tag (short name + hex) is no longer drawn, as in the web app.
