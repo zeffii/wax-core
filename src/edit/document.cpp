@@ -1044,6 +1044,22 @@ void SetBank::apply(Project& project) {
   node.data["bank"] = bytes_;
 }
 
+void SetNodeData::apply(Project& project) {
+  GraphNode& node = findGraphNode(project, instrument_, node_);
+  if (!captured_) { beforeData_ = node.data; captured_ = true; }
+  if (!node.data.is_object()) node.data = Json::object();
+  node.data[key_] = value_;
+}
+
+void SetNodeData::revert(Project& project) { findGraphNode(project, instrument_, node_).data = beforeData_; }
+
+bool SetNodeData::absorb(const Edit& next) {
+  const auto* other = dynamic_cast<const SetNodeData*>(&next);
+  if (!other || other->dataNode() != dataNode() || other->key_ != key_) return false;
+  value_ = other->value_;
+  return true;
+}
+
 void SetBank::revert(Project& project) { findGraphNode(project, instrument_, node_).data = beforeData_; }
 
 bool SetBank::absorb(const Edit& next) {

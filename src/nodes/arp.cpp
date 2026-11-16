@@ -121,9 +121,9 @@ class Arp final : public Node {
 public:
   explicit Arp(const NodeContext& context) : sampleRate_(context.sampleRate), clock_(context.clock), send_(context.deliver) {
     for (double& m : mask_) m = 1;
-    if (context.data && context.data->contains("gate") && (*context.data)["gate"].is_array() && (*context.data)["gate"].size() == 16) {
+    if (context.data && context.data->contains("gate") && (*context.data)["gate"].is_array() && (*context.data)["gate"].size() >= 16) {
       int i = 0;
-      for (const auto& v : (*context.data)["gate"]) mask_[i++] = v.is_number() ? v.get<double>() : 1;
+      for (const auto& v : (*context.data)["gate"]) { if (i >= 16) break; mask_[i++] = v.is_number() ? v.get<double>() : 1; }
     }
   }
 

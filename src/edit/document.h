@@ -543,6 +543,26 @@ private:
   Json beforeData_;
 };
 
+// One entry of a node's data (`data[key]`, such as a gate's step levels), replaced as a whole. While it is dragged each step folds into the one
+// before, so a drag is a single undo.
+class SetNodeData final : public Edit {
+public:
+  SetNodeData(std::string instrument, std::string node, std::string key, Json value, std::string what = "")
+      : instrument_(std::move(instrument)), node_(std::move(node)), key_(std::move(key)), value_(std::move(value)), what_(what.empty() ? key_ : std::move(what)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Edit " + what_; }
+  std::string dataNode() const override { return instrument_ + "\x1f" + node_; }
+  bool absorb(const Edit& next) override;
+
+private:
+  std::string instrument_, node_, key_;
+  Json value_;
+  std::string what_;
+  bool captured_ = false;
+  Json beforeData_;
+};
+
 // Silences a lane as a whole (the M button of the mixer), or lets it play again.
 class SetSilenced final : public Edit {
 public:

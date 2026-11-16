@@ -8,6 +8,7 @@
 #include <set>
 #include <vector>
 
+#include "app/gate_window.h"
 #include "app/node_help.h"
 #include "app/theme.h"
 #include "app/units.h"
@@ -290,6 +291,7 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
 
   if (!drawingsOf(picked->type).empty() && textButton("draw envelopes")) state.drawNode = picked->id;
   if (picked->type == "dvii" && textButton("edit voice")) state.dxNode = picked->id;
+  if (hasGate(picked->type) && textButton("edit steps")) state.gateNode = picked->id;
 
   std::set<std::string> wired;   // parameters a wire drives
   for (const Connection& c : instrument->graph.connections) {
