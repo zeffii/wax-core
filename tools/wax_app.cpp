@@ -661,8 +661,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     }
     const bool typing = session->edit && !ctrl && !io.KeyAlt && !session->envelopes.wantsKeys() && session->screen != Screen::Song;   // (the sequence has its own keys, above)
     if (!typing && session->screen == Screen::Pattern && !ctrl && ImGui::IsKeyPressed(ImGuiKey_Escape, false) && !editor.selection().active) {   // Esc with editing off: back to the sequence as well
-      if (session->solo.on) { session->solo = {}; editor.clearSolo(); }
-      session->screen = Screen::Song; session->scrollToCursor = true;
+      if (session->solo.on) { session->solo = {}; editor.clearSolo(); session->editStatus = "Solo-edit ended."; }
+      else { session->screen = Screen::Song; session->scrollToCursor = true; }
     }
     if (typing) {
       const int before = editor.tick() * 4096 + editor.cell();
@@ -696,12 +696,10 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) step(1, 0);
       if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) step(0, -1);
       if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) step(0, 1);
-      if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {   // Esc: drops a selection first; with none, leaves solo-edit and goes back to the sequence
+      if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {   // Esc: drops a selection first; then leaves solo-edit; then goes back to the sequence, as in the web
         if (editor.selection().active) editor.clearSelection();
-        else {
-          if (session->solo.on) { session->solo = {}; editor.clearSolo(); session->editStatus = "Solo-edit ended."; }
-          if (session->screen == Screen::Pattern) { session->screen = Screen::Song; session->scrollToCursor = true; }
-        }
+        else if (session->solo.on) { session->solo = {}; editor.clearSolo(); session->editStatus = "Solo-edit ended."; }   // (the web: solo first, then back)
+        else if (session->screen == Screen::Pattern) { session->screen = Screen::Song; session->scrollToCursor = true; }
       }
       if (session->solo.on && ImGui::IsKeyPressed(ImGuiKey_Tab, false)) {   // Tab: the pattern on its own, or the whole song with the rest locked
         app::settings().soloHatch = !app::settings().soloHatch;
