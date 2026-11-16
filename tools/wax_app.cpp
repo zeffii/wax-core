@@ -1609,6 +1609,7 @@ void feedKeys(const std::string& script, int frame) {
   io.AddKeyEvent(ImGuiMod_Shift, shift && down);
   io.AddKeyEvent(ImGuiMod_Alt, alt && down);
   io.AddKeyEvent(keyNamed(name), down);
+  if (down && name.size() == 1 && !ctrl && !alt) io.AddInputCharacter(static_cast<unsigned>(name[0]));   // (a text box that has the keyboard takes it as typing)
 }
 
 bool parse(int argc, char** argv, Options& o) {

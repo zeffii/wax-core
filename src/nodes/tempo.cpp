@@ -13,7 +13,7 @@ public:
 
 }  // namespace
 
-// (also registers nsgroups, the other machine that only holds values for the sequencer to read)
+// (also registers nsgroups, the other machine that only holds values for the sequencer to read, and note, which holds nothing)
 void registerTempo(NodeRegistry& registry) {
   NodeType type;
   type.type = "tempo";
@@ -42,6 +42,12 @@ void registerTempo(NodeRegistry& registry) {
   for (int i = 1; i <= 8; i++) groups.params.push_back({"g" + std::to_string(i), 0, 1, 1, true});
   groups.create = [](const NodeContext&) { return std::make_unique<Tempo>(); };
   registry.add(std::move(groups));
+
+  // A note left on the graph for whoever opens the instrument next: text only (its data is { text, open }), no ports, no sound.
+  NodeType note;
+  note.type = "note";
+  note.create = [](const NodeContext&) { return std::make_unique<Tempo>(); };
+  registry.add(std::move(note));
 }
 
 }  // namespace wax

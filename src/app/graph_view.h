@@ -5,6 +5,7 @@
 
 #include <set>
 #include <string>
+#include <vector>
 
 #include "imgui.h"
 
@@ -15,6 +16,9 @@
 namespace wax::app {
 
 struct GraphViewState {
+  std::string noteEditing;               // the note whose text is being typed
+  std::vector<char> noteBuffer = std::vector<char>(8192, 0);   // ...and the text so far
+  std::string focusNote;                 // a note just made: it takes the keyboard
   ImVec2 pan = ImVec2(0, 0);   // how far the middle button has moved the view
   std::string held;          // the tile being dragged
   float grabX = 0, grabY = 0;   // where on the tile it was taken

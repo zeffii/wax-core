@@ -57,6 +57,7 @@ struct Tile {
   std::vector<std::string> inputs;   // every input port: the type's, then one per '@' parameter
   float faceInputs = 0;       // how many of them sit on the tile's edge (the others hang in the strip)
   std::string glyph;
+  bool note = false;          // an annotation: text on the canvas, no ports
 };
 
 ImVec2 centreOf(const Tile& t) { return ImVec2((t.min.x + t.max.x) / 2, (t.min.y + t.max.y) / 2); }
@@ -102,6 +103,90 @@ void drawWire(ImDrawList* dl, ImVec2 a, ImVec2 b, ImU32 colour, float width, boo
     walked += std::hypot(q.x - prev.x, q.y - prev.y);
     prev = q;
   }
+}
+
+// ---- Notes: a message left on the graph ----
+
+constexpr float kNoteWidth = 220;   // an open note is this wide (web pixels); a folded one is as wide as its first line
+constexpr float kNoteIndent = 14;   // the fold marker's column
+
+std::string noteTextOf(const GraphNode& n) { return n.data.is_object() ? n.data.value("text", std::string()) : std::string(); }
+bool noteOpenOf(const GraphNode& n) { return !n.data.is_object() || n.data.value("open", true); }
+
+// The size a note takes in screen pixels: folded, its first line; open, its text wrapped to the note's width (the text being typed if it is).
+ImVec2 noteSize(const GraphViewState& state, const GraphNode& n, ImFont* font, float size, float scale) {
+  const std::string text = state.noteEditing == n.id ? std::string(state.noteBuffer.data()) : noteTextOf(n);
+  const float indent = kNoteIndent * scale, line = size + 4 * scale;
+  if (!noteOpenOf(n)) {
+    const std::string first = text.substr(0, text.find('\n'));
+    const float w = font->CalcTextSizeA(size, FLT_MAX, 0, first.empty() ? "note" : first.c_str()).x;
+    return ImVec2(std::min(kNoteWidth * scale, indent + w + 6 * scale), line);
+  }
+  const std::string measured = text + " ";
+  const float h = font->CalcTextSizeA(size, FLT_MAX, (kNoteWidth * scale - indent - 4 * scale), measured.c_str()).y;
+  return ImVec2(kNoteWidth * scale, std::max(line, h + 4 * scale));
+}
+
+// One note: a thin line down its left (the handle to drag it by), the fold marker, and its text. Pressing the text types into it; the edit is
+// one undo step, made when the box is left (Esc, a click elsewhere). Returns true when the graph changed.
+bool drawNote(GraphViewState& state, Document& doc, const std::string& instrumentId, const GraphNode& n, const Tile& t, bool chosen, ImDrawList* dl, ImFont* font, float size, float scale) {
+  bool changed = false;
+  const bool open = noteOpenOf(n);
+  const float indent = kNoteIndent * scale, line = size + 4 * scale;
+  const std::string stored = noteTextOf(n);
+  const auto commit = [&]() {   // the typed text becomes the note's
+    const std::string typed = state.noteBuffer.data();
+    state.noteEditing.clear();
+    if (typed != stored) { doc.apply(std::make_unique<SetNodeData>(instrumentId, n.id, "text", Json(typed), "note")); changed = true; }
+  };
+  if (state.noteEditing == n.id && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) commit();
+
+  dl->AddLine(ImVec2(t.min.x + scale, t.min.y), ImVec2(t.min.x + scale, t.max.y), chosen ? kAccent : dimAlpha(170), 1.5f * scale);
+  // the fold marker
+  const ImVec2 m(t.min.x + 7 * scale, t.min.y + line / 2);
+  const float r = 3 * scale;
+  if (open) dl->AddTriangleFilled(ImVec2(m.x - r, m.y - r * 0.6f), ImVec2(m.x + r, m.y - r * 0.6f), ImVec2(m.x, m.y + r * 0.8f), kDimText);
+  else dl->AddTriangleFilled(ImVec2(m.x - r * 0.6f, m.y - r), ImVec2(m.x - r * 0.6f, m.y + r), ImVec2(m.x + r * 0.8f, m.y), kDimText);
+  ImGui::SetCursorScreenPos(ImVec2(t.min.x + 3 * scale, t.min.y));
+  ImGui::PushID(n.id.c_str());
+  ImGui::InvisibleButton("fold", ImVec2(indent - 3 * scale, line));
+  if (ImGui::IsItemClicked()) {
+    if (state.noteEditing == n.id) commit();
+    doc.apply(std::make_unique<SetNodeData>(instrumentId, n.id, "open", Json(!open), open ? "fold note" : "unfold note"));
+    changed = true;
+  }
+  const ImVec2 body(t.min.x + indent, t.min.y);
+  if (state.noteEditing == n.id && open) {   // typing: a frameless text box in the small face, as tall as its text
+    ImGui::SetCursorScreenPos(ImVec2(body.x, body.y + 2 * scale));
+    ImGui::PushFont(nullptr, size);
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(kText));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0);
+    if (state.focusNote == n.id) { ImGui::SetKeyboardFocusHere(); state.focusNote.clear(); }
+    ImGui::InputTextMultiline("##text", state.noteBuffer.data(), state.noteBuffer.size(), ImVec2(t.max.x - body.x - 4 * scale, t.max.y - t.min.y - 2 * scale),
+                              ImGuiInputTextFlags_WordWrap | ImGuiInputTextFlags_NoHorizontalScroll);
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
+    ImGui::PopFont();
+    if (ImGui::IsItemDeactivated()) commit();
+  } else {   // reading: the text in the small face; a press on it starts typing
+    const std::string shown = open ? stored : stored.substr(0, stored.find('\n'));
+    const bool empty = stored.empty();
+    const ImU32 colour = empty ? textAlpha(110) : kText;
+    if (open) dl->AddText(font, size, ImVec2(body.x, body.y + 2 * scale), colour, empty ? "(a note: click to type)" : shown.c_str(), nullptr, t.max.x - body.x - 4 * scale);
+    else dl->AddText(font, size, ImVec2(body.x, body.y + 2 * scale), colour, empty ? "note" : shown.c_str());
+    ImGui::SetCursorScreenPos(body);
+    ImGui::InvisibleButton("body", ImVec2(std::max(1.0f, t.max.x - body.x), std::max(1.0f, t.max.y - t.min.y)));
+    if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_TextInput);
+    if (ImGui::IsItemClicked()) {
+      if (!open) { doc.apply(std::make_unique<SetNodeData>(instrumentId, n.id, "open", Json(true), "unfold note")); changed = true; }
+      std::snprintf(state.noteBuffer.data(), state.noteBuffer.size(), "%s", stored.c_str());
+      state.noteEditing = n.id; state.focusNote = n.id;
+    }
+  }
+  ImGui::PopID();
+  return changed;
 }
 
 }  // namespace
@@ -153,6 +238,18 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     if (!type || n.type == "tempo") continue;   // (the master's tempo node is not shown)
     Tile t;
     t.node = &n; t.type = type;
+    if (n.type == "note") {   // an annotation, not a machine: its size comes from its text
+      const ImVec2 size = noteSize(state, n, font, nameSize, scale);
+      const double nx = n.placed ? n.x : 24 + 130.0 * unplaced, ny = n.placed ? n.y : 40;
+      if (!n.placed) unplaced++;
+      t.note = true;
+      t.min = ImVec2(origin.x + static_cast<float>(nx) * scale, origin.y + static_cast<float>(ny) * scale);
+      t.max = ImVec2(t.min.x + size.x, t.min.y + size.y);
+      right = std::max(right, t.max.x - origin.x);
+      bottom = std::max(bottom, t.max.y - origin.y);
+      tiles[n.id] = t;
+      continue;
+    }
     const NodeLookInfo look = lookOf(n.type);
     t.shape = look.shape; t.glyph = look.glyph;
     t.compact = look.sizeW <= 0 && look.shape != TileShape::Dot;
@@ -344,6 +441,12 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     }
   }
 
+  // the tile (or a note's edge) was pressed: it is picked and held, ready to be dragged
+  const auto pressTile = [&](const GraphNode& n, const Tile& t) {
+    if (!(ImGui::IsItemClicked() && hover.node.empty())) return;
+    if (!io.KeyShift && !state.group.count(n.id)) state.group.clear(); state.lassoing = false; state.lastPicked = picked; picked = n.id; state.held = n.id; state.dragFree = false; state.dragMoved = false; state.dragForce = io.KeyShift; state.grabX = io.MousePos.x - t.min.x; state.grabY = io.MousePos.y - t.min.y;
+  };
+
   // the tiles themselves
   const ImU32 ink = kText;
   const ImU32 flat = IM_COL32(128, 128, 128, 51);   // the compact look: a flat grey fill, an outline only when chosen
@@ -355,6 +458,16 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     const float w = t.max.x - t.min.x, h = t.max.y - t.min.y;
     const ImVec2 mid = centreOf(t);
     const float lineWidth = (chosen ? 2.0f : 1.0f) * std::max(1.0f, scale);
+    if (t.note) {   // its own drawing; the line down its left edge is what drags it
+      if (drawNote(state, doc, instrumentId, n, t, chosen, dl, font, nameSize, scale)) moved = true;
+      ImGui::SetCursorScreenPos(t.min);
+      ImGui::PushID(n.id.c_str());
+      ImGui::InvisibleButton("edge", ImVec2(4 * scale, std::max(1.0f, h)));
+      ImGui::PopID();
+      pressTile(n, t);
+      if (ImGui::IsItemHovered() && hover.node.empty()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+      continue;
+    }
     if (t.shape == TileShape::Circle || t.shape == TileShape::Dot) {
       if (t.shape == TileShape::Dot) {
         dl->AddCircleFilled(mid, w / 2, kindColour(kindOf(t, t.type->outputs.empty() ? "" : t.type->outputs.front())), 20);
@@ -412,7 +525,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     ImGui::PushID(n.id.c_str());
     ImGui::InvisibleButton("tile", ImVec2(std::max(1.0f, w), std::max(1.0f, h)));
     ImGui::PopID();
-    if (ImGui::IsItemClicked() && hover.node.empty()) { if (!io.KeyShift && !state.group.count(n.id)) state.group.clear(); state.lassoing = false; state.lastPicked = picked; picked = n.id; state.held = n.id; state.dragFree = false; state.dragMoved = false; state.dragForce = io.KeyShift; state.grabX = io.MousePos.x - t.min.x; state.grabY = io.MousePos.y - t.min.y; }
+    pressTile(n, t);
     if (ImGui::IsItemHovered() && hover.node.empty()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     if (n.type != "out" && ImGui::BeginPopupContextItem("tilemenu")) {
       if (textButton("replace...")) { state.replacing = n.id; openInsertMenu(state.replaceMenu, "replacenode"); ImGui::CloseCurrentPopup(); }
@@ -684,6 +797,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       }
       float x = std::round(state.addAt.x / kGrid) * kGrid, y = std::round(state.addAt.y / kGrid) * kGrid;
       doc.apply(std::make_unique<AddNode>(instrumentId, name, id, std::max(0.0f, x), std::max(0.0f, y)));
+      if (name == "note") { state.noteEditing = id; state.noteBuffer[0] = 0; state.focusNote = id; }   // a new note: type at once
       picked = id;
       moved = true;
     }

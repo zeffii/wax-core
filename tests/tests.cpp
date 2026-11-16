@@ -1572,6 +1572,20 @@ void testSequenceOps() {
   const PlaceResult back = placeClip(pair, sigs, clip, 0, 100, context);
   check(back.placed == 2 && pair[0].patterns.size() == 1, "block: pasted into its own lane it is the same pattern");
   check(placeClip(pair, {"x", "other"}, clip, 1, 0, context).skipped == 2, "block: a lane with other columns takes nothing");
+  {   // a note left on a graph survives saving and loading, text and fold state
+    Document noted(loadProject(std::string(WAX_TEST_SONGS) + "/cloves.wax"));
+    const std::string instrument = noted.project().instruments.front().id;
+    noted.apply(std::make_unique<AddNode>(instrument, "note", "note", 40, 40));
+    noted.apply(std::make_unique<SetNodeData>(instrument, "note", "text", Json("keep the gain low"), "note"));
+    noted.apply(std::make_unique<SetNodeData>(instrument, "note", "open", Json(false), "fold note"));
+    const std::string file = (std::filesystem::temp_directory_path() / "wax-note-test.wax").string();
+    saveProject(noted.project(), file);
+    const Project again = loadProject(file);
+    bool kept = false;
+    for (const GraphNode& n : again.instruments.front().graph.nodes) if (n.type == "note") kept = n.data.value("text", std::string()) == "keep the gain low" && !n.data.value("open", true);
+    check(kept, "note: saved and loaded again with its text and fold state");
+    std::filesystem::remove(file);
+  }
   Project soloing;
   Lane lead, bass, master;
   lead.id = "lead"; lead.instrument = "a"; bass.id = "bass"; bass.instrument = "b"; master.id = "master"; master.instrument = "master";
