@@ -666,7 +666,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     state.addAt = ImVec2(((rightWire->p0.x + rightWire->p1.x) / 2 - origin.x) / scale - 30, ((rightWire->p0.y + rightWire->p1.y) / 2 - origin.y) / scale - 12);
     openInsertMenu(state.wireMenu, "wireinsert");
   }
-  if (ImGui::IsWindowHovered(ImGuiHoveredFlags_None) && !ImGui::IsAnyItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right) && hover.node.empty() && !hoverWire) {
+  if (ImGui::IsWindowHovered(ImGuiHoveredFlags_None) && !ImGui::IsAnyItemHovered() && (ImGui::IsMouseClicked(ImGuiMouseButton_Right) || ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) && hover.node.empty() && !hoverWire) {   // (a double-click on empty space too, as the web)
     state.addAt = ImVec2((io.MousePos.x - origin.x) / scale, (io.MousePos.y - origin.y) / scale);
     openInsertMenu(state.menu, "addnode");
   }
