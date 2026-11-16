@@ -536,7 +536,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       dl->AddRectFilled(lo, hi, accentAlpha(25));
     } else {
       if (hi.x - lo.x >= 4 * scale || hi.y - lo.y >= 4 * scale)
-        for (const auto& [id, t] : tiles) if (t.min.x < hi.x && t.max.x > lo.x && t.min.y < hi.y && t.max.y > lo.y && t.node->type != "out") state.group.insert(id);
+        for (const auto& [id, t] : tiles) if (t.min.x < hi.x && t.max.x > lo.x && t.min.y < hi.y && t.max.y > lo.y) state.group.insert(id);
       state.lassoing = false;
     }
   }
