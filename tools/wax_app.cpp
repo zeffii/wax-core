@@ -196,7 +196,7 @@ struct Session {
   char presetName[48] = {};
   char machineName[64] = {};              // the Instrument screen's rename box
   bool renamingMachine = false;
-  bool showMixer = true;                 // the mixer under the Song and Pattern screens (the status bar's toggle)
+  bool showMixer = true;                 // the mixer under the Song, Pattern and Instrument screens (the status bar's toggle)
   Screen screen = Screen::Pattern;       // the screen shown (the rail at the left)
   std::string instrument;                // the instrument shown on the Instrument screen
   std::string wantLane;                  // a lane the arrangement asked for; its tab opens next frame
@@ -776,7 +776,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (ImGui::IsKeyPressed(ImGuiKey_F10, false)) session->screen = Screen::Info;
     if (ImGui::IsKeyPressed(ImGuiKey_F11, false)) session->screen = Screen::Config;
   }
-  const bool mixerShown = session->showMixer && (session->screen == Screen::Song || session->screen == Screen::Pattern);
+  const bool mixerShown = session->showMixer && (session->screen == Screen::Song || session->screen == Screen::Pattern || session->screen == Screen::Instrument);
   const float statusH = ImGui::GetTextLineHeightWithSpacing() + 6 * scale;
   const float below = -(statusH + (mixerShown ? app::mixerHeight() + 10 : 0.0f));
   ImGui::BeginChild("rail", ImVec2(40 * scale, below), false);
@@ -1616,7 +1616,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     }
     if (app::iconButton("browser-toggle", "Browser: the patterns and machines, down the left of every screen (Alt+B)", session->showBrowser, 16)) session->showBrowser = !session->showBrowser;
     ImGui::SameLine(0, 10 * scale);
-    if (app::iconButton("mixer-toggle", "Mixer: a fader for each lane, along the bottom of the Song and Pattern screens", session->showMixer, 16)) session->showMixer = !session->showMixer;
+    if (app::iconButton("mixer-toggle", "Mixer: a fader for each lane, along the bottom of the Song, Pattern and Instrument screens", session->showMixer, 16)) session->showMixer = !session->showMixer;
     ImGui::SameLine(0, 10 * scale);
     if (app::textButton("params", session->panel.followOpen)) session->panel.followOpen = !session->panel.followOpen;   // the floating parameter window of the cursor lane's machine (Song and Pattern screens)
     ImGui::SameLine(0, 10 * scale);
