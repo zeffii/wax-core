@@ -732,14 +732,15 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
   }
   // the pictures beside a node (its envelopes): for the picked node, and for every node told to keep them
   state.response.list.clear();
-  const PictureTiming timing{60000.0 / (std::max(1.0, doc.project().song.bpm) * std::max(1, doc.project().song.ticksPerBeat)), std::max(1, doc.project().song.ticksPerBeat)};
+  const PictureTiming timing{60000.0 / (std::max(1.0, doc.project().song.bpm) * std::max(1, doc.project().song.ticksPerBeat)), std::max(1, doc.project().song.ticksPerBeat), &doc.project(), instrumentId, doc.revision()};
   for (const GraphNode& n : graph.nodes) {
     const auto found = tiles.find(n.id);
     if (found == tiles.end() || !(n.keepView || n.id == picked)) continue;
     if (hasResponse(n.type)) drawNodeResponse(dl, font, n, *found->second.type, found->second.min, found->second.max, dl->GetClipRectMin(), dl->GetClipRectMax(), scale, state.response);
-    if (hasPicture(n.type)) drawNodePicture(dl, font, n, *found->second.type, found->second.min, found->second.max, dl->GetClipRectMin(), dl->GetClipRectMax(), scale, timing, state.response);
+    float below = 0;   // a node with a picture and envelopes: the envelopes go under the picture
+    if (hasPicture(n.type)) below = drawNodePicture(dl, font, n, *found->second.type, found->second.min, found->second.max, dl->GetClipRectMin(), dl->GetClipRectMax(), scale, timing, state.response);
     if (!hasEnvelopes(n.type)) continue;
-    drawNodeEnvelopes(dl, font, n, *found->second.type, found->second.min, found->second.max, dl->GetClipRectMin(), dl->GetClipRectMax(), scale);
+    drawNodeEnvelopes(dl, font, n, *found->second.type, ImVec2(found->second.min.x, found->second.min.y + below), ImVec2(found->second.max.x, found->second.max.y + below), dl->GetClipRectMin(), dl->GetClipRectMax(), scale);
   }
   {   // the line under the graph: a refused wire, else what the mouse is over
     const std::string& text = !state.message.empty() ? state.message : hoverText;

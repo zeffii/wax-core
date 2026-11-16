@@ -10,6 +10,7 @@
 
 #include "app/theme.h"
 #include "nodes/membrane_view.h"
+#include "project/sample_edit.h"
 #include "nodes/spacecore.h"
 
 namespace wax::app {
@@ -32,12 +33,14 @@ ImU32 hsl(float h, float s, float l, int alpha = 255) {
 
 // The frame every picture sits in: under the tile (above it when the tile is low), with its title.
 struct Frame { float x0, y0, w, h; float size; };
+float gBelow = 0;   // how far under the tile the picture drawn last reaches (0 when it went above), for what is drawn after it
 
 Frame frameFor(ImDrawList* dl, ImFont* font, const std::string& title, float w, float h, ImVec2 tileMin, ImVec2 tileMax, ImVec2 areaMin, ImVec2 areaMax, float scale) {
   w *= scale; h *= scale;
   const float x0 = std::min(std::max(areaMin.x + 4 * scale, (tileMin.x + tileMax.x) / 2 - w / 2), std::max(areaMin.x + 4 * scale, areaMax.x - w - 4 * scale));
   const float below = tileMax.y + 16 * scale;
   const float y0 = below + h <= areaMax.y - 4 * scale ? below : std::max(areaMin.y + 4 * scale, tileMin.y - h - 22 * scale);
+  gBelow = below + h <= areaMax.y - 4 * scale ? h + 6 * scale : 0;
   dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x0 + w, y0 + h), kBg);
   dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x0 + w, y0 + h), IM_COL32(128, 128, 128, 41));
   dl->AddRect(ImVec2(x0 + 0.5f, y0 + 0.5f), ImVec2(x0 + w - 0.5f, y0 + h - 0.5f), IM_COL32(128, 128, 128, 178));
@@ -397,18 +400,127 @@ void drawMembrane(ImDrawList* dl, ImFont* font, const GraphNode& node, const Nod
   dl->AddText(font, f.size, ImVec2(f.x0 + 6 * scale, f.y0 + f.h - 14 * scale), textAlpha(190), text);
 }
 
+// ---- granular: the sample with the position, spray and scan; the grains; the cloud ----
+
+// The sample a granular node plays (its `sample` parameter picks from the node's list), as one min/max pair for each of `width` columns.
+const std::vector<std::pair<float, float>>& samplePeaks(const GraphNode& node, double slot, const PictureTiming& timing, int width) {
+  static std::vector<std::pair<float, float>> peaks;
+  static std::string key;
+  static std::vector<std::pair<float, float>> none;
+  if (!timing.project) return none;
+  const Instrument* instrument = nullptr;
+  for (const Instrument& i : timing.project->instruments) if (i.id == timing.instrument) instrument = &i;
+  if (!instrument || !instrument->raw.is_object() || !instrument->raw.contains("samples") || !instrument->raw["samples"].is_object() || !instrument->raw["samples"].contains(node.id)) return none;
+  const Json& mapped = instrument->raw["samples"][node.id];
+  std::string id;
+  if (mapped.is_string()) id = mapped.get<std::string>();
+  else if (mapped.is_array() && !mapped.empty()) { const Json& pick = mapped[std::min<std::size_t>(mapped.size() - 1, static_cast<std::size_t>(std::max(0.0, slot)))]; if (pick.is_string()) id = pick.get<std::string>(); }
+  if (id.empty() || !timing.project->samples.is_object() || !timing.project->samples.contains(id)) return none;
+  const std::string now = id + "#" + std::to_string(timing.revision) + "#" + std::to_string(width);
+  if (now != key) {
+    const EditableSample sample = readSample(timing.project->samples[id]);
+    peaks.assign(static_cast<std::size_t>(width), {0.0f, 0.0f});
+    const std::size_t len = sample.left.size();
+    for (int px = 0; px < width && len; px++) {
+      const std::size_t a = len * static_cast<std::size_t>(px) / static_cast<std::size_t>(width), b = std::max(a + 1, len * static_cast<std::size_t>(px + 1) / static_cast<std::size_t>(width));
+      float lo = 0, hi = 0;
+      for (std::size_t i = a; i < b && i < len; i += std::max<std::size_t>(1, (b - a) / 24)) { lo = std::min(lo, sample.left[i]); hi = std::max(hi, sample.left[i]); }
+      peaks[static_cast<std::size_t>(px)] = {lo, hi};
+    }
+    key = now;
+  }
+  return peaks;
+}
+
+double grainWindow(double p, double shape) {
+  const double edge = std::min(p, 1 - p) * 2 / std::max(0.02, shape);
+  return 0.5 - 0.5 * std::cos(kPi * std::min(1.0, std::max(0.0, edge)));
+}
+
+void drawGranular(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale, const PictureTiming& timing) {
+  const float PL = 8 * scale, PR = 8 * scale, pw = f.w - PL - PR;
+  const auto v = [&](const char* name) { return valueOf(node, type, name); };
+  char text[96];
+  const auto right = [&](const char* t, float y) { dl->AddText(font, f.size, ImVec2(f.x0 + f.w - PR - ImGui::CalcTextSize(t).x * f.size / ImGui::GetFontSize(), y), textAlpha(190), t); };
+  // the sample, with `position` marked, the band `spray` scatters the grains over, and an arrow for where `scan` takes the position in a second
+  const float sy = f.y0 + 34 * scale, sh = 64 * scale, mid = sy + sh / 2;
+  const double pos = v("position"), spray = v("spray"), scan = v("scan");
+  dl->AddText(font, f.size, ImVec2(f.x0 + 90 * scale, f.y0 + 4 * scale), textAlpha(190), "sample");
+  std::snprintf(text, sizeof text, "position %d%% ± %d%%%s", static_cast<int>(std::lround(pos * 100)), static_cast<int>(std::lround(spray * 100)), std::fabs(scan) > 0.0005 ? (std::string(" · scan ") + (scan > 0 ? "+" : "") + std::to_string(scan).substr(0, 5) + "/s").c_str() : "");
+  right(text, f.y0 + 18 * scale);
+  const auto band = [&](double a, double b) { dl->AddRectFilled(ImVec2(f.x0 + PL + static_cast<float>(std::max(0.0, a)) * pw, sy), ImVec2(f.x0 + PL + static_cast<float>(std::min(1.0, b)) * pw + 1, sy + sh), withAlpha(kBlue, 40)); };
+  const double lo = pos - spray, hi = pos + spray;
+  band(lo, hi);
+  if (lo < 0) band(1 + lo, 1);
+  if (hi > 1) band(0, hi - 1);
+  dl->AddLine(ImVec2(f.x0 + PL, std::round(mid)), ImVec2(f.x0 + PL + pw, std::round(mid)), textAlpha(64));
+  const auto& peaks = samplePeaks(node, v("sample"), timing, static_cast<int>(pw));
+  if (peaks.empty()) dl->AddText(font, f.size, ImVec2(f.x0 + f.w / 2 - 80 * scale, mid - 5 * scale), textAlpha(190), "no sample: add one to the node");
+  for (std::size_t px = 0; px < peaks.size(); px++) {
+    const float amp = sh / 2 - 2 * scale, top = mid - std::min(1.0f, peaks[px].second) * amp, bottom = mid - std::max(-1.0f, peaks[px].first) * amp;
+    dl->AddRectFilled(ImVec2(f.x0 + PL + static_cast<float>(px), top), ImVec2(f.x0 + PL + static_cast<float>(px) + 1, std::max(top + 1, bottom)), textAlpha(200));
+  }
+  const float px = f.x0 + PL + static_cast<float>(pos) * pw;
+  dl->AddLine(ImVec2(px + 0.5f, sy), ImVec2(px + 0.5f, sy + sh), kBlue, 1.5f);
+  if (std::fabs(scan) > 0.005) {
+    const float to = f.x0 + PL + static_cast<float>(std::clamp(pos + scan, 0.0, 1.0)) * pw, dir = to >= px ? 1.0f : -1.0f, ay = sy + sh + 7 * scale;
+    dl->AddLine(ImVec2(px, ay), ImVec2(to, ay), kOrange, 1.2f);
+    dl->AddLine(ImVec2(to - dir * 4 * scale, ay - 3 * scale), ImVec2(to, ay), kOrange, 1.2f);
+    dl->AddLine(ImVec2(to - dir * 4 * scale, ay + 3 * scale), ImVec2(to, ay), kOrange, 1.2f);
+  }
+  // the grains: a stretch of time with the grains that start in it, their shape and how many sound at once
+  const double size = v("size"), density = std::max(0.1, v("density")), shape = v("shape");
+  const float gy = f.y0 + 134 * scale, gh = 62 * scale, base = gy + gh;
+  dl->AddText(font, f.size, ImVec2(f.x0 + PL, gy - 14 * scale), textAlpha(190), "grains");
+  const double overlap = density * size / 1000;
+  std::snprintf(text, sizeof text, "%d ms · %d/s · about %s at once", static_cast<int>(std::lround(size)), static_cast<int>(std::lround(density)), (overlap < 10 ? std::to_string(overlap).substr(0, 3) : std::to_string(static_cast<int>(std::lround(overlap)))).c_str());
+  right(text, gy - 14 * scale);
+  const double span = std::max(std::min(1000.0, size * 3), 200.0), msPx = pw / span, every = 1000 / density;
+  dl->AddLine(ImVec2(f.x0 + PL, base), ImVec2(f.x0 + PL + pw, base), textAlpha(50));
+  unsigned seed = 7;
+  const auto jitter = [&]() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280.0 - 0.5; };
+  int index = 0;
+  for (double t = 0; t < span && index < 400; t += every, index++) {
+    const double t0 = t + jitter() * every * 0.6, rowH = (gh - 6 * scale) * (0.55 + 0.45 * std::fmod(index * 0.618, 1.0));
+    const float x0 = f.x0 + PL + static_cast<float>(t0 * msPx), w = static_cast<float>(size * msPx);
+    if (x0 + w < f.x0 + PL || x0 > f.x0 + PL + pw) continue;
+    std::vector<ImVec2> pts;
+    for (int k = 0; k <= 32; k++) pts.push_back(ImVec2(std::clamp(x0 + k / 32.0f * w, f.x0 + PL, f.x0 + PL + pw), base - static_cast<float>(grainWindow(k / 32.0, shape) * rowH)));
+    dl->AddPolyline(pts.data(), static_cast<int>(pts.size()), withAlpha(index % 2 ? kBlue : kOrange, 160), 0, 1.0f);
+  }
+  // the cloud: pitch (tune and the random cents), the chance of playing backwards, how wide the grains are spread
+  const double tune = v("tune"), rand = v("pitchRand") / 100, rev = v("reverse"), spread = v("spread");
+  const auto track = [&](const char* name, float y, const std::string& label, double from, double to) {
+    dl->AddText(font, f.size, ImVec2(f.x0 + PL, y), textAlpha(190), name);
+    const float x0 = f.x0 + PL + 54 * scale, w = 150 * scale;
+    dl->AddLine(ImVec2(x0, y + 6 * scale), ImVec2(x0 + w, y + 6 * scale), textAlpha(64));
+    if (to - from > 0.01) dl->AddLine(ImVec2(x0 + static_cast<float>(from) * w, y + 6 * scale), ImVec2(x0 + static_cast<float>(to) * w, y + 6 * scale), kBlue, 2.0f);
+    dl->AddCircleFilled(ImVec2(x0 + static_cast<float>((from + to) / 2) * w, y + 6 * scale), 3 * scale, kBlue);
+    dl->AddText(font, f.size, ImVec2(x0 + w + 10 * scale, y), textAlpha(190), label.c_str());
+  };
+  const auto semi = [](double s) { return (std::clamp(s, -24.0, 24.0) + 24) / 48; };
+  const float cy = f.y0 + 214 * scale;
+  std::snprintf(text, sizeof text, "%s%.1f st%s", tune > 0 ? "+" : "", tune, rand ? (" ± " + std::to_string(static_cast<int>(std::lround(v("pitchRand")))) + " ct").c_str() : "");
+  track("pitch", cy, text, semi(tune - rand), semi(tune + rand));
+  track("reverse", cy + 14 * scale, std::to_string(static_cast<int>(std::lround(rev * 100))) + "% backwards", 0, rev);
+  track("spread", cy + 28 * scale, spread < 0.01 ? "centre" : std::to_string(static_cast<int>(std::lround(spread * 100))) + "% of the width", 0.5 - spread / 2, 0.5 + spread / 2);
+}
+
 }  // namespace
 
-bool hasPicture(const std::string& nodeType) { return nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu" || nodeType == "membrane"; }
+bool hasPicture(const std::string& nodeType) { return nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu" || nodeType == "membrane" || nodeType == "granular"; }
 
-void drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, ImVec2 tileMin, ImVec2 tileMax, ImVec2 areaMin, ImVec2 areaMax, float scale, const PictureTiming& timing, ResponseHandles& handles) {
+float drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, ImVec2 tileMin, ImVec2 tileMax, ImVec2 areaMin, ImVec2 areaMax, float scale, const PictureTiming& timing, ResponseHandles& handles) {
+  gBelow = 0;
   if (node.type == "prismacanyon") drawCanyon(dl, font, node, type, frameFor(dl, font, node.id + " echoes", 360, 20 + 30 * kCanyonLines + 24, tileMin, tileMax, areaMin, areaMax, scale), scale, timing);
   else if (node.type == "ensemble") drawEnsemble(dl, font, node, type, frameFor(dl, font, node.id + " delays", 320, 150, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "haas") drawHaas(dl, font, node, type, frameFor(dl, font, node.id + " sides", 400, 280, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "reflect") drawReflect(dl, font, node, type, frameFor(dl, font, node.id + " room", 560, 384, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
+  else if (node.type == "granular") drawGranular(dl, font, node, type, frameFor(dl, font, node.id + " grains", 360, 262, tileMin, tileMax, areaMin, areaMax, scale), scale, timing);
   else if (node.type == "membrane") drawMembrane(dl, font, node, type, frameFor(dl, font, node.id + " membrane", 360, 196, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "khufu") drawKhufu(dl, font, node, type, frameFor(dl, font, node.id + " registers", 310, 150, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "rotary") drawRotary(dl, font, node, type, frameFor(dl, font, node.id + " cabinet", 300, 190, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
+  return gBelow;
 }
 
 std::vector<std::pair<std::string, double>> dragPictureHandle(const ResponseHandles::Handle& handle, const GraphNode& node, const NodeType& type, ImVec2 at) {
