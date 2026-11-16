@@ -1048,15 +1048,19 @@ void SetNodeData::apply(Project& project) {
   GraphNode& node = findGraphNode(project, instrument_, node_);
   if (!captured_) { beforeData_ = node.data; captured_ = true; }
   if (!node.data.is_object()) node.data = Json::object();
-  node.data[key_] = value_;
+  const auto put = [&](const std::string& key, const Json& value) { if (value.is_null()) node.data.erase(key); else node.data[key] = value; };
+  put(key_, value_);
+  for (const auto& [key, value] : also_) put(key, value);
 }
 
 void SetNodeData::revert(Project& project) { findGraphNode(project, instrument_, node_).data = beforeData_; }
 
 bool SetNodeData::absorb(const Edit& next) {
   const auto* other = dynamic_cast<const SetNodeData*>(&next);
-  if (!other || other->dataNode() != dataNode() || other->key_ != key_) return false;
+  if (!other || other->dataNode() != dataNode() || other->key_ != key_ || other->also_.size() != also_.size()) return false;
+  for (std::size_t i = 0; i < also_.size(); i++) if (other->also_[i].first != also_[i].first) return false;
   value_ = other->value_;
+  also_ = other->also_;
   return true;
 }
 

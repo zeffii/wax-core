@@ -218,3 +218,5 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 - Chord node: "edit chords" opens the 256-slot window (pages 0x-Fx, a box per slot with the notes it makes, unreadable names marked); data.chords, one undo step per slot.
 
 - Westcoast: "draw wave" shares the oscillator's wave window (data.wave).
+
+- Wavetable: "edit table" opens a window with the table stack (bundled set or cut from a sample, per-frame size), waves A and B cut from any sample (frame box, ±16, snap, click the strip) and the blend at the current mix; data.table/pair as base64, data.meta remembers sources, one undo step each. `SetNodeData::also` sets a second key in the same step; a null value erases a key.

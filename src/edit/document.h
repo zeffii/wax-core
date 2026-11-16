@@ -554,10 +554,13 @@ public:
   std::string label() const override { return "Edit " + what_; }
   std::string dataNode() const override { return instrument_ + "\x1f" + node_; }
   bool absorb(const Edit& next) override;
+  // A second key set in the same step (a table and the note of where it came from). A null value takes the key away.
+  SetNodeData& also(std::string key, Json value) { also_.emplace_back(std::move(key), std::move(value)); return *this; }
 
 private:
   std::string instrument_, node_, key_;
   Json value_;
+  std::vector<std::pair<std::string, Json>> also_;
   std::string what_;
   bool captured_ = false;
   Json beforeData_;

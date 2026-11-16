@@ -34,6 +34,7 @@
 #include "app/curve_view.h"
 #include "app/dx_window.h"
 #include "app/chord_window.h"
+#include "app/wavetable_window.h"
 #include "app/gate_window.h"
 #include "app/shape_window.h"
 #include "app/graph_view.h"
@@ -133,6 +134,7 @@ struct Session {
   app::GraphViewState graphView;
   app::GateWindow gate;
   app::ChordWindow chords;
+  app::WavetableWindow table;
   app::ShapeWindow shape;
   app::PatternListState patternList;     // the Song screen's pattern list
   char laneName[40] = {0};               // the rename box on the Song screen
@@ -1355,6 +1357,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   app::drawNodeHelp(session->nodeHelp);
   if (!session->panel.shapeNode.empty()) { app::showShape(session->shape, laneInstrument, session->panel.shapeNode); session->panel.shapeNode.clear(); }
   if (app::drawShapeWindow(session->shape, doc)) syncData(doc, player.engine());
+  if (!session->panel.tableNode.empty()) { app::showWavetable(session->table, laneInstrument, session->panel.tableNode); session->panel.tableNode.clear(); }
+  if (app::drawWavetableWindow(session->table, doc, player.engine())) syncData(doc, player.engine());
   if (!session->panel.chordNode.empty()) { app::showChords(session->chords, laneInstrument, session->panel.chordNode); session->panel.chordNode.clear(); }
   if (app::drawChordWindow(session->chords, doc, player.engine())) syncData(doc, player.engine());
   if (!session->panel.gateNode.empty()) { app::showGate(session->gate, laneInstrument, session->panel.gateNode); session->panel.gateNode.clear(); }
