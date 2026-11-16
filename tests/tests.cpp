@@ -28,6 +28,7 @@
 #include "io/wav.h"
 #include "project/project.h"
 #include "project/sample_edit.h"
+#include "project/backups.h"
 #include "project/onsets.h"
 #include "project/spectrogram.h"
 #include "project/save.h"
@@ -1305,6 +1306,23 @@ void testOnsets() {   // the frames come from the web app's detectOnsets on the 
   check(wax::detectOnsets(std::vector<float>(d.begin(), d.begin() + 500), {}, rate).empty(), "onsets: too short to look at");
 }
 
+void testBackups() {
+  namespace fs = std::filesystem;
+  const fs::path folder = fs::temp_directory_path() / "wax-backup-test";
+  fs::remove_all(folder);
+  const std::time_t base = 1700000000;
+  for (int i = 0; i < 5; i++) wax::writeBackup(folder, "My Song!", "{\"n\":" + std::to_string(i) + "}", 3, base + i * 200);
+  wax::writeBackup(folder, "", "{}", 3, base + 5 * 200);
+  std::vector<wax::BackupInfo> list = wax::listBackups(folder);
+  check(list.size() == 3, "only the newest snapshots are kept");
+  check(list[0].name == "song" && list[1].name == "My_Song_" && list[0].time == base + 1000 && list[1].time == base + 800, "newest first, names made safe, times read back");
+  std::ifstream in(list[1].file);
+  std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  check(text == "{\"n\":4}", "a snapshot holds the song as it was written");
+  check(wax::listBackups(folder / "nothing").empty(), "no folder, no snapshots");
+  fs::remove_all(folder);
+}
+
 void testSampleLoading() {
   check(wax::sampleIdFromName("My Kick (01).wav") == "My_Kick_01_" && wax::sampleIdFromName("808.wav") == "_808" && wax::sampleIdFromName("...") == "_" && wax::sampleIdFromName(".wav") == "sample" && wax::sampleIdFromName("") == "sample", "a file name becomes an id");
   check(wax::sampleIdFromName("a_very_long_sample_name_that_goes_on_and_on.wav").size() == 24, "an id is at most 24 characters");
@@ -1476,6 +1494,7 @@ void testSetParam() {
 
 int main(int argc, char** argv) {
   if (argc > 1 && std::string(argv[1]) == "--samples") {   // just the sample tests (the whole run takes a long while)
+    testBackups();
     testSampleLoading();
     testSpectrogram();
     testOnsets();
@@ -1502,6 +1521,7 @@ int main(int argc, char** argv) {
   testInstrumentManage();
   testCurveEdit();
   testCurveDocument();
+  testBackups();
   testSampleLoading();
   testSpectrogram();
   testOnsets();

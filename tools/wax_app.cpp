@@ -28,6 +28,7 @@
 #include "app/config.h"
 #include "app/sample_browser.h"
 #include "app/sample_view.h"
+#include "project/backups.h"
 #include "app/curve_view.h"
 #include "app/dx_window.h"
 #include "app/graph_view.h"
@@ -73,6 +74,7 @@ struct DialogAnswer {
 };
 DialogAnswer gAnswer;
 enum class DialogRequest { None, Open, SaveAs, Export, New };
+std::string gOpenBackup;   // a snapshot the File menu asked to open (the main loop does it: it replaces the session)
 DialogRequest gRequest = DialogRequest::None;   // set by the keys, carried out by the main loop (it has the window)
 
 void SDLCALL dialogDone(void* userdata, const char* const* files, int) {
@@ -112,6 +114,9 @@ struct Session {
   std::unique_ptr<Document> doc;         // the song as edited: every change goes through it, so it can be undone
   std::unique_ptr<CellEditor> editor;
   bool edit = false;                     // Enter: the keyboard types into cells
+  bool backupsOpen = false;              // the Backups list is showing
+  int backupRevision = 0;                // the revision of `doc` the last snapshot (or the opening) holds
+  std::time_t backupAt = 0;              // when the last snapshot was made (or the song opened)
   int rowsRevision = -1;                 // the revision of `doc` that `rows` shows
   bool scrollToCursor = false;
   std::string editStatus;
@@ -204,6 +209,14 @@ void drawMeter(const char* id, float level, ImVec2 size) {
   const float fill = std::clamp((db + 60.0f) / 60.0f, 0.0f, 1.0f);
   draw->AddRectFilled(origin, ImVec2(origin.x + size.x * fill, origin.y + size.y),
                       db > -0.5f ? IM_COL32(220, 90, 70, 255) : app::kAccent, 2);
+}
+
+// Where the automatic backups go: a folder of the user's preferences.
+std::filesystem::path backupFolder() {
+  char* dir = SDL_GetPrefPath("wax", "wax-app");
+  const std::filesystem::path path = dir ? std::filesystem::path(dir) / "backups" : std::filesystem::path();
+  if (dir) SDL_free(dir);
+  return path;
 }
 
 // The chosen theme is kept between runs in the user's preferences folder.
@@ -327,9 +340,46 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       if (app::textButton("Save  Ctrl+S")) { requestSave = true; ImGui::CloseCurrentPopup(); }
       if (app::textButton("Save as...  Ctrl+Shift+S")) { gRequest = DialogRequest::SaveAs; ImGui::CloseCurrentPopup(); }
       if (app::textButton("Export WAV...")) { gRequest = DialogRequest::Export; ImGui::CloseCurrentPopup(); }
+      if (app::textButton("Backups...")) { ImGui::CloseCurrentPopup(); session->backupsOpen = true; }
       ImGui::EndPopup();
     }
     ImGui::SameLine(0, 18 * hs);
+  }
+  {   // automatic backups: a snapshot every few minutes while the song has changes
+    const std::time_t now = std::time(nullptr);
+    const app::Settings& cfg = app::settings();
+    if (session->backupAt == 0) { session->backupAt = now; session->backupRevision = doc.revision(); }
+    if (cfg.backupOn && doc.revision() != session->backupRevision && now - session->backupAt >= cfg.backupMinutes * 60 && !backupFolder().empty()) {
+      try {
+        writeBackup(backupFolder(), doc.project().song.name, serializeProject(doc.project()), cfg.backupKeep, now);
+        session->backupRevision = doc.revision();
+      } catch (const std::exception& e) {
+        session->editStatus = std::string("backup failed: ") + e.what();
+      }
+      session->backupAt = now;
+    }
+  }
+  if (session->backupsOpen) { ImGui::OpenPopup("backups"); session->backupsOpen = false; }
+  if (ImGui::BeginPopup("backups")) {   // the snapshots, newest first; one opens as an untitled song (saving it asks for a file)
+    const std::vector<BackupInfo> list = listBackups(backupFolder());
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Automatic backups (every %d min while the song changes, %d kept)", app::settings().backupMinutes, app::settings().backupKeep);
+    if (list.empty()) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "none yet");
+    int shown = 0;
+    for (const BackupInfo& info : list) {
+      if (++shown > 20) break;
+      char when[32];
+      std::tm parts{};
+#ifdef _WIN32
+      localtime_s(&parts, &info.time);
+#else
+      localtime_r(&info.time, &parts);
+#endif
+      std::strftime(when, sizeof when, "%Y-%m-%d %H:%M:%S", &parts);
+      char label[160];
+      std::snprintf(label, sizeof label, "%s   %s   %.0f KB###%s", when, info.name.c_str(), info.size / 1024.0, info.file.string().c_str());
+      if (app::textButton(label)) { gOpenBackup = info.file.string(); ImGui::CloseCurrentPopup(); }
+    }
+    ImGui::EndPopup();
   }
   // The transport.
   const bool playing = player.playing();
@@ -1182,6 +1232,12 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     group("Editing", "How the cursor moves.");
     if (ImGui::Checkbox("Up and Down wrap round the first and last row", &cfg.rowWrap)) changed = true;
     if (ImGui::Checkbox("Left and Right wrap round the first and last lane (All lanes view)", &cfg.laneWrap)) changed = true;
+    group("Backup", "Snapshots of the song in the preferences folder; File > Backups opens one.");
+    if (ImGui::Checkbox("Automatic backups", &cfg.backupOn)) changed = true;
+    ImGui::SetNextItemWidth(220 * scale);
+    if (ImGui::SliderInt("Back up every (minutes)", &cfg.backupMinutes, 1, 60)) changed = true;
+    ImGui::SetNextItemWidth(220 * scale);
+    if (ImGui::SliderInt("Snapshots kept", &cfg.backupKeep, 5, 200)) changed = true;
     group("Sample", "The Sample screen.");
     ImGui::SetNextItemWidth(220 * scale);
     if (ImGui::SliderInt("Auto-slice: sensitivity (%)", &cfg.sliceSensitivity, 0, 100)) changed = true;
@@ -1478,6 +1534,12 @@ int main(int argc, char** argv) {
     ImGui::NewFrame();
     drawFrame(session.get(), options, status, meterL, meterR, held, octave, selectedLane, follow, playFromRequest);
     if (showSplash) showSplash = drawSplash(SDL_GetTicks() / 1000.0, "native");
+    if (!gOpenBackup.empty()) {   // a snapshot from the File menu: opened as an untitled song, so Save cannot overwrite the snapshot
+      const std::string file = gOpenBackup;
+      gOpenBackup.clear();
+      open(file);
+      if (session) { session->path.clear(); SDL_SetWindowTitle(window, ("Wax - " + session->project.song.name + " (backup)").c_str()); }
+    }
     if (gRequest == DialogRequest::New) {   // start over with an empty song (the old one is replaced: unsaved changes are lost)
       gRequest = DialogRequest::None;
       if (session) {

@@ -35,6 +35,9 @@ struct Settings {
   bool waveHideLoop = false, waveHideSel = false, waveHideSus = false;
   std::string hexMode = "both";   // what a slice marker shows: "relative" (0000..FFFF through the sample), "absolute" (its frame) or "both"
   int sampleAskMB = 10;           // the sample browser asks before reading files over this many megabytes
+  // automatic backups (the web's backupOn, backupMinutes, backupKeep)
+  bool backupOn = true;
+  int backupMinutes = 3, backupKeep = 30;
   int arrangementRow = 0;   // the Song screen's row size in ticks (Ctrl+wheel); 0: a bar
 };
 
