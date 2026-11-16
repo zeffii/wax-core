@@ -1147,24 +1147,35 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       ImGui::EndChild();
     }
     {   // the grip on the right edge: drag to change the width, all the way left closes it
+      // It is a window of its own, straddling the edge, so that it can be picked up from a few pixels either side (a button inside the panel
+      // would only reach the panel's own pixels, and the panels beside it would take the rest).
       const ImVec2 window = ImGui::GetWindowPos();
-      const float x = window.x + ImGui::GetWindowWidth() - 5 * scale;
-      ImGui::SetCursorScreenPos(ImVec2(x, window.y));
-      ImGui::InvisibleButton("##browsergrip", ImVec2(5 * scale, ImGui::GetWindowHeight()));
-      const bool hot = ImGui::IsItemHovered() || ImGui::IsItemActive();
-      if (hot) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-      if (ImGui::IsItemActive()) {
-        session->browserWidth += ImGui::GetIO().MouseDelta.x / scale;
-        if (session->browserWidth < 90) { session->browserWidth = 260; session->showBrowser = false; }
-        session->browserWidth = std::clamp(session->browserWidth, 160.0f, 600.0f);
-      }
-      if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) session->browserWidth = 260;
-      {   // always visible, like the mixer's: a thin accent line the height of the panel, with a short handle in the middle
-        const float lineX = std::floor(x + 2 * scale) + 0.5f, mid = window.y + ImGui::GetWindowHeight() * 0.5f, half = 18 * scale;
+      const float height = ImGui::GetWindowHeight(), edge = window.x + ImGui::GetWindowWidth(), reach = 7 * scale;
+      ImGui::SetNextWindowPos(ImVec2(edge - reach, window.y));
+      ImGui::SetNextWindowSize(ImVec2(reach * 2, height));
+      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+      ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+      const ImGuiWindowFlags gripFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoNav |
+                                         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoScrollWithMouse;
+      const bool gripOpen = ImGui::Begin("##browsergrip", nullptr, gripFlags);
+      ImGui::PopStyleVar(2);
+      if (gripOpen) {
+        ImGui::InvisibleButton("##grip", ImVec2(reach * 2, height));
+        const bool hot = ImGui::IsItemHovered() || ImGui::IsItemActive();
+        if (hot) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+        if (ImGui::IsItemActive()) {
+          session->browserWidth += ImGui::GetIO().MouseDelta.x / scale;
+          if (session->browserWidth < 90) { session->browserWidth = 260; session->showBrowser = false; }
+          session->browserWidth = std::clamp(session->browserWidth, 160.0f, 600.0f);
+        }
+        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) session->browserWidth = 260;
+        // always visible, like the mixer's: a thin accent line the height of the panel, with a longer handle in the middle that thickens when hot
+        const float lineX = std::floor(edge - 3 * scale) + 0.5f, mid = window.y + height * 0.5f, half = 28 * scale;
         ImDrawList* draw = ImGui::GetForegroundDrawList();
-        draw->AddLine(ImVec2(lineX, window.y), ImVec2(lineX, window.y + ImGui::GetWindowHeight()), app::kAccent, 1.0f);
-        draw->AddLine(ImVec2(lineX, mid - half), ImVec2(lineX, mid + half), app::kAccent, hot ? 4.0f : 3.0f);
+        draw->AddLine(ImVec2(lineX, window.y), ImVec2(lineX, window.y + height), app::kAccent, 1.0f);
+        draw->AddLine(ImVec2(lineX, mid - half), ImVec2(lineX, mid + half), app::kAccent, hot ? 6.0f : 4.0f);
       }
+      ImGui::End();
     }
     ImGui::EndChild();
     ImGui::SameLine(0, 0);
