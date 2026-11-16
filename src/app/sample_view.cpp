@@ -188,7 +188,36 @@ bool drawSampleScreen(SampleView& v, Document& document, Preview& preview, float
 
   // ---- the settings, side by side ----
   const bool stereo = s.stereo();
-  ImGui::TextColored(dim, "%s   %d frames   %.2f s   %s", v.selected.c_str(), frames, s.rate > 0 ? frames / s.rate : 0.0, stereo ? "stereo" : "mono");
+  {   // the name (Enter renames it; the instruments that play it follow), then what it is, and the remove button
+    char name[64];
+    std::snprintf(name, sizeof name, "%s", v.selected.c_str());
+    ImGui::SetNextItemWidth(150 * scale);
+    if (ImGui::InputText("##samplename", name, sizeof name, ImGuiInputTextFlags_EnterReturnsTrue) && name[0] && v.selected != name) {
+      const std::string wanted = sampleIdFromName(name);
+      const std::string next = document.project().samples.contains(wanted) && wanted != v.selected ? uniqueSampleId(document.project().samples, wanted) : wanted;
+      document.apply(std::make_unique<RenameSample>(v.selected, next));
+      v.selected = v.cacheId = next;
+      changed = true;
+    }
+    ImGui::SameLine();
+    ImGui::TextColored(dim, "%d frames   %.2f s   %s", frames, s.rate > 0 ? frames / s.rate : 0.0, stereo ? "stereo" : "mono");
+    ImGui::SameLine(0, 18 * scale);
+    if (textButton("Remove")) {
+      const std::vector<std::string> users = instrumentsPlaying(document.project(), v.selected);
+      if (!users.empty()) v.status = "\"" + v.selected + "\" is used by " + users.front() + (users.size() > 1 ? " and others." : ".");
+      else {
+        const std::string gone = v.selected;
+        const auto at = std::find(ids.begin(), ids.end(), gone) - ids.begin();
+        document.apply(std::make_unique<RemoveSample>(gone));
+        changed = true;
+        const std::vector<std::string> rest = sampleIds(document.project());
+        v.selected.clear();
+        if (!rest.empty()) select(v, rest[std::min<std::size_t>(static_cast<std::size_t>(at), rest.size() - 1)]);
+        ImGui::EndGroup();
+        return changed;   // the screen is drawn again next frame for the neighbour
+      }
+    }
+  }
   const auto loopColumn = [&](bool sustain, const char* title, ImU32 colour) {
     ImGui::BeginGroup();
     ImGui::PushStyleColor(ImGuiCol_Text, colour);
@@ -438,6 +467,16 @@ bool drawSampleScreen(SampleView& v, Document& document, Preview& preview, float
     if (!io.KeyCtrl && !io.KeyAlt && !io.KeyShift) {
       if (ImGui::IsKeyPressed(ImGuiKey_LeftBracket, false)) { v.octave = std::max(0, v.octave - 1); v.status = "Octave " + std::to_string(v.octave); }
       if (ImGui::IsKeyPressed(ImGuiKey_RightBracket, false)) { v.octave = std::min(9, v.octave + 1); v.status = "Octave " + std::to_string(v.octave); }
+      for (const int dir : {-1, 1}) {   // - and + move the current slice marker (Shift: 100 frames, Ctrl: 1000)
+        if (!ImGui::IsKeyPressed(dir < 0 ? ImGuiKey_Minus : ImGuiKey_Equal, true) || savedSlices.empty()) continue;
+        const std::size_t i = static_cast<std::size_t>(std::clamp(v.activeSlice, 0, static_cast<int>(savedSlices.size()) - 1));
+        const int to = std::clamp(savedSlices[i] + dir, 0, frames - 1);
+        if (to == savedSlices[i]) continue;
+        if (std::find(savedSlices.begin(), savedSlices.end(), to) != savedSlices.end()) { v.status = "Another marker is already there."; continue; }
+        std::vector<int> next = savedSlices;
+        next[i] = to;
+        changed |= commitSlices(next, to);
+      }
       if (ImGui::IsKeyPressed(ImGuiKey_Space, false)) { audition(v, preview, kRootNote, v.head); v.heldKey = ImGuiKey_Space; }   // plays at its root note, from the playhead
       for (int i = 0; i < static_cast<int>(sizeof kKeys / sizeof kKeys[0]); i++) {
         if (!ImGui::IsKeyPressed(kKeys[i], false)) continue;

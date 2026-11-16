@@ -847,6 +847,16 @@ void testLiveSampler() {
   engine.runtime().note("sampler", on);
   check(heard(60) > 1.0, "undo brings the sound back");
   check(wax::syncSamples(doc, engine).empty(), "nothing changed, nothing sent");
+  check(wax::instrumentsPlaying(doc.project(), "probe") == std::vector<std::string>({"sampler"}) && wax::instrumentsPlaying(doc.project(), "nothing").empty(), "who plays a sample");
+  doc.apply(std::make_unique<wax::RenameSample>("probe", "renamed"));
+  check(doc.project().samples.contains("renamed") && !doc.project().samples.contains("probe") && wax::instrumentsPlaying(doc.project(), "renamed").size() == 1, "renaming a sample moves the instruments that play it");
+  doc.undo();
+  check(doc.project().samples.contains("probe") && wax::instrumentsPlaying(doc.project(), "probe").size() == 1, "undo gives the old name back to both");
+  doc.apply(std::make_unique<wax::AddSample>("spare", wax::encodeSample(44100, tone, {})));
+  doc.apply(std::make_unique<wax::RemoveSample>("spare"));
+  check(!doc.project().samples.contains("spare"), "a sample can be removed");
+  doc.undo();
+  check(doc.project().samples.contains("spare"), "undo brings it back");
   std::printf("ok: live sampler\n");
 }
 

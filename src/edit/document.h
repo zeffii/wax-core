@@ -501,6 +501,37 @@ private:
   bool fold_;
 };
 
+// A sample taken out of the project. Refused (std::runtime_error from the constructor's check, see usersOfSample) while an instrument plays it.
+// Undo puts it back in its place.
+class RemoveSample final : public Edit {
+public:
+  explicit RemoveSample(std::string id) : id_(std::move(id)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Remove sample " + id_; }
+
+private:
+  std::string id_;
+  Json before_;
+};
+
+// A sample given another id; the instruments that play it follow. The caller has checked the new id is free (see uniqueSampleId).
+class RenameSample final : public Edit {
+public:
+  RenameSample(std::string from, std::string to) : from_(std::move(from)), to_(std::move(to)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Rename sample " + from_; }
+
+private:
+  std::string from_, to_;
+  Json before_;
+  std::vector<std::pair<std::string, Json>> instrumentSamples_;   // each instrument's `samples` before
+};
+
+// The instruments that play a sample, by id.
+std::vector<std::string> instrumentsPlaying(const Project& project, const std::string& sampleId);
+
 // An empty lane (at the end) that plays an instrument the song already has.
 class AddLane final : public Edit {
 public:

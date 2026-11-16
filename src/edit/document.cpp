@@ -2,6 +2,7 @@
 #include <cctype>
 #include <set>
 #include "edit/document.h"
+#include "project/samples.h"
 #include "core/node_registry.h"
 
 #include <sstream>
@@ -901,6 +902,48 @@ void AddSample::apply(Project& project) {
 
 void AddSample::revert(Project& project) {
   if (project.samples.is_object()) project.samples.erase(id_);
+}
+
+std::vector<std::string> instrumentsPlaying(const Project& project, const std::string& sampleId) {
+  std::vector<std::string> out;
+  for (const Instrument& instrument : project.instruments) {
+    bool plays = false;
+    for (const GraphNode& node : instrument.graph.nodes) {
+      const std::vector<std::string> ids = sampleSlots(instrument, node.id);
+      plays |= std::find(ids.begin(), ids.end(), sampleId) != ids.end();
+    }
+    if (plays) out.push_back(instrument.id);
+  }
+  return out;
+}
+
+void RemoveSample::apply(Project& project) {
+  before_ = project.samples;
+  project.samples.erase(id_);
+}
+
+void RemoveSample::revert(Project& project) { project.samples = before_; }
+
+void RenameSample::apply(Project& project) {
+  before_ = project.samples;
+  instrumentSamples_.clear();
+  Json renamed = Json::object();
+  for (const auto& [key, value] : project.samples.items()) renamed[key == from_ ? to_ : key] = value;
+  project.samples = renamed;
+  for (Instrument& instrument : project.instruments) {
+    if (!instrument.raw.is_object() || !instrument.raw.contains("samples") || !instrument.raw["samples"].is_object()) continue;
+    instrumentSamples_.emplace_back(instrument.id, instrument.raw["samples"]);
+    for (auto& [node, ref] : instrument.raw["samples"].items()) {
+      if (ref.is_string() && ref.get<std::string>() == from_) ref = to_;
+      else if (ref.is_array()) for (Json& slot : ref) if (slot.is_string() && slot.get<std::string>() == from_) slot = to_;
+    }
+  }
+}
+
+void RenameSample::revert(Project& project) {
+  project.samples = before_;
+  for (const auto& [id, samples] : instrumentSamples_)
+    for (Instrument& instrument : project.instruments) if (instrument.id == id) instrument.raw["samples"] = samples;
 }
 
 void SetSample::apply(Project& project) {
