@@ -216,3 +216,5 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 - FM synth: "draw wave" has op 1-4 tabs (data.waves, one 128-point wave per operator), in the same window as the oscillator's wave.
 
 - Chord node: "edit chords" opens the 256-slot window (pages 0x-Fx, a box per slot with the notes it makes, unreadable names marked); data.chords, one undo step per slot.
+
+- Westcoast: "draw wave" shares the oscillator's wave window (data.wave).

@@ -22,7 +22,7 @@ const GraphNode* findNode(const Project& project, const std::string& instrumentI
   return nullptr;
 }
 
-bool isWave(const std::string& type) { return type == "osc" || type == "fmsynth"; }
+bool isWave(const std::string& type) { return type == "osc" || type == "westcoast" || type == "fmsynth"; }
 
 std::vector<double> sineWave() {
   std::vector<double> w(kWavePoints);

@@ -294,7 +294,7 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
   if (picked->type == "dvii" && textButton("edit voice")) state.dxNode = picked->id;
   if (hasGate(picked->type) && textButton("edit steps")) state.gateNode = picked->id;
   if (picked->type == "chord" && textButton("edit chords")) state.chordNode = picked->id;
-  if (hasShape(picked->type) && textButton(picked->type == "osc" || picked->type == "fmsynth" ? "draw wave" : picked->type == "addsynth" ? "draw spectrum" : picked->type == "shiva" ? "edit taps" : "draw curve")) state.shapeNode = picked->id;
+  if (hasShape(picked->type) && textButton(picked->type == "osc" || picked->type == "westcoast" || picked->type == "fmsynth" ? "draw wave" : picked->type == "addsynth" ? "draw spectrum" : picked->type == "shiva" ? "edit taps" : "draw curve")) state.shapeNode = picked->id;
 
   std::set<std::string> wired;   // parameters a wire drives
   for (const Connection& c : instrument->graph.connections) {
