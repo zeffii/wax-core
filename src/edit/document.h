@@ -901,6 +901,20 @@ private:
   Sequence after_, before_;
 };
 
+// The same for several lanes at once (a block glued or cleared, a waypoint restored): one undo step. Lanes that no longer exist are skipped.
+class SetLaneSequences final : public Edit {
+public:
+  SetLaneSequences(const std::vector<Lane>& after, std::string label);
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return label_; }
+
+private:
+  struct Sequence { std::string lane; std::vector<Pattern> patterns; std::vector<Placement> placements; std::vector<int> mutes, offs; };
+  std::string label_;
+  std::vector<Sequence> after_, before_;
+};
+
 // Puts blank text in a row's place and pushes the rows below it down one; the last row falls off the end (it comes back on undo).
 class InsertRow final : public Edit {
 public:

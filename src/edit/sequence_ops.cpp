@@ -120,6 +120,12 @@ bool slicePlacement(Lane& lane, int tick) {
   return true;
 }
 
+int clearRange(Lane& lane, int from, int to) {
+  const std::size_t before = lane.placements.size();
+  lane.placements.erase(std::remove_if(lane.placements.begin(), lane.placements.end(), [&](const Placement& p) { return p.start >= from && p.start < to; }), lane.placements.end());
+  return static_cast<int>(before - lane.placements.size());
+}
+
 bool mergeRange(Lane& lane, const Context& context, int from, int to, bool fillEmpty) {
   to = std::min(to, context.length);
   if (from < 0 || from >= to) return false;

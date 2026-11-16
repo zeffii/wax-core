@@ -34,6 +34,8 @@ bool mergeRange(Lane& lane, const Context& context, int from, int to, bool fillE
 int resizePlacement(Lane& lane, const Context& context, int tick, int delta);
 // The placement moved by `delta` ticks, not onto a tick where another starts. Its new start.
 std::optional<int> movePlacement(Lane& lane, const Context& context, int tick, int delta);
+// Every placement that starts in [from, to) goes (the patterns stay in the list). How many.
+int clearRange(Lane& lane, int from, int to);
 // The placement under the tick goes; the pattern stays in the lane's list.
 bool removePlacement(Lane& lane, int tick);
 // Every placement starting at or after `from` moves by `delta`: positive makes room, negative pulls up (no further than the gap). How far they moved.

@@ -59,6 +59,7 @@
 #include "edit/presets.h"
 #include "app/column_info.h"
 #include "edit/sync.h"
+#include "seq/cells.h"
 #include "seq/loop.h"
 #include "live/audio_out.h"
 #include "project/save.h"
@@ -168,6 +169,13 @@ struct Session {
   std::string instrument;                // the instrument shown on the Instrument screen
   std::string wantLane;                  // a lane the arrangement asked for; its tab opens next frame
   int wantTick = -1;                     // and the cursor goes here
+  bool seqSelecting = false;             // a block selected on the Song screen (Shift+arrows) from this anchor to the cursor
+  std::string seqAnchorLane;
+  int seqAnchorTick = 0;
+  bool glueAsk = false;                  // G over several lanes, some of them empty there: asking whether they get an empty pattern
+  app::SequenceBlock glueBlock;          // ...and the block it was asked about
+  std::vector<Lane> waypoint;            // W: the arrangement as it was (every lane's patterns and placements); Shift+W goes back to it
+  bool hasWaypoint = false;
   std::string path;                      // the file this song was opened from, where Ctrl+S saves it
 
   int audioBuffer = 0;                   // the sound card buffer asked for (0: the card's own)
@@ -217,6 +225,40 @@ struct Session {
     audio.reset();
   }
 };
+
+// The block the Song screen has selected: the anchor's lane and row to the cursor's, as lane positions and ticks.
+static app::SequenceBlock selectedBlock(const Project& project, const Session& session, const std::string& cursorLane, int cursorTick, int cell) {
+  app::SequenceBlock block;
+  if (!session.seqSelecting) return block;
+  int a = -1, b = -1, index = 0;
+  for (const Lane& lane : project.lanes) {
+    if (lane.id == session.seqAnchorLane) a = index;
+    if (lane.id == cursorLane) b = index;
+    index++;
+  }
+  if (a < 0 || b < 0) return block;
+  block.first = std::min(a, b); block.last = std::max(a, b);
+  block.from = std::min(session.seqAnchorTick, cursorTick) / cell * cell;
+  block.to = (std::max(session.seqAnchorTick, cursorTick) / cell + 1) * cell;
+  return block;
+}
+
+// G: one new pattern per lane of the block from what the lane plays there. `blankFor` gives a lane's empty row. Lanes with nothing there only
+// get one when `fillEmpty`. How many lanes changed (0 changes nothing).
+static int glueBlockOf(Document& doc, const app::SequenceBlock& block, bool fillEmpty, const std::function<std::string(const std::string&)>& blankFor) {
+  std::vector<Lane> changed;
+  for (int i = block.first; i <= block.last && i < static_cast<int>(doc.project().lanes.size()); i++) {
+    Lane copy = doc.project().lanes[static_cast<std::size_t>(i)];
+    seq::Context context;
+    context.length = doc.project().song.length;
+    context.blankRow = blankFor(copy.id);
+    if (seq::mergeRange(copy, context, block.from, block.to, fillEmpty)) changed.push_back(copy);
+  }
+  if (changed.empty()) return 0;
+  doc.apply(std::make_unique<SetLaneSequences>(changed, "merge to pattern"));
+  return static_cast<int>(changed.size());
+}
+
 
 // The computer keyboard as a piano: two rows, the lower from C of the octave, the upper an octave higher.
 const ImGuiKey kPianoKeys[] = {
@@ -542,12 +584,24 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         else session->editStatus = "No pattern here, and one cannot start here.";
       } else session->edit = !session->edit;
     }
-    if (session->screen == Screen::Song && session->edit && !io.KeyCtrl && !io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) session->edit = false;
+    if (session->screen == Screen::Song && session->edit && !io.KeyCtrl && !io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { session->edit = false; session->seqSelecting = false; }
     if (session->screen == Screen::Song && session->edit && !io.KeyCtrl && !io.KeyAlt && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_H, false)) { app::settings().seqNames = !app::settings().seqNames; app::saveSettings(); session->editStatus = app::settings().seqNames ? "Pattern names shown." : "Pattern names hidden."; }
     if (session->screen == Screen::Song && session->edit && !io.KeyCtrl && !io.KeyAlt) {   // the sequence's cursor: a row is `cell` ticks, the lanes run across
       const int cell = app::sequenceRowTicks(song), rows = std::max(1, (song.length + cell - 1) / cell);
       const auto toRow = [&](int row) { editor.moveTo(std::clamp(row, 0, rows - 1) * cell, editor.cell()); };
       const int row = editor.tick() / cell;
+      // Shift with a movement key grows a block from where the cursor was; Delete clears it, G glues it; any other key drops it
+      const ImGuiKey movers[] = {ImGuiKey_UpArrow, ImGuiKey_DownArrow, ImGuiKey_PageUp, ImGuiKey_PageDown, ImGuiKey_Home, ImGuiKey_End, ImGuiKey_LeftArrow, ImGuiKey_RightArrow};
+      bool extending = false;
+      if (io.KeyShift) for (ImGuiKey k : movers) extending |= ImGui::IsKeyPressed(k);
+      if (extending && !session->seqSelecting) { session->seqSelecting = true; session->seqAnchorLane = editor.lane(); session->seqAnchorTick = editor.tick(); }
+      if (!extending && session->seqSelecting) {
+        for (int k = ImGuiKey_Tab; k < ImGuiKey_GamepadStart; k++) {   // (the keyboard's keys)
+          const ImGuiKey key = static_cast<ImGuiKey>(k);
+          if (key == ImGuiKey_Delete || key == ImGuiKey_Backspace || key == ImGuiKey_G || (key >= ImGuiKey_LeftCtrl && key <= ImGuiKey_RightSuper)) continue;
+          if (ImGui::IsKeyPressed(key, false)) { session->seqSelecting = false; break; }
+        }
+      }
       if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) toRow(row - 1);
       if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) toRow(row + 1);
       if (ImGui::IsKeyPressed(ImGuiKey_PageUp)) toRow(row - 16);
@@ -589,7 +643,49 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
           return true;
         };
         const auto pressed = [&](ImGuiKey key) { return ImGui::IsKeyPressed(key, true); };
-        if (pressed(ImGuiKey_Delete) || pressed(ImGuiKey_Backspace)) {
+        const app::SequenceBlock block = selectedBlock(doc.project(), *session, laneId, tick, cell);
+        const std::function<std::string(const std::string&)> blankFor = [&](const std::string& id) {
+          std::string blank;
+          const std::vector<Column>& columns = player.engine().laneColumns(id);
+          for (std::size_t i = 0; i < columns.size(); i++) blank += (i ? " " : "") + tokenBlank(columns[i].token);
+          return blank;
+        };
+        const bool clearing = block.first >= 0 && (pressed(ImGuiKey_Delete) || pressed(ImGuiKey_Backspace));
+        if (clearing) {   // the patterns that start inside the block go (they stay in the lanes' lists)
+          std::vector<Lane> changed;
+          int removed = 0;
+          for (int i = block.first; i <= block.last; i++) {
+            Lane copy = doc.project().lanes[static_cast<std::size_t>(i)];
+            const int n = seq::clearRange(copy, block.from, block.to);
+            if (n) { removed += n; changed.push_back(copy); }
+          }
+          if (removed) { doc.apply(std::make_unique<SetLaneSequences>(changed, "clear block")); edited = true; }
+          session->editStatus = removed ? "Removed " + std::to_string(removed) + (removed == 1 ? " pattern." : " patterns.") : "Nothing there.";
+          session->seqSelecting = false;
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_G, false) && !io.KeyShift) {   // glue the block into one new pattern per lane
+          if (block.first < 0) session->editStatus = "Select a block first (Shift+arrows).";
+          else {
+            bool someEmpty = false;
+            for (int i = block.first; i <= block.last; i++) {
+              const Lane& l = doc.project().lanes[static_cast<std::size_t>(i)];
+              bool plays = false;
+              for (const Placement& p : l.placements) {
+                const Pattern* pat = seq::patternOf(l, p.pattern);
+                if (p.start < block.to && pat && p.start + std::min(p.length, static_cast<int>(pat->rows.size())) > block.from) plays = true;
+              }
+              someEmpty |= !plays;
+            }
+            if (block.last > block.first && someEmpty) { session->glueAsk = true; session->glueBlock = block; }   // (asked below: do the empty lanes get a pattern too?)
+            else {
+              const int n = glueBlockOf(doc, block, true, blankFor);
+              edited |= n > 0;
+              session->editStatus = n == 0 ? "Nothing to merge there." : n == 1 ? "Merged into one new pattern." : "Merged into " + std::to_string(n) + " new patterns, one per lane.";
+              session->seqSelecting = false;
+            }
+          }
+        }
+        if (!clearing && (pressed(ImGuiKey_Delete) || pressed(ImGuiKey_Backspace))) {
           if (seq::placementAt(*current, tick)) change("remove the pattern", "Removed. The pattern stays in the list.", [&](Lane& l) { return seq::removePlacement(l, tick); });
           else change("pull up", "Pulled the patterns below up.", [&](Lane& l) { return seq::shiftPlacements(l, context, rowStart, -16) != 0; });   // an empty spot: close the gap, 16 ticks at most
         }
@@ -600,6 +696,11 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
           if (ImGui::IsKeyPressed(ImGuiKey_S, false)) change("slice", "Sliced.", [&](Lane& l) { return seq::slicePlacement(l, tick); });
           if (ImGui::IsKeyPressed(ImGuiKey_M, false)) change("mute", "Mute marker flipped here.", [&](Lane& l) { return seq::toggleMute(l, context, rowStart); });
           if (ImGui::IsKeyPressed(ImGuiKey_O, false)) change("mark a note off", "Note-off marker flipped here.", [&](Lane& l) { return seq::toggleOff(l, context, rowStart); });
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_W, false)) {   // W: remember the arrangement as it is; Shift+W: go back to it (an undoable step)
+          if (!io.KeyShift) { session->waypoint = doc.project().lanes; session->hasWaypoint = true; session->editStatus = "Waypoint set."; }
+          else if (!session->hasWaypoint) session->editStatus = "No waypoint set.";
+          else { doc.apply(std::make_unique<SetLaneSequences>(session->waypoint, "restore waypoint")); edited = true; session->editStatus = "Restored the waypoint."; }
         }
         if (ImGui::IsKeyPressed(ImGuiKey_K, false)) change("change the colour", "Pattern colour changed.", [&](Lane& l) { return seq::colourPattern(l, tick, io.KeyShift ? -1 : 1); });   // Shift+K steps back
         if (pressed(ImGuiKey_Equal) || pressed(ImGuiKey_KeypadAdd)) change("extend", "Extended.", [&](Lane& l) { return seq::resizePlacement(l, context, tick, 16) != 0; });
@@ -1178,14 +1279,38 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     const float songSheetW = session->showKeys ? 270 * scale : 0;
     ImGui::BeginChild("seqmain", ImVec2(-songSheetW, 0), false, ImGuiWindowFlags_NoNav);
     const app::CurveView::Targets curveTargetsOf = [&](const Lane& lane) { return curveTargets(player.engine().laneColumns(lane.id), lane.instrument, player.engine().registry()); };
-    const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, session->edit ? editor.tick() : -1, follow && playing && !session->edit, session->curveView, curveTargetsOf);
+    const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, session->edit ? editor.tick() : -1, follow && playing && !session->edit, session->curveView, curveTargetsOf, session->edit ? selectedBlock(doc.project(), *session, editor.lane(), editor.tick(), app::sequenceRowTicks(doc.project().song)) : app::SequenceBlock());
     if (hit.curve.any) {   // a curve edited: one undo step per gesture, the lane rebuilt in the engine
       doc.apply(std::make_unique<SetCurves>(hit.curve.lane, hit.curve.curves, hit.curve.label), hit.curve.fold);
       const std::vector<std::string> problems = syncLanes(doc, player.engine());
       session->editStatus = problems.empty() ? std::string() : problems.front();
     }
     if (hit.playFrom >= 0) { playFromRequest = hit.playFrom; session->pausedAt = -1; }   // a tick number clicked: play from there
+    if (session->glueAsk) { ImGui::OpenPopup("glue"); session->glueAsk = false; }
+    if (ImGui::BeginPopup("glue")) {   // G over several lanes with some empty there
+      ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Some of these lanes play nothing there.");
+      const auto glue = [&](bool fill) {
+        const std::function<std::string(const std::string&)> blankFor = [&](const std::string& id) {
+          std::string blank;
+          const std::vector<Column>& columns = player.engine().laneColumns(id);
+          for (std::size_t i = 0; i < columns.size(); i++) blank += (i ? " " : "") + tokenBlank(columns[i].token);
+          return blank;
+        };
+        const int n = glueBlockOf(doc, session->glueBlock, fill, blankFor);
+        if (n) { const std::vector<std::string> problems = syncLanes(doc, player.engine()); (void)problems; }
+        session->editStatus = n == 0 ? "Nothing to merge there." : n == 1 ? "Merged into one new pattern." : "Merged into " + std::to_string(n) + " new patterns, one per lane.";
+        session->seqSelecting = false;
+        ImGui::CloseCurrentPopup();
+      };
+      if (app::textButton("Empty patterns too")) glue(true);
+      ImGui::SameLine();
+      if (app::textButton("Only where there is something")) glue(false);
+      ImGui::SameLine();
+      if (app::textButton("Cancel")) ImGui::CloseCurrentPopup();
+      ImGui::EndPopup();
+    }
     if (!hit.lane.empty()) {
+      session->seqSelecting = false;
       session->wantLane = hit.lane; session->wantTick = hit.tick; selectedLane = hit.lane;
       editor.setLane(hit.lane, player.engine().laneColumns(hit.lane));   // (the keys carry on from the click)
       editor.moveTo(hit.tick, 0);

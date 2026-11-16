@@ -82,7 +82,7 @@ float sequenceWidth(const Project& project) {
   return width;
 }
 
-SequenceClick drawSequenceView(const Project& project, const std::string& selectedLane, int playTick, int cursorTick, bool follow, CurveView& curves, const CurveView::Targets& targets) {
+SequenceClick drawSequenceView(const Project& project, const std::string& selectedLane, int playTick, int cursorTick, bool follow, CurveView& curves, const CurveView::Targets& targets, const SequenceBlock& block) {
   SequenceClick result;
   const float scale = ImGui::GetStyle().FontScaleDpi;
   if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::GetIO().KeyCtrl && ImGui::GetIO().MouseWheel != 0) {   // Ctrl+wheel: the size of a row, a step a notch
@@ -196,7 +196,9 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
 
   // the lanes
   float left = origin.x + gutter;
+  int laneIndex = -1;
   for (const Lane& lane : project.lanes) {
+    laneIndex++;
     const float w = laneWidth(lane, scale);
     const bool selected = lane.id == selectedLane;
     const ImU32 blockFill = selected ? accentAlpha(70) : dimAlpha(50);
@@ -228,6 +230,11 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
       }
     }
     curves.draw(draw, lane, selected);
+    if (block.first >= 0 && laneIndex >= block.first && laneIndex <= block.last) {   // the selected block, tinted
+      const float top = origin.y + headHeight + static_cast<float>(block.from / cell) * rowHeight;
+      const float bottom = origin.y + headHeight + static_cast<float>((block.to + cell - 1) / cell) * rowHeight;
+      draw->AddRectFilled(ImVec2(left, top), ImVec2(left + w, bottom), accentAlpha(55));
+    }
     if (cursorTick >= 0 && selected) {
       const float y = origin.y + headHeight + static_cast<float>(cursorTick / cell) * rowHeight;
       draw->AddRectFilled(ImVec2(left, y), ImVec2(left + w, y + rowHeight), kCursorCell);

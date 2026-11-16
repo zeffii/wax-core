@@ -17,9 +17,15 @@ struct SequenceClick {
   CurveEditRequest curve;   // a change to a lane's curves asked for (see curve_view.h)
 };
 
+// A selected block: lanes first..last (by position) and the ticks from..to (to exclusive). `first` -1 when nothing is selected.
+struct SequenceBlock {
+  int first = -1, last = -1;
+  int from = 0, to = 0;
+};
+
 // `playTick` is -1 when stopped; `cursorTick` -1 hides the edit cursor. With `follow` the view keeps the play row in sight.
 // `curves` keeps the lane curves' view state; `targets` says what a lane's curve can move.
-SequenceClick drawSequenceView(const Project& project, const std::string& selectedLane, int playTick, int cursorTick, bool follow, CurveView& curves, const CurveView::Targets& targets);
+SequenceClick drawSequenceView(const Project& project, const std::string& selectedLane, int playTick, int cursorTick, bool follow, CurveView& curves, const CurveView::Targets& targets, const SequenceBlock& block = {});
 
 // What the cursor is on, for the status line: the lane, the row, the tick and the pattern there ("lane 2/9 oberheim · row 9/96 · tick 144 ·
 // 00 "pat00" used 8x in this lane").

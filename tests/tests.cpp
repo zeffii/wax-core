@@ -1544,6 +1544,21 @@ void testSequenceOps() {
   colours.id = "c"; colours.patterns.push_back(a); colours.placements = {{"a", 0, 16}};
   check(colourPattern(colours, 0, 1) && colours.patterns[0].color == 0 && colourPattern(colours, 0, -1) && colours.patterns[0].color.is_null(), "sequence: colour steps through the presets and back to automatic");
   check(toggleMute(colours, context, 32) && colours.mutes.size() == 1 && toggleMute(colours, context, 32) && colours.mutes.empty(), "sequence: mute flips");
+  Lane cleared;
+  cleared.id = "k"; cleared.patterns.push_back(a);
+  cleared.placements = {{"a", 0, 16}, {"a", 16, 16}, {"a", 32, 16}};
+  check(clearRange(cleared, 16, 32) == 1 && cleared.placements.size() == 2 && cleared.patterns.size() == 1, "sequence: clearing a range removes the placements starting in it, not the patterns");
+  // several lanes as one undo step (a block glued or cleared, a waypoint restored)
+  Project project;
+  Lane one = merged, two = cleared;
+  project.lanes = {one, two};
+  Document document(project);
+  Lane oneAfter = one, twoAfter = two;
+  oneAfter.placements.clear(); twoAfter.placements.clear();
+  document.apply(std::make_unique<SetLaneSequences>(std::vector<Lane>{oneAfter, twoAfter}, "clear block"));
+  check(document.project().lanes[0].placements.empty() && document.project().lanes[1].placements.empty(), "sequence: several lanes replaced at once");
+  document.undo();
+  check(document.project().lanes[0].placements.size() == one.placements.size() && document.project().lanes[1].placements.size() == two.placements.size(), "sequence: one undo puts every lane back");
 }
 
 void testExposeMovesCells() {

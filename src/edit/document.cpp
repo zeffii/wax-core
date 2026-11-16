@@ -342,6 +342,30 @@ void SetLaneSequence::revert(Project& project) {
   }
 }
 
+SetLaneSequences::SetLaneSequences(const std::vector<Lane>& after, std::string label) : label_(std::move(label)) {
+  for (const Lane& lane : after) after_.push_back({lane.id, lane.patterns, lane.placements, lane.mutes, lane.offs});
+}
+
+void SetLaneSequences::apply(Project& project) {
+  before_.clear();
+  for (const Sequence& next : after_) {
+    for (Lane& lane : project.lanes) {
+      if (lane.id != next.lane) continue;
+      before_.push_back({lane.id, lane.patterns, lane.placements, lane.mutes, lane.offs});
+      lane.patterns = next.patterns; lane.placements = next.placements; lane.mutes = next.mutes; lane.offs = next.offs;
+    }
+  }
+}
+
+void SetLaneSequences::revert(Project& project) {
+  for (const Sequence& old : before_) {
+    for (Lane& lane : project.lanes) {
+      if (lane.id != old.lane) continue;
+      lane.patterns = old.patterns; lane.placements = old.placements; lane.mutes = old.mutes; lane.offs = old.offs;
+    }
+  }
+}
+
 void PlacePattern::apply(Project& project) {
   for (Lane& lane : project.lanes) {
     if (lane.id != lane_) continue;
