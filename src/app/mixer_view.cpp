@@ -168,7 +168,7 @@ void drawGrip(MixerState& state) {
   if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) { settings().mixerHeight = kDefaultHeight; saveSettings(); }
   ImDrawList* draw = ImGui::GetForegroundDrawList();   // (the panels above reach down over this bar: draw over them)
   const float y = std::floor(at.y) + 3.5f;   // (the middle of a pixel row: a one-pixel line is then drawn whole)
-  draw->AddLine(ImVec2(at.x, y), ImVec2(at.x + width, y), hot ? kAccent : accentAlpha(120), 1.0f);
+  draw->AddLine(ImVec2(at.x, y), ImVec2(at.x + width, y), kAccent, 1.0f);
   const float mid = at.x + width * 0.5f, half = 18 * scale;
   draw->AddLine(ImVec2(mid - half, y), ImVec2(mid + half, y), kAccent, hot ? 4.0f : 3.0f);   // the handle
   ImGui::EndChild();

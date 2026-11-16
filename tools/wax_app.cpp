@@ -1159,7 +1159,12 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         session->browserWidth = std::clamp(session->browserWidth, 160.0f, 600.0f);
       }
       if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) session->browserWidth = 260;
-      ImGui::GetWindowDrawList()->AddLine(ImVec2(x + 2 * scale, window.y), ImVec2(x + 2 * scale, window.y + ImGui::GetWindowHeight()), hot ? app::kAccent : app::lineAlpha(90), 1.0f);
+      {   // always visible, like the mixer's: a thin accent line the height of the panel, with a short handle in the middle
+        const float lineX = std::floor(x + 2 * scale) + 0.5f, mid = window.y + ImGui::GetWindowHeight() * 0.5f, half = 18 * scale;
+        ImDrawList* draw = ImGui::GetForegroundDrawList();
+        draw->AddLine(ImVec2(lineX, window.y), ImVec2(lineX, window.y + ImGui::GetWindowHeight()), app::kAccent, 1.0f);
+        draw->AddLine(ImVec2(lineX, mid - half), ImVec2(lineX, mid + half), app::kAccent, hot ? 4.0f : 3.0f);
+      }
     }
     ImGui::EndChild();
     ImGui::SameLine(0, 0);
