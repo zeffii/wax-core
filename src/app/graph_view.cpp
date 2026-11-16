@@ -482,7 +482,15 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     }
   }
   // right-click on empty space: the add-node menu (a cascading tree, as in the web app)
-  if (ImGui::IsWindowHovered(ImGuiHoveredFlags_None) && !ImGui::IsAnyItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right) && hover.node.empty()) {
+  const WireEnds* rightWire = nullptr;   // right-click on an audio wire: a node to put into it
+  if (hoverWire && windowHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right) && hover.node.empty())
+    for (const WireEnds& w : wires) if (w.c == hoverWire && (w.kind == PortKind::Audio || w.kind == PortKind::Stereo)) rightWire = &w;
+  if (rightWire) {
+    state.menuWireFrom = rightWire->c->from; state.menuWireTo = rightWire->c->to;
+    state.addAt = ImVec2(((rightWire->p0.x + rightWire->p1.x) / 2 - origin.x) / scale - 30, ((rightWire->p0.y + rightWire->p1.y) / 2 - origin.y) / scale - 12);
+    openInsertMenu(state.wireMenu, "wireinsert");
+  }
+  if (ImGui::IsWindowHovered(ImGuiHoveredFlags_None) && !ImGui::IsAnyItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right) && hover.node.empty() && !hoverWire) {
     state.addAt = ImVec2((io.MousePos.x - origin.x) / scale, (io.MousePos.y - origin.y) / scale);
     openInsertMenu(state.menu, "addnode");
   }
@@ -503,6 +511,33 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       picked = id;
       moved = true;
     }
+  }
+  if (!state.menuWireFrom.empty()) {   // the menu for a node to put into a wire: added at the wire and wired in as one undo step
+    std::set<std::string> available;
+    for (const std::string& name : types.typeNames()) {
+      const NodeType* t = types.find(name);
+      if (!t || name == "out" || name == "tempo" || t->inputs.empty() || t->outputs.empty()) continue;
+      const GraphNode blank;
+      const PortKind in = portKind(*t, blank, t->inputs.front()), out = portKind(*t, blank, t->outputs.front());
+      if ((in == PortKind::Audio || in == PortKind::Stereo) && (out == PortKind::Audio || out == PortKind::Stereo)) available.insert(name);
+    }
+    const std::string name = drawInsertMenu(state.wireMenu, "wireinsert", available);
+    if (!name.empty()) {
+      std::string id = name;
+      for (int k = 1;; k++) {
+        bool taken = false;
+        for (const GraphNode& n : graph.nodes) taken |= n.id == id;
+        if (!taken) break;
+        id = name + std::to_string(k);
+      }
+      const NodeType* t = types.find(name);
+      const float x = std::round(state.addAt.x / kGrid) * kGrid, y = std::round(state.addAt.y / kGrid) * kGrid;
+      std::vector<std::unique_ptr<Edit>> follow;
+      follow.push_back(std::make_unique<InsertOnWire>(instrumentId, state.menuWireFrom, state.menuWireTo, id + "." + t->inputs.front(), id + "." + t->outputs.front()));
+      tryApply(std::make_unique<FollowedEdit>(std::make_unique<AddNode>(instrumentId, name, id, std::max(0.0f, x), std::max(0.0f, y)), std::move(follow)));
+      if (state.message.empty()) picked = id;
+      state.menuWireFrom.clear(); state.menuWireTo.clear();
+    } else if (!ImGui::IsPopupOpen("wireinsert")) { state.menuWireFrom.clear(); state.menuWireTo.clear(); }
   }
   if (!state.replacing.empty()) {   // the replace menu: the type the node becomes
     std::set<std::string> available;

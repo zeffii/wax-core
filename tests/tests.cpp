@@ -1047,6 +1047,15 @@ void testWireEdits() {
     doc.undo();
     check(wax::serializeProject(doc.project()) == saved, "undo of the replace gives the node back exactly");
   }
+  {   // a node added and wired into a wire as one step (the wire's right-click menu)
+    const std::string saved = wax::serializeProject(doc.project());
+    std::vector<std::unique_ptr<wax::Edit>> follow;
+    follow.push_back(std::make_unique<wax::InsertOnWire>(id, first.from, first.to, "zq.in", "zq.out"));
+    doc.apply(std::make_unique<wax::FollowedEdit>(std::make_unique<wax::AddNode>(id, "osc", "zq", 0, 0), std::move(follow)));
+    check(has(first.from, "zq.in") && has("zq.out", first.to) && !has(first.from, first.to), "a node added into a wire in one step");
+    doc.undo();
+    check(wax::serializeProject(doc.project()) == saved, "one undo takes the added node and its wiring away");
+  }
   std::printf("ok: wire edits\n");
 }
 

@@ -31,6 +31,8 @@ struct GraphViewState {
   ImVec2 addAt{0, 0};        // where the add-node menu was opened (web pixels)
   InsertMenuState menu;      // the add-node menu (right-click on empty space)
   InsertMenuState replaceMenu;   // the same menu, choosing the type a node becomes (right-click a tile > replace)
+  InsertMenuState wireMenu;      // the same menu again, for a node to put into the wire that was right-clicked
+  std::string menuWireFrom, menuWireTo;   // (that wire: output address, input address)
   std::string replacing;     // the node the replace menu is for
   std::string deleteNode;    // set by the right-click menu; the caller never needs to clear it
 };
