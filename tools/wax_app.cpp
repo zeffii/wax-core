@@ -331,6 +331,14 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     const float hs = ImGui::GetStyle().FontScaleDpi;
     ImGui::AlignTextToFramePadding();   // the words in this row sit on the same baseline as the text inside the boxes
     const float lineY = ImGui::GetCursorPosY();
+    {   // the small Wax mark at the top left (the rail's width, so the File button starts over the browser), the File button beside it
+      const float width = 34 * hs, aspect = 820.0f / 2320.0f, frame = ImGui::GetFrameHeight();
+      const ImVec2 at = ImGui::GetCursorScreenPos();
+      app::drawIcon("wax-logo", ImVec2(at.x + 3 * hs, at.y + (frame - width * aspect) / 2), width, aspect, app::kText, ImGui::GetWindowDrawList());
+      ImGui::Dummy(ImVec2(40 * hs, frame));
+      ImGui::SameLine(0, 0);
+      ImGui::SetCursorPosY(lineY);
+    }
     ImGui::SetCursorPosY(lineY + ImGui::GetStyle().FramePadding.y);   // (a text button does not apply the baseline offset itself)
     if (app::textButton("File")) ImGui::OpenPopup("filemenu");
     ImGui::SameLine(0, 0); ImGui::SetCursorPosY(lineY);
@@ -655,6 +663,11 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     (void)entries;
   }
   ImGui::EndChild();
+  {   // a thin line between the rail and what is to the right of it
+    const ImVec2 railMin = ImGui::GetItemRectMin(), railMax = ImGui::GetItemRectMax();
+    const float x = std::floor(railMax.x + ImGui::GetStyle().ItemSpacing.x / 2) + 0.5f;
+    ImGui::GetWindowDrawList()->AddLine(ImVec2(x, railMin.y), ImVec2(x, railMax.y), app::lineAlpha(255), 1.0f);
+  }
   ImGui::SameLine();
   // The browser, down the left of every screen as in the web app: tabs for the lists (patterns, machines, samples), and under them
   // the options of the screen being shown (the Song screen's lane tools).

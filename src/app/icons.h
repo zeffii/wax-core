@@ -23,7 +23,7 @@ bool iconButton(const char* name, const char* tip, bool on = false, float size =
 ImTextureID pixelTexture(const std::string& key, const unsigned char* rgba, int w, int h);
 
 // A drawing at its own proportions (not a square button): its top left at `min`, `width` points wide (scaled with the window), height
-// `aspect` times the width, tinted. Used for the logo on the splash screen.
-void drawIcon(const char* name, ImVec2 min, float width, float aspect, ImU32 tint);
+// `aspect` times the width, tinted. Drawn over everything (the splash screen's logo) unless `list` is given (the logo in the header).
+void drawIcon(const char* name, ImVec2 min, float width, float aspect, ImU32 tint, ImDrawList* list = nullptr);
 
 }  // namespace wax::app
