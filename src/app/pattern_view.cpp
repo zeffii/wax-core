@@ -7,6 +7,7 @@
 #include "app/theme.h"
 #include "seq/lane.h"
 #include "imgui.h"
+#include "imgui_internal.h"
 
 namespace wax::app {
 
@@ -57,11 +58,22 @@ PatternViewResult drawPatternView(const std::vector<PatternLane>& lanes, int tic
         ImGui::TableSetColumnEnabled(firstColumn[li] + c, keep);
       }
   }
-  if (several) {   // the lanes' names over their columns
+  if (several) {   // the lanes' names over their columns. Drawn on top of the cells, not as their text: a name wider than its first column would stretch that column
     ImGui::TableNextRow();
+    ImGuiTable* table = ImGui::GetCurrentTable();
+    ImGuiWindow* window = ImGui::GetCurrentWindow();
+    const float frozenEdge = ImGui::TableGetCellBgRect(table, 0).Max.x;   // (a name sliding left stops at the row numbers)
     for (std::size_t li = 0; li < lanes.size(); li++) {
       ImGui::TableSetColumnIndex(firstColumn[li]);
-      ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(static_cast<int>(li) == cursor.lane ? kAccent : kDimText), "%s", lanes[li].id.c_str());
+      const ImVec2 at = ImGui::GetCursorScreenPos();
+      float right = at.x;   // the lane's last shown column ends where its name must stop
+      for (int c = 0; c < static_cast<int>(lanes[li].labels->size()); c++)
+        if (ImGui::TableGetColumnFlags(firstColumn[li] + c) & ImGuiTableColumnFlags_IsEnabled) right = std::max(right, ImGui::TableGetCellBgRect(table, firstColumn[li] + c).Max.x);
+      ImDrawList* draw = ImGui::GetWindowDrawList();
+      draw->PushClipRect(ImVec2(frozenEdge, at.y), ImVec2(std::min(right, window->InnerClipRect.Max.x), at.y + ImGui::GetTextLineHeight()), false);
+      draw->AddText(at, static_cast<int>(li) == cursor.lane ? kAccent : kDimText, lanes[li].id.c_str());
+      draw->PopClipRect();
+      ImGui::Dummy(ImVec2(0, ImGui::GetTextLineHeight()));
     }
   }
   ImGui::TableHeadersRow();

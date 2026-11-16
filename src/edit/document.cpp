@@ -479,6 +479,104 @@ void PullOut::apply(Project& project) {
 
 void PullOut::revert(Project& project) { graphOf(project, instrument_).connections = before_; }
 
+namespace {
+// The node types that play the samples listed for them (the sample choice lives in the machine's "samples" by node id).
+bool playsSamples(const std::string& type) {
+  static const std::set<std::string> types = {"sampler", "granular", "drumsynth", "drumsynth2", "modchan", "convolver", "specsynth"};
+  return types.count(type) > 0;
+}
+
+// The port of `names` that stands in for `name` after a node changes type: the same name, else (not for a parameter port) the same position.
+const std::string* mappedPort(const std::string& name, const std::vector<std::string>& before, const std::vector<std::string>& after) {
+  const auto same = std::find(after.begin(), after.end(), name);
+  if (same != after.end()) return &*same;
+  if (!name.empty() && name[0] == '@') return nullptr;
+  const auto at = std::find(before.begin(), before.end(), name);
+  const std::size_t index = static_cast<std::size_t>(at - before.begin());
+  return at != before.end() && index < after.size() ? &after[index] : nullptr;
+}
+
+// Every input a node has: the type's, then one per parameter given a port.
+std::vector<std::string> inputsOf(const GraphNode& node, const NodeType& type) {
+  std::vector<std::string> names = type.inputs;
+  for (const std::string& p : node.ports) names.push_back("@" + p);
+  return names;
+}
+}  // namespace
+
+void ReplaceNode::apply(Project& project) {
+  Instrument& instrument = instrumentNamed(project, instrument_);
+  Graph& g = instrument.graph;
+  const auto found = std::find_if(g.nodes.begin(), g.nodes.end(), [&](const GraphNode& n) { return n.id == node_; });
+  if (found == g.nodes.end()) throw std::out_of_range("no node " + node_);
+  const NodeType* from = builtinNodes().find(found->type);
+  const NodeType* to = builtinNodes().find(type_);
+  if (!from || !to) throw std::runtime_error("Unknown node type \"" + type_ + "\".");
+  if (from->master) throw std::runtime_error("The out node cannot be replaced.");
+  if (to->master) throw std::runtime_error("There is already an out node.");
+  newId_ = node_;
+  if (found->type == type_) return;
+  graph_ = g; exposed_ = instrument.exposed; commands_ = instrument.commands; raw_ = instrument.raw;
+  const GraphNode old = *found;
+  // a node still named for its type ("filter2") is named for the new one
+  const std::string stem = old.type;
+  const bool named = node_.size() > stem.size() && node_.compare(0, stem.size(), stem) == 0 && std::all_of(node_.begin() + static_cast<std::ptrdiff_t>(stem.size()), node_.end(), [](unsigned char c) { return std::isdigit(c); });
+  if (named) {
+    for (int i = 1;; i++) {
+      newId_ = type_ + std::to_string(i);
+      if (std::none_of(g.nodes.begin(), g.nodes.end(), [&](const GraphNode& n) { return n.id == newId_; })) break;
+    }
+  }
+  GraphNode node;
+  node.id = newId_; node.type = type_; node.x = old.x; node.y = old.y; node.placed = old.placed;
+  node.params = Json::object();
+  if (old.params.is_object()) {
+    for (const auto& [name, value] : old.params.items()) {
+      const auto spec = std::find_if(to->params.begin(), to->params.end(), [&](const ParamSpec& p) { return p.name == name; });
+      const auto was = std::find_if(from->params.begin(), from->params.end(), [&](const ParamSpec& p) { return p.name == name; });
+      if (spec != to->params.end() && was != from->params.end() && spec->min == was->min && spec->max == was->max) node.params[name] = value;
+    }
+  }
+  for (const std::string& p : old.ports) if (std::any_of(to->params.begin(), to->params.end(), [&](const ParamSpec& s) { return s.name == p; })) node.ports.push_back(p);
+  const std::vector<std::string> oldIns = inputsOf(old, *from), newIns = inputsOf(node, *to);
+  *std::find_if(g.nodes.begin(), g.nodes.end(), [&](const GraphNode& n) { return n.id == node_; }) = node;
+  std::vector<Connection> wires;
+  std::set<std::string> seen;
+  for (const Connection& c : g.connections) {
+    std::string fromNode = c.from.substr(0, c.from.find('.')), fromPort = c.from.substr(c.from.find('.') + 1);
+    std::string toNode = c.to.substr(0, c.to.find('.')), toPort = c.to.substr(c.to.find('.') + 1);
+    if (fromNode == node_) { const std::string* m = mappedPort(fromPort, from->outputs, to->outputs); if (!m) continue; fromPort = *m; fromNode = newId_; }
+    if (toNode == node_) { const std::string* m = mappedPort(toPort, oldIns, newIns); if (!m) continue; toPort = *m; toNode = newId_; }
+    const std::string key = fromNode + "." + fromPort + ">" + toNode + "." + toPort;
+    if (seen.insert(key).second) wires.push_back({fromNode + "." + fromPort, toNode + "." + toPort});
+  }
+  g.connections = wires;
+  // what pointed at the old id follows it, and what the new type does not have goes
+  const auto lacks = [&](const std::string& nodeId, const std::string& param) {
+    if (nodeId != newId_) return false;
+    return std::none_of(to->params.begin(), to->params.end(), [&](const ParamSpec& p) { return p.name == param; });
+  };
+  for (Exposed& e : instrument.exposed) if (e.node == node_) e.node = newId_;
+  for (Command& c : instrument.commands) if (c.node == node_) c.node = newId_;
+  instrument.exposed.erase(std::remove_if(instrument.exposed.begin(), instrument.exposed.end(), [&](const Exposed& e) { return lacks(e.node, e.param); }), instrument.exposed.end());
+  instrument.commands.erase(std::remove_if(instrument.commands.begin(), instrument.commands.end(), [&](const Command& c) { return lacks(c.node, c.param); }), instrument.commands.end());
+  if (instrument.raw.is_object() && instrument.raw.contains("samples") && instrument.raw["samples"].is_object()) {
+    Json& samples = instrument.raw["samples"];
+    if (samples.contains(node_)) { Json choice = samples[node_]; samples.erase(node_); if (playsSamples(type_)) samples[newId_] = choice; }
+  }
+  if (playsSamples(type_) && !sampleId_.empty()) {
+    if (!instrument.raw.is_object()) instrument.raw = Json::object();
+    if (!instrument.raw.contains("samples") || !instrument.raw["samples"].is_object()) instrument.raw["samples"] = Json::object();
+    if (!instrument.raw["samples"].contains(newId_)) instrument.raw["samples"][newId_] = sampleId_;
+  }
+}
+
+void ReplaceNode::revert(Project& project) {
+  if (newId_ == node_ && graph_.nodes.empty()) return;   // (the same type: nothing was changed)
+  Instrument& instrument = instrumentNamed(project, instrument_);
+  instrument.graph = graph_; instrument.exposed = exposed_; instrument.commands = commands_; instrument.raw = raw_;
+}
+
 void SetInstrumentSetup::apply(Project& project) {
   if (voices_ < 1 || voices_ > 16) throw std::out_of_range("voices must be 1 to 16");
   Graph& g = graphOf(project, instrument_);

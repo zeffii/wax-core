@@ -30,12 +30,14 @@ struct GraphViewState {
   std::string message;       // the last thing that went wrong (a refused wire), shown under the graph until the next click
   ImVec2 addAt{0, 0};        // where the add-node menu was opened (web pixels)
   InsertMenuState menu;      // the add-node menu (right-click on empty space)
+  InsertMenuState replaceMenu;   // the same menu, choosing the type a node becomes (right-click a tile > replace)
+  std::string replacing;     // the node the replace menu is for
   std::string deleteNode;    // set by the right-click menu; the caller never needs to clear it
 };
 
 // `picked` is the node chosen (in/out). As in the web app: drag from an output port to an input port (or the other way from a free input);
 // drag a port that has wires to pick up a wire by that end (drop it on another port to move it, anywhere else to unplug it, Esc puts it
-// back; Shift+drag starts a new wire instead); click a wire to select it and press Delete to cut it; drag a tile onto a wire to put it into that wire (a node far out of its chain, or Shift+drag, takes it out: its neighbours are joined; Esc during the drag moves it alone); right-click a tile for delete. Wiring changes go through `doc` (the caller runs syncGraphs). Returns true when a node moved.
+// back; Shift+drag starts a new wire instead); click a wire to select it and press Delete to cut it; drag a tile onto a wire to put it into that wire (a node far out of its chain, or Shift+drag, takes it out: its neighbours are joined; Esc during the drag moves it alone); right-click a tile for delete or replace (the node becomes another type: its wires, values and exposed columns follow). Wiring changes go through `doc` (the caller runs syncGraphs). Returns true when a node moved.
 bool drawGraphView(GraphViewState& state, Document& doc, const std::string& instrument, std::string& picked, float height);
 
 }  // namespace wax::app

@@ -403,6 +403,28 @@ private:
   double x_, y_;
 };
 
+// A node swapped for one of another type, in the same place. Its wires follow to the ports of the same name (else the port in the same
+// position; parameter ports only by name), parameters with the same name and range keep their values, and a node that still has the id its
+// type gave it ("filter2") gets a new one to match; exposed columns, commands and sample choices follow it, those the new type lacks go.
+// `sampleId` is given to a new sample-playing node that has none. Undo puts everything back as it was.
+class ReplaceNode final : public Edit {
+public:
+  ReplaceNode(std::string instrument, std::string node, std::string type, std::string sampleId = {})
+      : instrument_(std::move(instrument)), node_(std::move(node)), type_(std::move(type)), sampleId_(std::move(sampleId)), newId_(node_) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Make " + node_ + " a " + type_; }
+  std::string graphInstrument() const override { return instrument_; }
+  const std::string& newId() const { return newId_; }   // the node's id after apply
+
+private:
+  std::string instrument_, node_, type_, sampleId_, newId_;
+  Graph graph_;
+  std::vector<Exposed> exposed_;
+  std::vector<Command> commands_;
+  Json raw_;
+};
+
 // A node taken out with its wires; undo puts them back where they were.
 class DeleteNode final : public Edit {
 public:

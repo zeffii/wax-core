@@ -1022,6 +1022,31 @@ void testWireEdits() {
   bool looped = false;   // a node placed so that the wire would feed itself is refused and nothing changes
   try { doc.apply(std::make_unique<wax::InsertOnWire>(id, first.from, first.to, "zz.in", first.to.substr(0, first.to.find('.')) + ".o")); } catch (const std::exception&) { looped = true; }
   check(looped && wires().size() == before.size() && has(first.from, first.to), "a loop through the new node is refused");
+  {   // a node made another type: the project stays whole, and undo gives it back exactly
+    const std::string saved = wax::serializeProject(doc.project());
+    const wax::Instrument* host = nullptr;
+    for (const wax::Instrument& i : doc.project().instruments) if (i.id == id) host = &i;
+    std::string target;
+    for (const wax::GraphNode& n : host->graph.nodes) if (n.type != "out" && n.type != "tempo" && n.type != "osc") { target = n.id; break; }
+    check(!target.empty(), "a node to replace");
+    auto edit = std::make_unique<wax::ReplaceNode>(id, target, "osc");
+    const wax::ReplaceNode* replace = edit.get();
+    doc.apply(std::move(edit));
+    const wax::Instrument* after = nullptr;
+    for (const wax::Instrument& i : doc.project().instruments) if (i.id == id) after = &i;
+    bool whole = true, there = false;
+    for (const wax::Connection& c : after->graph.connections) {
+      bool a = false, b = false;
+      for (const wax::GraphNode& n : after->graph.nodes) { a |= n.id == c.from.substr(0, c.from.find('.')); b |= n.id == c.to.substr(0, c.to.find('.')); }
+      whole &= a && b;
+    }
+    for (const wax::GraphNode& n : after->graph.nodes) there |= n.id == replace->newId() && n.type == "osc";
+    check(whole && there, "the replaced node is an osc and no wire is left dangling");
+    for (const wax::Exposed& e : after->exposed) { bool ok = false; for (const wax::GraphNode& n : after->graph.nodes) ok |= n.id == e.node; whole &= ok; }
+    check(whole, "exposed columns follow the node or go");
+    doc.undo();
+    check(wax::serializeProject(doc.project()) == saved, "undo of the replace gives the node back exactly");
+  }
   std::printf("ok: wire edits\n");
 }
 

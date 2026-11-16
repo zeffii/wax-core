@@ -367,6 +367,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     if (ImGui::IsItemClicked() && hover.node.empty()) { picked = n.id; state.held = n.id; state.dragFree = false; state.dragMoved = false; state.dragForce = io.KeyShift; state.grabX = io.MousePos.x - t.min.x; state.grabY = io.MousePos.y - t.min.y; }
     if (ImGui::IsItemHovered() && hover.node.empty()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     if (n.type != "out" && ImGui::BeginPopupContextItem("tilemenu")) {
+      if (textButton("replace...")) { state.replacing = n.id; openInsertMenu(state.replaceMenu, "replacenode"); ImGui::CloseCurrentPopup(); }
       if (textButton("delete")) { doc.apply(std::make_unique<DeleteNode>(instrumentId, n.id)); if (picked == n.id) picked.clear(); ImGui::CloseCurrentPopup(); ImGui::EndPopup(); ImGui::EndChild(); return true; }
       ImGui::EndPopup();
     }
@@ -502,6 +503,21 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       picked = id;
       moved = true;
     }
+  }
+  if (!state.replacing.empty()) {   // the replace menu: the type the node becomes
+    std::set<std::string> available;
+    for (const std::string& name : types.typeNames()) if (name != "out" && name != "tempo") available.insert(name);
+    const std::string name = drawInsertMenu(state.replaceMenu, "replacenode", available);
+    if (!name.empty()) {
+      std::string sample;   // a node that plays samples starts on the first one of the song
+      if (doc.project().samples.is_object())
+        for (const auto& [id, value] : doc.project().samples.items()) if (!isPoolSample(id)) { sample = id; break; }
+      auto edit = std::make_unique<ReplaceNode>(instrumentId, state.replacing, name, sample);
+      const ReplaceNode* made = edit.get();
+      tryApply(std::move(edit));
+      if (state.message.empty()) { picked = made->newId(); state.message = state.replacing + " is now a " + name + (made->newId() != state.replacing ? " (" + made->newId() + ")" : std::string()) + "."; }
+      state.replacing.clear();
+    } else if (!ImGui::IsPopupOpen("replacenode")) state.replacing.clear();
   }
   {   // the line under the graph: a refused wire, else what the mouse is over
     const std::string& text = !state.message.empty() ? state.message : hoverText;
