@@ -54,6 +54,8 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
   const bool began = ImGui::BeginTable("pattern", columns + 1, tableFlags, ImVec2(0, std::max(60.0f, ImGui::GetContentRegionAvail().y - infoHeight)));
   ImGui::PopStyleVar();
   if (!began) return result;
+  // no highlight under the mouse: the cursor cell is the only marked cell, the pointer needs no shadow
+  for (ImGuiCol colour : {ImGuiCol_Header, ImGuiCol_HeaderHovered, ImGuiCol_HeaderActive}) ImGui::PushStyleColor(colour, ImVec4(0, 0, 0, 0));
   ImGui::TableSetupScrollFreeze(1, several ? 2 : 1);
   // Every column has the width of its widest text (the heading or any cell of any row), worked out from all the rows: left to the table, a
   // column would be as wide as the rows on show, and widen or narrow as the grid scrolls.
@@ -179,6 +181,7 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
     draw->AddLine(ImVec2(from.x, y), ImVec2(from.x + ImGui::GetWindowWidth(), y), kAccent, 1.5f);
     draw->PopClipRect();
   }
+  ImGui::PopStyleColor(3);
   ImGui::EndTable();
   if (!cursor.info.empty()) {   // the line under the grid: a small face, so a long description fits
     ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 0.85f);
