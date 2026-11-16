@@ -55,7 +55,7 @@ const std::vector<Shortcut>& patternShortcuts() {
 
 const std::vector<Shortcut>& songShortcuts() {
   static const std::vector<Shortcut> list = {
-      {"Enter", "switch editing on; with it on, Enter opens the pattern under the cursor in the Pattern screen (a new one when none is there)"},
+      {"Enter", "switch editing on; with it on, Enter opens the pattern under the cursor on its own (solo-edit; a new pattern when none is there)"},
       {"Esc", "switch editing off"},
       {"Click", "click a cell to put the cursor there; click a tick number to play from that row"},
       {"Up / Down", "move a row (Ctrl+wheel sets how many ticks a row is)"},
@@ -75,7 +75,7 @@ const std::vector<Shortcut>& songShortcuts() {
       {"Ctrl+V", "paste at the cursor (or where the selection is); a pattern goes back into its own lane as the same pattern, into another lane with the same columns as a copy"},
       {"Ctrl+D", "copy the block to the rows right below it; again for another copy"},
       {"Ctrl+B, Ctrl+E, Ctrl+L", "start the loop at this row, end it where this row starts; Ctrl+L switches it off and on"},
-      {"Ctrl+Enter", "open the pattern under the cursor on its own (solo-edit): nothing else can be edited or pasted into"},
+      {"Ctrl+Enter", "open the pattern under the cursor on its own (solo-edit) whether editing is on or not: nothing else can be edited or pasted into"},
       {"L / Shift+L", "the loop on or off / a loop round the pattern under the cursor (again to remove it)"},
       {"Alt+S", "solo the lane under the cursor (the others let go); again to bring everyone back"},
       {"Alt+M", "silence the lane under the cursor whatever its marks say; again to bring it back"},
