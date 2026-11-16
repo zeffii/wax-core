@@ -26,6 +26,7 @@
 
 #include "app/sequence_view.h"
 #include "app/envelope_window.h"
+#include "app/node_help.h"
 #include "app/config.h"
 #include "app/sample_browser.h"
 #include "app/sample_view.h"
@@ -124,6 +125,7 @@ struct Session {
   app::ParamPanelState panel;
   app::MixerState mixer;
   app::EnvelopeWindow envelopes;
+  app::NodeHelpWindow nodeHelp;           // Shift+F1 on the Instrument screen: the help of the picked node
   app::DxWindow dx;
   app::GraphViewState graphView;
   app::PatternListState patternList;     // the Song screen's pattern list
@@ -649,7 +651,16 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   // The screens, as in the web app's rail: Song (the arrangement), Pattern, Instrument, Info, Config. F1, F2, F3, F10 and F11 switch.
   const float scale = ImGui::GetStyle().FontScaleDpi;
   if (!io.WantTextInput) {
-    if (ImGui::IsKeyPressed(ImGuiKey_F1, false)) session->screen = Screen::Song;
+    if (ImGui::IsKeyPressed(ImGuiKey_F1, false)) {
+      if (io.KeyShift) {   // Shift+F1: the help of the node picked in the graph
+        for (const Instrument& inst : doc.project().instruments) {
+          if (inst.id != session->panel.instrument) continue;
+          for (const GraphNode& n : inst.graph.nodes) if (n.id == session->panel.node) app::showNodeHelp(session->nodeHelp, n.type);
+        }
+      } else {
+        session->screen = Screen::Song;
+      }
+    }
     if (ImGui::IsKeyPressed(ImGuiKey_F2, false)) session->screen = Screen::Pattern;
     if (ImGui::IsKeyPressed(ImGuiKey_F3, false)) session->screen = Screen::Instrument;
     if (ImGui::IsKeyPressed(ImGuiKey_F4, false)) session->screen = Screen::Sample;
@@ -1323,6 +1334,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (!sampleProblems.empty()) session->editStatus = sampleProblems.front();
   }
   if (app::drawEnvelopeWindow(session->envelopes, doc, player.engine())) syncData(doc, player.engine());
+  app::drawNodeHelp(session->nodeHelp);
   if (!session->panel.dxNode.empty()) { app::showDx(session->dx, laneInstrument, session->panel.dxNode); session->panel.dxNode.clear(); }
   if (app::drawDxWindow(session->dx, doc, player.engine())) { syncData(doc, player.engine()); syncParams(doc, player.engine()); }
   if (mixerShown && app::drawMixer(session->mixer, doc, player.engine(), selectedLane)) {
@@ -1417,7 +1429,8 @@ ImGuiKey keyNamed(const std::string& name) {
   static const std::map<std::string, ImGuiKey> named = {
       {"enter", ImGuiKey_Enter}, {"up", ImGuiKey_UpArrow}, {"down", ImGuiKey_DownArrow}, {"left", ImGuiKey_LeftArrow},
       {"right", ImGuiKey_RightArrow}, {"delete", ImGuiKey_Delete}, {"backspace", ImGuiKey_Backspace}, {"insert", ImGuiKey_Insert},
-      {"equal", ImGuiKey_Equal}, {"pagedown", ImGuiKey_PageDown}, {"pageup", ImGuiKey_PageUp}, {"space", ImGuiKey_Space}};
+      {"equal", ImGuiKey_Equal}, {"pagedown", ImGuiKey_PageDown}, {"pageup", ImGuiKey_PageUp}, {"space", ImGuiKey_Space},
+      {"tab", ImGuiKey_Tab}, {"escape", ImGuiKey_Escape}, {"f1", ImGuiKey_F1}, {"f2", ImGuiKey_F2}, {"f3", ImGuiKey_F3}, {"f4", ImGuiKey_F4}};
   const auto found = named.find(name);
   if (found != named.end()) return found->second;
   if (name.size() == 1 && name[0] >= '0' && name[0] <= '9') return static_cast<ImGuiKey>(ImGuiKey_0 + (name[0] - '0'));

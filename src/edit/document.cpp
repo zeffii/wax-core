@@ -27,6 +27,13 @@ std::string& findRow(Pattern& pattern, int row) {
 
 }  // namespace
 
+namespace {
+Instrument& instrumentNamed(Project& project, const std::string& id) {
+  for (Instrument& i : project.instruments) if (i.id == id) return i;
+  throw std::out_of_range("no machine " + id);
+}
+}  // namespace
+
 std::string withCell(const std::string& row, int cell, const std::string& text) {
   if (cell < 0) throw std::out_of_range("no cell " + std::to_string(cell));
   std::string out;
@@ -652,13 +659,6 @@ void RemoveInstrument::apply(Project& project) {
 void RemoveInstrument::revert(Project& project) {
   project.instruments.insert(project.instruments.begin() + at_, removed_);
 }
-
-namespace {
-Instrument& instrumentNamed(Project& project, const std::string& id) {
-  for (Instrument& i : project.instruments) if (i.id == id) return i;
-  throw std::out_of_range("no machine " + id);
-}
-}  // namespace
 
 void RecallPreset::apply(Project& project) {
   Instrument& instrument = instrumentNamed(project, instrument_);

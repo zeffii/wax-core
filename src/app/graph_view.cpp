@@ -12,6 +12,7 @@
 #include "app/theme.h"
 #include "app/widgets.h"
 #include "core/node_registry.h"
+#include "project/samples.h"
 
 namespace wax::app {
 
@@ -554,6 +555,11 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     }
   }
 
+  if (windowHovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 0)) {   // the middle button pans the whole graph, as in the web app
+    ImGui::SetScrollX(ImGui::GetScrollX() - io.MouseDelta.x);
+    ImGui::SetScrollY(ImGui::GetScrollY() - io.MouseDelta.y);
+    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+  }
   // dragging the held tile; it lands on the grid unless Ctrl is held
   if (!state.held.empty()) {
     if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { state.dragFree = true; state.message = "Moving " + state.held + " only: its wires stay as they are"; }
