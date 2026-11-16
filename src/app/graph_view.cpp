@@ -1,5 +1,6 @@
 #include "app/graph_view.h"
 #include "app/node_envelope.h"
+#include "app/node_pictures.h"
 #include "app/node_response.h"
 
 #include <cstdio>
@@ -547,7 +548,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       bool allKept = true;
       for (const std::string& id : ids) {
         const GraphNode* node = tiles.at(id).node;
-        if (!hasEnvelopes(node->type) && !hasResponse(node->type)) continue;
+        if (!hasEnvelopes(node->type) && !hasResponse(node->type) && !hasPicture(node->type)) continue;
         pictured.push_back(id);
         if (!node->keepView) allKept = false;
       }
@@ -731,10 +732,12 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
   }
   // the pictures beside a node (its envelopes): for the picked node, and for every node told to keep them
   state.response.list.clear();
+  const PictureTiming timing{60000.0 / (std::max(1.0, doc.project().song.bpm) * std::max(1, doc.project().song.ticksPerBeat)), std::max(1, doc.project().song.ticksPerBeat)};
   for (const GraphNode& n : graph.nodes) {
     const auto found = tiles.find(n.id);
     if (found == tiles.end() || !(n.keepView || n.id == picked)) continue;
     if (hasResponse(n.type)) drawNodeResponse(dl, font, n, *found->second.type, found->second.min, found->second.max, dl->GetClipRectMin(), dl->GetClipRectMax(), scale, state.response);
+    if (hasPicture(n.type)) drawNodePicture(dl, font, n, *found->second.type, found->second.min, found->second.max, dl->GetClipRectMin(), dl->GetClipRectMax(), scale, timing);
     if (!hasEnvelopes(n.type)) continue;
     drawNodeEnvelopes(dl, font, n, *found->second.type, found->second.min, found->second.max, dl->GetClipRectMin(), dl->GetClipRectMax(), scale);
   }

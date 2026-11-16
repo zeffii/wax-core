@@ -220,3 +220,5 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 - Westcoast: "draw wave" shares the oscillator's wave window (data.wave).
 
 - Wavetable: "edit table" opens a window with the table stack (bundled set or cut from a sample, per-frame size), waves A and B cut from any sample (frame box, ±16, snap, click the strip) and the blend at the current mix; data.table/pair as base64, data.meta remembers sources, one undo step each. `SetNodeData::also` sets a second key in the same step; a null value erases a key.
+
+- Parameter-only node pictures (`app/node_pictures`, shown beside the picked node or with Alt+V like the envelopes): prismacanyon (echo bars per delay line against the song's ticks, pan and cutoff per line), ensemble (the three delays' length over 4 s), haas (early/late pulses and the mono comb). Display only: the sliders move them (the web's haas pulse drag is not ported). Still to do: the pictures that need the audio thread to report (notepan, pogue, filterpro, ...), and the other parameter-only ones (granular, membrane, kaleidoscope, drum, reflect, rotary, sympathy, compass, pulsar, khufu).
