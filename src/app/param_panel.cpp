@@ -261,7 +261,9 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
 
   const float rowH = ImGui::GetTextLineHeight() + 3 * scale;
   const float total = ImGui::GetContentRegionAvail().x;
-  const float nameW = std::clamp(total * 0.36f, 52 * scale, 160 * scale);
+  float nameW = 0;   // as wide as the longest name (and its port dot), not a share of the panel
+  for (const ParamSpec& spec : type->params) if (spec.name != "bypass") nameW = std::max(nameW, ImGui::CalcTextSize(spec.name.c_str()).x);
+  nameW = std::min(nameW + 14 * scale, total * 0.5f);
   ImDrawList* dl = ImGui::GetWindowDrawList();
   for (const ParamSpec& spec : type->params) {
     if (spec.name == "bypass") continue;
@@ -301,7 +303,9 @@ bool drawExposedDock(ParamPanelState& state, Document& doc, const Engine& engine
   if (visible) {
     ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 0.85f);
     const float total = ImGui::GetContentRegionAvail().x;
-    const float nameW = std::clamp(total * 0.36f, 52 * scale, 160 * scale);
+    float nameW = 0;   // as wide as the longest label (and its port dot), not a share of the panel
+    for (const Exposed& e : instrument->exposed) nameW = std::max(nameW, ImGui::CalcTextSize((e.label.empty() ? e.param : e.label).c_str()).x);
+    nameW = std::min(nameW + 14 * scale, total * 0.5f);
     for (const Exposed& e : instrument->exposed) {   // a row for each column the machine's patterns have
       const GraphNode* node = nullptr;
       for (const GraphNode& n : instrument->graph.nodes) if (n.id == e.node) node = &n;
