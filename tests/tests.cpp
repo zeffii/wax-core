@@ -28,6 +28,7 @@
 #include "io/wav.h"
 #include "project/project.h"
 #include "project/sample_edit.h"
+#include "project/spectrogram.h"
 #include "project/save.h"
 
 namespace {
@@ -1256,6 +1257,23 @@ void testSampleEdit() {
   check(throws([&] { applySampleTool(s, "nonsense", std::nullopt); }) && throws([&] { applySampleTool(s, "cut", std::nullopt); }), "unknown tools and a cut with no selection are refused");
 }
 
+void testSpectrogram() {   // the numbers come from the web app's computeSpectrogram on the same signal
+  const int n = 6000;
+  std::vector<float> d(n), r(n);
+  for (int i = 0; i < n; i++) {
+    d[static_cast<std::size_t>(i)] = static_cast<float>(0.5 * std::sin(i * 0.3) * std::exp(-i / 3000.0) + 0.2 * std::sin(i * 1.1));
+    r[static_cast<std::size_t>(i)] = static_cast<float>(0.1 * std::sin(i * 0.07));
+  }
+  const auto sum = [](const std::vector<std::uint8_t>& a) { long total = 0; for (const std::uint8_t v : a) total += v; return total; };
+  const auto stereo = wax::computeSpectrogram(d, r, 0, n, 12, 20), mono = wax::computeSpectrogram(d, {}, 0, n, 12, 20);
+  check(sum(stereo) == 14337 && stereo[0] == 106 && stereo[5 * 12 + 3] == 0 && stereo[19 * 12 + 11] == 135, "a stereo spectrogram matches the web app's");
+  check(sum(mono) == 10971 && mono[7 * 12 + 6] == 150, "a mono spectrogram matches the web app's");
+  const auto part = wax::computeSpectrogram(d, {}, 1000, 4000, 8, 16);
+  check(sum(part) == 5806 && part[40] == 150, "a part of the sample matches the web app's");
+  const auto heat = wax::spectrogramHeat(100);
+  check(heat[0] == 127 && heat[1] == 26 && heat[2] == 246 && wax::spectrogramHeat(255)[0] == 255 && wax::spectrogramHeat(0)[2] == 0, "the heat colours");
+}
+
 void testSampleLoading() {
   check(wax::sampleIdFromName("My Kick (01).wav") == "My_Kick_01_" && wax::sampleIdFromName("808.wav") == "_808" && wax::sampleIdFromName("...") == "_" && wax::sampleIdFromName(".wav") == "sample" && wax::sampleIdFromName("") == "sample", "a file name becomes an id");
   check(wax::sampleIdFromName("a_very_long_sample_name_that_goes_on_and_on.wav").size() == 24, "an id is at most 24 characters");
@@ -1428,6 +1446,7 @@ void testSetParam() {
 int main(int argc, char** argv) {
   if (argc > 1 && std::string(argv[1]) == "--samples") {   // just the sample tests (the whole run takes a long while)
     testSampleLoading();
+    testSpectrogram();
     testSampleEdit();
     testLiveSampler();
     if (failures) std::printf("%d check%s failed\n", failures, failures == 1 ? "" : "s");
@@ -1452,6 +1471,7 @@ int main(int argc, char** argv) {
   testCurveEdit();
   testCurveDocument();
   testSampleLoading();
+  testSpectrogram();
   testSampleEdit();
   testPresets();
   testGraphSaved();

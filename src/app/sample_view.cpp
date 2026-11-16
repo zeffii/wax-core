@@ -5,10 +5,12 @@
 #include <cstdio>
 #include <stdexcept>
 
+#include "app/icons.h"
 #include "app/theme.h"
 #include "app/widgets.h"
 #include "imgui.h"
 #include "project/samples.h"
+#include "project/spectrogram.h"
 
 namespace wax::app {
 
@@ -202,6 +204,8 @@ bool drawSampleScreen(SampleView& v, Document& document, Preview& preview, float
     ImGui::SameLine();
     ImGui::TextColored(dim, "%d frames   %.2f s   %s", frames, s.rate > 0 ? frames / s.rate : 0.0, stereo ? "stereo" : "mono");
     ImGui::SameLine(0, 18 * scale);
+    if (textButton(v.spectrogram ? "Waveform" : "Spectrogram")) v.spectrogram = !v.spectrogram;
+    ImGui::SameLine(0, 18 * scale);
     if (textButton("Remove")) {
       const std::vector<std::string> users = instrumentsPlaying(document.project(), v.selected);
       if (!users.empty()) v.status = "\"" + v.selected + "\" is used by " + users.front() + (users.size() > 1 ? " and others." : ".");
@@ -329,15 +333,29 @@ bool drawSampleScreen(SampleView& v, Document& document, Preview& preview, float
   if (v.selTo > v.selFrom) draw->AddRectFilled(ImVec2(frameToX(v.selFrom), origin.y), ImVec2(frameToX(v.selTo), origin.y + size.y), IM_COL32(255, 255, 255, 40));
   if (v.drag == SampleView::Drag::Select && v.dragMoved) draw->AddRectFilled(ImVec2(frameToX(v.dragStart), origin.y), ImVec2(frameToX(v.dragEnd), origin.y + size.y), IM_COL32(255, 255, 255, 40));
 
-  // the waveform itself
+  // the waveform itself, or the spectrogram (one cell per pixel, made again when the view or the size changes)
   const int width = std::max(1, static_cast<int>(size.x));
   const std::string key = v.selected + ":" + std::to_string(v.cacheRevision) + ":" + std::to_string(width) + ":" + std::to_string(static_cast<long long>(span.from)) + ":" + std::to_string(static_cast<long long>(span.to));
-  if (v.peaksKey != key) { v.peaks = computePeaks(s.left, width, span.from, span.to); v.peaksKey = key; }
   const float half = size.y / 2 - 2;
-  for (int x = 0; x < width; x++) {
-    const float lo = v.peaks[static_cast<std::size_t>(2 * x)], hi = v.peaks[static_cast<std::size_t>(2 * x + 1)];
-    const float px = origin.x + x + 0.5f;
-    draw->AddLine(ImVec2(px, mid - hi * half), ImVec2(px, std::max(mid - hi * half + 1, mid - lo * half)), accentAlpha(200));
+  if (v.spectrogram) {
+    const int height = std::max(1, static_cast<int>(size.y));
+    const std::string spectrumKey = key + ":" + std::to_string(height);
+    if (v.spectrumKey != spectrumKey || !pixelTexture("spectrogram", nullptr, width, height)) {
+      const std::vector<std::uint8_t> cells = computeSpectrogram(s.left, s.right, static_cast<int>(span.from), static_cast<int>(span.to), width, height);
+      std::vector<unsigned char> pixels(cells.size() * 4);
+      for (std::size_t i = 0; i < cells.size(); i++) { const auto c = spectrogramHeat(cells[i]); std::copy(c.begin(), c.end(), pixels.begin() + static_cast<std::ptrdiff_t>(i * 4)); }
+      pixelTexture("spectrogram", pixels.data(), width, height);
+      v.spectrumKey = spectrumKey;
+    }
+    const ImTextureID texture = pixelTexture("spectrogram", nullptr, width, height);
+    if (texture) draw->AddImage(texture, origin, ImVec2(origin.x + size.x, origin.y + size.y));
+  } else {
+    if (v.peaksKey != key) { v.peaks = computePeaks(s.left, width, span.from, span.to); v.peaksKey = key; }
+    for (int x = 0; x < width; x++) {
+      const float lo = v.peaks[static_cast<std::size_t>(2 * x)], hi = v.peaks[static_cast<std::size_t>(2 * x + 1)];
+      const float px = origin.x + x + 0.5f;
+      draw->AddLine(ImVec2(px, mid - hi * half), ImVec2(px, std::max(mid - hi * half + 1, mid - lo * half)), accentAlpha(200));
+    }
   }
   for (const Region& r : regions) {
     if (r.end <= r.start) continue;

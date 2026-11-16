@@ -70,11 +70,36 @@ SDL_Texture* textureFor(const std::string& name, int pixels) {
 
 }  // namespace
 
+namespace {
+struct Pixels { SDL_Texture* texture = nullptr; int w = 0, h = 0; };
+std::map<std::string, Pixels> gPixels;
+}  // namespace
+
+ImTextureID pixelTexture(const std::string& key, const unsigned char* rgba, int w, int h) {
+  if (!gRenderer || w < 1 || h < 1) return 0;
+  if (!rgba) {
+    const auto kept = gPixels.find(key);
+    return kept != gPixels.end() && kept->second.texture && kept->second.w == w && kept->second.h == h ? static_cast<ImTextureID>(reinterpret_cast<intptr_t>(kept->second.texture)) : 0;
+  }
+  Pixels& slot = gPixels[key];
+  if (!slot.texture || slot.w != w || slot.h != h) {
+    if (slot.texture) SDL_DestroyTexture(slot.texture);
+    slot.texture = SDL_CreateTexture(gRenderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, w, h);
+    slot.w = w; slot.h = h;
+    if (!slot.texture) return 0;
+    SDL_SetTextureScaleMode(slot.texture, SDL_SCALEMODE_LINEAR);
+  }
+  SDL_UpdateTexture(slot.texture, nullptr, rgba, w * 4);
+  return static_cast<ImTextureID>(reinterpret_cast<intptr_t>(slot.texture));
+}
+
 void iconsInit(SDL_Renderer* renderer) { gRenderer = renderer; }
 
 void iconsShutdown() {
   for (auto& [key, texture] : gTextures) if (texture) SDL_DestroyTexture(texture);
   gTextures.clear();
+  for (auto& [key, pixels] : gPixels) if (pixels.texture) SDL_DestroyTexture(pixels.texture);
+  gPixels.clear();
   gRenderer = nullptr;
 }
 

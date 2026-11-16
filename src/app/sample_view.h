@@ -35,6 +35,8 @@ struct SampleView {
   int cacheRevision = -1;
   std::vector<float> peaks;
   std::string peaksKey;
+  bool spectrogram = false;            // the display shows the spectrogram instead of the waveform
+  std::string spectrumKey;             // what the spectrogram picture on show was made for (its pixels are kept as a texture)
 
   int heldKey = -1;                    // the piano key playing the sample (ImGuiKey), -1 for none
 };

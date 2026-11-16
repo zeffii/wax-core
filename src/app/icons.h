@@ -18,6 +18,10 @@ void iconsShutdown();
 // `tip` shows when hovered. True when clicked. A name with no file shows its text instead.
 bool iconButton(const char* name, const char* tip, bool on = false, float size = 22);
 
+// A picture made of pixels (`rgba`, w x h, 4 bytes each), kept as a texture under `key` and replaced each time this is called with that key.
+// With `rgba` null it only gives the texture already kept. Returns 0 when there is none. Used for the spectrogram.
+ImTextureID pixelTexture(const std::string& key, const unsigned char* rgba, int w, int h);
+
 // A drawing at its own proportions (not a square button): its top left at `min`, `width` points wide (scaled with the window), height
 // `aspect` times the width, tinted. Used for the logo on the splash screen.
 void drawIcon(const char* name, ImVec2 min, float width, float aspect, ImU32 tint);

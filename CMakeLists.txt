@@ -84,7 +84,7 @@ add_library(waxcore
   src/nodes/fourpole.cpp
   src/nodes/sampler.cpp
   src/nodes/glsl.cpp
-  src/project/samples.cpp src/project/sample_edit.cpp
+  src/project/samples.cpp src/project/sample_edit.cpp src/project/spectrogram.cpp
   src/nodes/mix.cpp
   src/nodes/dcblock.cpp
   src/nodes/distortion.cpp
