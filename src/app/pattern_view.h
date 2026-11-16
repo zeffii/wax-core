@@ -20,8 +20,9 @@ struct PatternLane {
   const std::vector<std::string>* labels = nullptr;
   std::vector<unsigned int> tint;   // per tick, an ImU32 colour (0: none); empty: no tint
   // per tick: where patterns start and end, and which rows belong to a pattern other than the one under the cursor; empty: none
-  static constexpr unsigned char kStart = 1, kEnd = 2, kDim = 4, kLocked = 8;   // kLocked: solo-edit keeps the row out of reach: greyed, hatched, no cells to click
+  static constexpr unsigned char kStart = 1, kDim = 4, kLocked = 8;   // kLocked: solo-edit keeps the row out of reach: greyed, hatched, no cells to click
   std::vector<unsigned char> marks;
+  std::vector<unsigned int> edge;               // on a pattern's first row (kStart): the pattern's colour, for the bar drawn across its top
 };
 
 struct CursorView {

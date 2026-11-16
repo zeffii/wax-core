@@ -167,12 +167,11 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
             if (cursor.scrollTo) ImGui::SetScrollHereY(0.5f);
           }
           const bool filled = c < static_cast<int>(cells.size());
-          if (marks & (PatternLane::kStart | PatternLane::kEnd)) {   // a thin line where a pattern starts (above its first row) and ends (under its last)
+          if (marks & PatternLane::kStart) {   // where a pattern starts: a bar across its top, in the pattern's colour
             const ImVec2 at = ImGui::GetCursorScreenPos();
-            const float wide = ImGui::GetContentRegionAvail().x + charWidth, y0 = at.y - ImGui::GetStyle().CellPadding.y;
-            ImDrawList* dl = ImGui::GetWindowDrawList();
-            if (marks & PatternLane::kStart) dl->AddLine(ImVec2(at.x - charWidth / 2, y0), ImVec2(at.x - charWidth / 2 + wide, y0), dimAlpha(110));
-            if (marks & PatternLane::kEnd) dl->AddLine(ImVec2(at.x - charWidth / 2, y0 + rowHeight), ImVec2(at.x - charWidth / 2 + wide, y0 + rowHeight), dimAlpha(110));
+            const float wide = ImGui::GetContentRegionAvail().x + charWidth, top = at.y - ImGui::GetStyle().CellPadding.y;
+            const ImU32 barColour = static_cast<std::size_t>(tick) < lane.edge.size() && lane.edge[static_cast<std::size_t>(tick)] ? lane.edge[static_cast<std::size_t>(tick)] : dimAlpha(110);
+            ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(at.x - charWidth / 2, top), ImVec2(at.x - charWidth / 2 + wide, top + std::max(2.0f, 2.5f * ImGui::GetStyle().FontScaleDpi)), barColour);
           }
           const bool dimmed = (marks & PatternLane::kDim) != 0;
           if (dimmed) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(withAlpha(kText, 105)));   // the other patterns step back

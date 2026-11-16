@@ -1273,15 +1273,14 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         }
         {   // where each pattern starts and ends; on the cursor's lane the patterns other than the one under the cursor are dimmed
           grid.marks.assign(static_cast<std::size_t>(song.length), 0);
+          grid.edge.assign(static_cast<std::size_t>(song.length), 0);
           const Placement* under = shownLane->id == editor.lane() ? seq::placementAt(*shownLane, editor.tick()) : nullptr;
           for (int t = 0; t < song.length; t++) {
             const Placement* owner = seq::placementAt(*shownLane, t);
             if (!owner) continue;
             const Pattern* pat = seq::patternOf(*shownLane, owner->pattern);
-            const int end = owner->start + std::min(owner->length, pat ? static_cast<int>(pat->rows.size()) : 0);
             unsigned char& mark = grid.marks[static_cast<std::size_t>(t)];
-            if (t == owner->start) mark |= app::PatternLane::kStart;
-            if (t == end - 1 || t == song.length - 1) mark |= app::PatternLane::kEnd;
+            if (t == owner->start) { mark |= app::PatternLane::kStart; if (pat) grid.edge[static_cast<std::size_t>(t)] = app::patternColour(*pat, 230); }
             if (under && owner != under) mark |= app::PatternLane::kDim;
           }
           if (session->solo.on && app::settings().soloHatch)   // solo-edit with the song shown: everything but the pattern is out of reach
