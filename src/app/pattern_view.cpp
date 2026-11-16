@@ -1,4 +1,5 @@
 #include "app/pattern_view.h"
+#include "app/config.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -176,18 +177,16 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
   return result;
 }
 
-// Ctrl + mouse wheel over the pattern makes its text bigger or smaller (the rest of the window keeps its size).
+// Ctrl + mouse wheel over the pattern makes its text bigger or smaller: the "Text size" setting of the Pattern view (kept in the preferences).
 PatternViewResult drawPatternView(const std::vector<PatternLane>& lanes, int ticksPerBeat, int beatsPerBar, int playTick, bool follow, const CursorView& cursor) {
-  static float zoom = 1.0f;
   ImGuiIO& io = ImGui::GetIO();
   if (io.KeyCtrl && io.MouseWheel != 0 && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) {
-    zoom = std::min(3.0f, std::max(0.5f, zoom * (io.MouseWheel > 0 ? 1.1f : 1.0f / 1.1f)));
+    float& size = settings().patternText;
+    size = std::min(2.0f, std::max(0.6f, size * (io.MouseWheel > 0 ? 1.1f : 1.0f / 1.1f)));
+    saveSettings();
     io.MouseWheel = 0;   // (the grid does not scroll as well)
   }
-  ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * zoom);
-  PatternViewResult result = drawPatternGrid(lanes, ticksPerBeat, beatsPerBar, playTick, follow, cursor);
-  ImGui::PopFont();
-  return result;
+  return drawPatternGrid(lanes, ticksPerBeat, beatsPerBar, playTick, follow, cursor);
 }
 
 }  // namespace wax::app

@@ -96,6 +96,7 @@ struct Options {
   double rate = 48000;
   int threads = 0, midiPort = 0, frames = 3, playFrom = -1, buffer = 0;
   bool useNull = false;
+  bool allLanes = false;   // --all-lanes: the Pattern screen shows every lane side by side
   bool splashForced = false;
   bool splash = true;   // the Wax logo for a moment at start (not when taking a screenshot, unless --splash is given)
 };
@@ -1524,6 +1525,7 @@ bool parse(int argc, char** argv, Options& o) {
     else if (a == "--frames" && more) o.frames = std::max(1, std::atoi(argv[++i]));
     else if (a == "--play-from" && more) o.playFrom = std::atoi(argv[++i]);
     else if (a == "--null") o.useNull = true;
+    else if (a == "--all-lanes") o.allLanes = true;
     else if (a == "--splash") { o.splash = true; o.splashForced = true; }
     else if (a == "--no-splash") o.splash = false;
     else if (!a.empty() && a[0] != '-' && o.path.empty()) o.path = a;
@@ -1562,6 +1564,7 @@ int main(int argc, char** argv) {
   loadTheme();
   app::loadSettings();
   if (!options.theme.empty()) app::setThemeByName(options.theme.c_str());
+  if (options.allLanes) app::settings().patternAll = true;
   ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
   ImGui_ImplSDLRenderer3_Init(renderer);
 

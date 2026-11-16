@@ -1505,6 +1505,25 @@ void testExposePort() {
   std::printf("ok: expose and port\n");
 }
 
+// Hiding or showing a parameter column moves the cells of the patterns with it (and undo puts them back), so the lane stays readable.
+void testExposeMovesCells() {
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/cloves.wax"));
+  const wax::Instrument& first = doc.project().instruments[1];   // clang: notes, then shown parameters, then a command column
+  const std::string id = first.id;
+  const std::size_t shown = first.exposed.size();
+  const wax::Exposed one = first.exposed.front();
+  const wax::Lane* lane = nullptr;
+  for (const wax::Lane& l : doc.project().lanes) if (l.instrument == id) lane = &l;
+  check(lane && !lane->patterns.empty(), "the lane has a pattern");
+  const auto cellCount = [&](const wax::Document& d) { std::istringstream words(d.project().lanes[1].patterns.front().rows.front()); std::size_t n = 0; for (std::string w; words >> w;) n++; return n; };
+  const std::size_t before = cellCount(doc);
+  doc.apply(std::make_unique<wax::SetExposed>(id, one.node, one.param, false));
+  check(doc.project().instruments[1].exposed.size() == shown - 1 && cellCount(doc) == before - 1, "hiding a parameter takes its cell out of the rows");
+  doc.undo();
+  check(cellCount(doc) == before, "undoing it puts the cell back");
+  std::printf("ok: expose moves cells\n");
+}
+
 void testMoveNode() {
   const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
   wax::Document doc(original);
@@ -1603,6 +1622,7 @@ int main(int argc, char** argv) {
   testPresets();
   testGraphSaved();
   testExposePort();
+  testExposeMovesCells();
   testAddNode();
   testUnits();
   testRewire();

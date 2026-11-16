@@ -232,6 +232,7 @@ private:
   std::string instrument_, node_, param_;
   bool on_;
   std::vector<Exposed> before_;
+  std::map<std::pair<std::string, std::string>, std::vector<std::string>> rowsBefore_;   // (lane, pattern) -> its rows, before the cells moved
 };
 
 // The width of an exposed parameter's column: 4 bits is one hex digit, 8 two (the usual), 16 four.

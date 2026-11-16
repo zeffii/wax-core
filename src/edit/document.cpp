@@ -759,11 +759,52 @@ void CloneLaneWithMachine::revert(Project& project) {
   if (machine >= 0) project.instruments.erase(project.instruments.begin() + machine);
 }
 
+namespace {
+
+// Where an instrument's first shown-parameter column sits in its lanes' patterns: after its note and velocity columns and its triggers
+// (the order buildColumns gives, see ownColumns in seq/columns.cpp).
+int firstParamCell(const Instrument& instrument) {
+  const int pairs = instrument.noteColumns == 0 ? 0 : std::max(1, std::min(8, instrument.noteColumns));
+  return pairs * (instrument.noVel ? 1 : 2) + static_cast<int>(instrument.triggers.size());
+}
+
+// The cells of every pattern of the lanes that play `instrument`, changed by `edit` row by row (a row is its cells joined by one space).
+// `saved` remembers each changed pattern's rows, so the change can be undone. A shown parameter being added or taken away moves the cells
+// after it; without this the patterns would be out of step with the columns.
+template <typename Edit>
+void changeCells(Project& project, const Instrument& instrument, std::map<std::pair<std::string, std::string>, std::vector<std::string>>& saved, Edit edit) {
+  if (instrument.isMeta) return;
+  for (Lane& lane : project.lanes) {
+    if (lane.instrument != instrument.id) continue;
+    for (Pattern& pattern : lane.patterns) {
+      saved[{lane.id, pattern.id}] = pattern.rows;
+      for (std::string& row : pattern.rows) {
+        std::vector<std::string> cells;
+        std::istringstream words(row);
+        for (std::string cell; words >> cell;) cells.push_back(cell);
+        if (cells.empty()) continue;
+        edit(cells);
+        row.clear();
+        for (std::size_t i = 0; i < cells.size(); i++) row += (i ? " " : "") + cells[i];
+      }
+    }
+  }
+}
+
+}  // namespace
+
 void SetExposed::apply(Project& project) {
   Instrument& instrument = instrumentNamed(project, instrument_);
   before_ = instrument.exposed;
   const auto found = std::find_if(instrument.exposed.begin(), instrument.exposed.end(), [&](const Exposed& e) { return e.node == node_ && e.param == param_; });
-  if (!on_) { if (found != instrument.exposed.end()) instrument.exposed.erase(found); return; }
+  rowsBefore_.clear();
+  if (!on_) {
+    if (found == instrument.exposed.end()) return;
+    const std::size_t at = static_cast<std::size_t>(firstParamCell(instrument) + (found - instrument.exposed.begin()));
+    changeCells(project, instrument, rowsBefore_, [&](std::vector<std::string>& cells) { if (at < cells.size()) cells.erase(cells.begin() + static_cast<std::ptrdiff_t>(at)); });
+    instrument.exposed.erase(found);
+    return;
+  }
   if (found != instrument.exposed.end()) return;
   const GraphNode* node = nullptr;
   for (const GraphNode& n : instrument.graph.nodes) if (n.id == node_) node = &n;
@@ -784,10 +825,20 @@ void SetExposed::apply(Project& project) {
   }
   if (spec->isInt && spec->max - spec->min < 16) added.bits = 4;
   added.log = spec->min > 0 && spec->max / spec->min >= 50;
+  const std::size_t at = static_cast<std::size_t>(firstParamCell(instrument) + static_cast<int>(instrument.exposed.size()));
+  const std::string blank = added.bits == 4 ? "." : added.bits == 16 ? "...." : "..";
+  changeCells(project, instrument, rowsBefore_, [&](std::vector<std::string>& cells) { if (at < cells.size()) cells.insert(cells.begin() + static_cast<std::ptrdiff_t>(at), blank); });
   instrument.exposed.push_back(std::move(added));
 }
 
-void SetExposed::revert(Project& project) { instrumentNamed(project, instrument_).exposed = before_; }
+void SetExposed::revert(Project& project) {
+  instrumentNamed(project, instrument_).exposed = before_;
+  for (Lane& lane : project.lanes)
+    for (Pattern& pattern : lane.patterns) {
+      const auto saved = rowsBefore_.find({lane.id, pattern.id});
+      if (saved != rowsBefore_.end()) pattern.rows = saved->second;
+    }
+}
 
 void SetExposedBits::apply(Project& project) {
   for (Exposed& e : instrumentNamed(project, instrument_).exposed) {

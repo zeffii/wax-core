@@ -231,3 +231,5 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 - Khufu picture: two cycles of the low/mid/high registers, each faint and the mix as it is added up.
 
 - Membrane picture: the head with the pattern of the picked mode (filled dot up, hollow down, a cross where it is struck) and every mode as a stem along its pitch; click a stem to see its pattern (kept for the session). Uses `membraneModes` from the node itself so it agrees with the sound.
+
+- Showing or hiding a parameter column now moves the cells of the patterns with it (`SetExposed`: the cell is taken out of, or a blank put into, every row of every lane that plays the instrument; undo restores the rows). Before, the rows kept their old cells and everything after the column slid into the wrong column. Meta lanes are not remapped yet. Ctrl + wheel over the pattern changes the saved "Text size" setting; `--all-lanes` shows every lane side by side in screenshots.
