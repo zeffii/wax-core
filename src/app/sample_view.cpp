@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <stdexcept>
 
+#include "app/config.h"
 #include "app/icons.h"
 #include "app/theme.h"
 #include "app/widgets.h"
@@ -75,6 +76,20 @@ std::string sliceHex(int frame, int frames) {
   return hex4(static_cast<int>(std::lround(static_cast<double>(frame) / std::max(1, frames - 1) * 65535)));
 }
 
+// The absolute place as hex: four digits while the sample fits in them, else "hh:hhhh" (the 65536-frame blocks passed, then what is left).
+std::string frameHex(int frame, int frames) {
+  char text[24];
+  if (frames > 65536) std::snprintf(text, sizeof text, "%02X:%04X", frame / 65536, frame % 65536);
+  else std::snprintf(text, sizeof text, "%04X", frame);
+  return text;
+}
+
+// What a marker shows for its place, by the "hex value" setting: relative, absolute or both.
+std::string placeHex(int frame, int frames) {
+  const std::string& mode = settings().hexMode;
+  return mode == "relative" ? sliceHex(frame, frames) : mode == "absolute" ? frameHex(frame, frames) : sliceHex(frame, frames) + " " + frameHex(frame, frames);
+}
+
 // Applies `change` to a decoded copy of the sample and commits it as one undoable edit. A refusal (the tool throws) becomes the status.
 template <class Change>
 bool commit(SampleView& v, Document& document, const std::string& label, bool fold, Change change) {
@@ -115,14 +130,14 @@ bool runTool(SampleView& v, Document& document, const std::string& tool, const c
 // What auto-slice would do with the settings now: the hits it finds, and the markers it would add (one on each hit, and one at the start of the
 // range when the first hit is well after it). Worked out again only when a setting, the selection or the sample changes.
 void updateAutoSlice(SampleView& v, const EditableSample& s, int revision) {
-  const bool whole = v.sliceWhole || v.selTo <= v.selFrom;
+  const bool whole = settings().sliceWhole || v.selTo <= v.selFrom;
   const int from = whole ? 0 : v.selFrom, to = whole ? s.frames() : v.selTo;
-  const std::string key = v.selected + ":" + std::to_string(revision) + ":" + std::to_string(v.sliceSensitivity) + ":" + std::to_string(v.sliceGap) + ":" + std::to_string(from) + ":" + std::to_string(to);
+  const std::string key = v.selected + ":" + std::to_string(revision) + ":" + std::to_string(settings().sliceSensitivity) + ":" + std::to_string(settings().sliceMinGap) + ":" + std::to_string(from) + ":" + std::to_string(to);
   if (key == v.sliceKey) return;
   v.sliceKey = key;
-  OnsetSettings settings;
-  settings.from = from; settings.to = to; settings.sensitivity = v.sliceSensitivity / 100.0; settings.minGapMs = v.sliceGap;
-  v.sliceHits = detectOnsets(s.left, s.right, s.rate, settings);
+  OnsetSettings look;
+  look.from = from; look.to = to; look.sensitivity = settings().sliceSensitivity / 100.0; look.minGapMs = settings().sliceMinGap;
+  v.sliceHits = detectOnsets(s.left, s.right, s.rate, look);
   v.sliceMarks.clear();
   if (!v.sliceHits.empty()) {
     if (v.sliceHits.front() - from > static_cast<int>(std::lround(0.02 * s.rate))) v.sliceMarks.push_back(from);
@@ -348,13 +363,19 @@ bool drawSampleScreen(SampleView& v, Document& document, Preview& preview, float
     }
   }
   for (const Region& r : regions) {
-    if (r.end <= r.start) continue;
+    if (r.end <= r.start || (r.sustain ? settings().waveHideSus : settings().waveHideLoop)) continue;   // (hidden in Config)
     const float x0 = frameToX(r.start), x1 = frameToX(r.end);
     const bool on = r.sustain ? loopActive(s, true) : loopActive(s, false);
     draw->AddRectFilled(ImVec2(x0, origin.y), ImVec2(x1, origin.y + size.y), (r.colour & 0x00ffffff) | (static_cast<ImU32>(on ? 45 : 18) << 24));
   }
-  if (v.selTo > v.selFrom) draw->AddRectFilled(ImVec2(frameToX(v.selFrom), origin.y), ImVec2(frameToX(v.selTo), origin.y + size.y), IM_COL32(255, 255, 255, 40));
-  if (v.drag == SampleView::Drag::Select && v.dragMoved) draw->AddRectFilled(ImVec2(frameToX(v.dragStart), origin.y), ImVec2(frameToX(v.dragEnd), origin.y + size.y), IM_COL32(255, 255, 255, 40));
+  // the selection: shaded in the theme's text colour (so it shows on light themes too) with a line at each edge
+  const auto shade = [&](int from, int to) {
+    draw->AddRectFilled(ImVec2(frameToX(from), origin.y), ImVec2(frameToX(to), origin.y + size.y), textAlpha(60));
+    draw->AddLine(ImVec2(frameToX(from), origin.y), ImVec2(frameToX(from), origin.y + size.y), textAlpha(170));
+    draw->AddLine(ImVec2(frameToX(to), origin.y), ImVec2(frameToX(to), origin.y + size.y), textAlpha(170));
+  };
+  if (v.selTo > v.selFrom && !settings().waveHideSel) shade(v.selFrom, v.selTo);
+  if (v.drag == SampleView::Drag::Select && v.dragMoved) shade(v.dragStart, v.dragEnd);
 
   // the waveform itself, or the spectrogram (one cell per pixel, made again when the view or the size changes)
   const int width = std::max(1, static_cast<int>(size.x));
@@ -381,13 +402,13 @@ bool drawSampleScreen(SampleView& v, Document& document, Preview& preview, float
     }
   }
   for (const Region& r : regions) {
-    if (r.end <= r.start) continue;
+    if (r.end <= r.start || (r.sustain ? settings().waveHideSus : settings().waveHideLoop)) continue;
     for (const int f : {r.start, r.end}) draw->AddLine(ImVec2(frameToX(f), origin.y), ImVec2(frameToX(f), origin.y + size.y), r.colour, 1.5f);
   }
   const std::vector<int> savedSlices = sliceMarkers(s);
   if (v.sliceOpen) {   // the markers auto-slice would add, faint, with the range it replaces shaded
     updateAutoSlice(v, s, v.cacheRevision);
-    if (v.sliceReplace) draw->AddRectFilled(ImVec2(frameToX(v.sliceFrom), origin.y), ImVec2(frameToX(v.sliceTo), origin.y + 3), kSliceColour);
+    if (settings().sliceReplace) draw->AddRectFilled(ImVec2(frameToX(v.sliceFrom), origin.y), ImVec2(frameToX(v.sliceTo), origin.y + 3), kSliceColour);
     for (const int f : v.sliceMarks) draw->AddLine(ImVec2(frameToX(f), origin.y), ImVec2(frameToX(f), origin.y + size.y), withAlpha(kSliceColour, 130), 1.0f);
   }
   const std::vector<int>& slices = v.drag == SampleView::Drag::Slice ? v.dragSlices : savedSlices;
@@ -395,7 +416,7 @@ bool drawSampleScreen(SampleView& v, Document& document, Preview& preview, float
     const float x = frameToX(slices[i]);
     draw->AddLine(ImVec2(x, origin.y), ImVec2(x, origin.y + size.y), kSliceColour, static_cast<int>(i) == v.activeSlice ? 2.5f : 1.0f);
     char label[32];
-    std::snprintf(label, sizeof label, "%02X %s", static_cast<int>(i), sliceHex(slices[i], frames).c_str());
+    std::snprintf(label, sizeof label, "%02X %s", static_cast<int>(i), placeHex(slices[i], frames).c_str());
     draw->AddText(ImVec2(x + 3, origin.y + 1), kSliceColour, label);
   }
   draw->AddLine(ImVec2(frameToX(v.head), origin.y), ImVec2(frameToX(v.head), origin.y + size.y), textAlpha(150));
@@ -432,6 +453,7 @@ bool drawSampleScreen(SampleView& v, Document& document, Preview& preview, float
     v.dragAnchor = f;
     const auto grabRegion = [&](bool sustain) {
       v.dragSustain = sustain;
+      (sustain ? settings().waveHideSus : settings().waveHideLoop) = false;   // working on it shows it
       const int start = static_cast<int>(s.number(sustain ? "susStart" : "loopStart")), end = static_cast<int>(s.number(sustain ? "susEnd" : "loopEnd"));
       v.dragStart = start; v.dragEnd = end;
       if (end > start && std::abs(mouse.x - frameToX(start)) <= kGrab * scale) v.drag = SampleView::Drag::LoopStart;
@@ -443,7 +465,7 @@ bool drawSampleScreen(SampleView& v, Document& document, Preview& preview, float
       if (at >= 0) { v.drag = SampleView::Drag::Slice; v.dragSlice = at; v.dragSlices = savedSlices; v.activeSlice = at; }
       else { grabRegion(false); v.dragSlice = -1; }
     } else if (io.KeyCtrl) grabRegion(true);
-    else { v.drag = SampleView::Drag::Select; v.dragStart = v.dragEnd = f; }
+    else { v.drag = SampleView::Drag::Select; v.dragStart = v.dragEnd = f; settings().waveHideSel = false; }
   }
   if (v.drag != SampleView::Drag::None && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
     const int f = xToFrame(mouse.x);
@@ -538,20 +560,21 @@ bool drawSampleScreen(SampleView& v, Document& document, Preview& preview, float
   if (v.sliceOpen && !ImGui::IsPopupOpen("Auto-slice")) ImGui::OpenPopup("Auto-slice");
   if (ImGui::BeginPopupModal("Auto-slice", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
     updateAutoSlice(v, s, v.cacheRevision);
-    ImGui::TextColored(dim, "Marks a slice at each hit of the %s.", v.sliceWhole || v.selTo <= v.selFrom ? "whole sample" : "selection");
+    ImGui::TextColored(dim, "Marks a slice at each hit of the %s.", settings().sliceWhole || v.selTo <= v.selFrom ? "whole sample" : "selection");
     ImGui::SetNextItemWidth(220 * scale);
-    ImGui::SliderInt("Sensitivity (%)", &v.sliceSensitivity, 0, 100);
+    bool tuned = ImGui::SliderInt("Sensitivity (%)", &settings().sliceSensitivity, 0, 100);
     ImGui::SetNextItemWidth(220 * scale);
-    ImGui::SliderInt("Shortest gap (ms)", &v.sliceGap, 5, 500);
-    ImGui::Checkbox("Replace the markers in range", &v.sliceReplace);
-    ImGui::Checkbox("Operate on the whole sample", &v.sliceWhole);
-    const bool whole = v.sliceWhole || v.selTo <= v.selFrom;
+    tuned |= ImGui::SliderInt("Shortest gap (ms)", &settings().sliceMinGap, 5, 500);
+    tuned |= ImGui::Checkbox("Replace the markers in range", &settings().sliceReplace);
+    tuned |= ImGui::Checkbox("Operate on the whole sample", &settings().sliceWhole);
+    if (tuned) saveSettings();
+    const bool whole = settings().sliceWhole || v.selTo <= v.selFrom;
     if (v.sliceHits.empty()) ImGui::TextColored(dim, "No hits found%s: raise the sensitivity or shorten the gap.", whole ? "" : " in the selection");
     else ImGui::Text("%d hits found%s.", static_cast<int>(v.sliceHits.size()), whole ? "" : " in the selection");
     ImGui::Separator();
     if (!v.sliceHits.empty() && textButton("Slice")) {
       std::vector<int> next;
-      for (const int f : sliceMarkers(s)) if (!v.sliceReplace || f < v.sliceFrom || f >= v.sliceTo) next.push_back(f);   // markers outside the range stay
+      for (const int f : sliceMarkers(s)) if (!settings().sliceReplace || f < v.sliceFrom || f >= v.sliceTo) next.push_back(f);   // markers outside the range stay
       next.insert(next.end(), v.sliceMarks.begin(), v.sliceMarks.end());
       if (commit(v, document, "Auto-slice", false, [&](EditableSample& e) { setSliceMarkers(e, next); })) {
         changed = true;

@@ -491,7 +491,32 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     const bool typing = session->edit && !ctrl && !io.KeyAlt && !session->envelopes.wantsKeys();
     if (typing) {
       const int before = editor.tick() * 4096 + editor.cell();
-      const auto step = [&](int rows, int cells) { if (io.KeyShift) editor.extend(rows, cells); else editor.move(rows, cells); };
+      editor.setWrapRows(app::settings().rowWrap);
+      const auto step = [&](int rows, int cells) {
+        if (io.KeyShift) { editor.extend(rows, cells); return; }
+        const int cellBefore = editor.cell();
+        editor.move(rows, cells);
+        if (!cells || editor.cell() != cellBefore || session->screen != Screen::Pattern || !app::settings().patternAll) return;
+        // Left or Right at the first or last column of a lane: on into the next lane (when all lanes are shown), the cursor at the same row
+        std::vector<std::string> order;
+        for (const Lane& l : doc.project().lanes) if (l.id != kMaster) order.push_back(l.id);
+        const auto at = std::find(order.begin(), order.end(), editor.lane());
+        if (at == order.end() || order.size() < 2) return;
+        std::ptrdiff_t next = (at - order.begin()) + cells;
+        if (next < 0 || next >= static_cast<std::ptrdiff_t>(order.size())) {
+          if (!app::settings().laneWrap) return;   // the caret stops at the first and last column
+          next = (next + static_cast<std::ptrdiff_t>(order.size())) % static_cast<std::ptrdiff_t>(order.size());
+        }
+        const std::string lane = order[static_cast<std::size_t>(next)];
+        const int tick = editor.tick();
+        selectedLane = lane;
+        editor.setLane(lane, player.engine().laneColumns(lane));
+        const int columns = static_cast<int>(player.engine().laneColumns(lane).size());
+        editor.moveTo(tick, cells > 0 ? 0 : std::max(0, columns - 1));
+        if (cells > 0) editor.move(0, 1), editor.move(0, -1);   // (the first cell that is not a spacer)
+        else editor.move(0, -1), editor.move(0, 1);              // (the last one)
+        session->wantLane = lane;
+      };
       if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) step(-1, 0);
       if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) step(1, 0);
       if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) step(0, -1);
@@ -624,7 +649,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       if (!any) ImGui::TextColored(dim, "none yet: pick a file below");
       ImGui::PopFont();
       ImGui::Separator();
-      const app::SampleBrowserResult picked = app::drawSampleBrowser(session->sampleBrowser, player.preview(), std::filesystem::path(options.path).parent_path(), 10, session->screen == Screen::Sample ? session->sampleView.selected : std::string());
+      const app::SampleBrowserResult picked = app::drawSampleBrowser(session->sampleBrowser, player.preview(), std::filesystem::path(options.path).parent_path(), app::settings().sampleAskMB, session->screen == Screen::Sample ? session->sampleView.selected : std::string());
       if (picked.load) {
         try {
           const StereoAudio audio = readWav(picked.file.string());
@@ -1154,6 +1179,31 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     colour("Wire colour: stereo", cfg.wireStereo);
     colour("Wire colour: parameter", cfg.wireParam);
     if (ImGui::Checkbox("Control wires are dashed", &cfg.wireDashed)) changed = true;
+    group("Editing", "How the cursor moves.");
+    if (ImGui::Checkbox("Up and Down wrap round the first and last row", &cfg.rowWrap)) changed = true;
+    if (ImGui::Checkbox("Left and Right wrap round the first and last lane (All lanes view)", &cfg.laneWrap)) changed = true;
+    group("Sample", "The Sample screen.");
+    ImGui::SetNextItemWidth(220 * scale);
+    if (ImGui::SliderInt("Auto-slice: sensitivity (%)", &cfg.sliceSensitivity, 0, 100)) changed = true;
+    ImGui::SetNextItemWidth(220 * scale);
+    if (ImGui::SliderInt("Auto-slice: shortest gap (ms)", &cfg.sliceMinGap, 5, 500)) changed = true;
+    if (ImGui::Checkbox("Auto-slice: replace the markers in range", &cfg.sliceReplace)) changed = true;
+    if (ImGui::Checkbox("Auto-slice: operate on the whole sample", &cfg.sliceWhole)) changed = true;
+    if (ImGui::Checkbox("Waveform: hide the loop region", &cfg.waveHideLoop)) changed = true;
+    if (ImGui::Checkbox("Waveform: hide the selection", &cfg.waveHideSel)) changed = true;
+    if (ImGui::Checkbox("Waveform: hide the sustain loop region", &cfg.waveHideSus)) changed = true;
+    {
+      static const struct { const char* id; const char* label; } modes[] = {{"both", "both (relative and absolute)"}, {"relative", "relative: 0000 to FFFF through the sample"}, {"absolute", "absolute: the frame number"}};
+      const char* shown = modes[0].label;
+      for (const auto& mode : modes) if (cfg.hexMode == mode.id) shown = mode.label;
+      ImGui::SetNextItemWidth(330 * scale);
+      if (ImGui::BeginCombo("Slice markers: hex value", shown)) {
+        for (const auto& mode : modes) if (ImGui::Selectable(mode.label, cfg.hexMode == mode.id)) { cfg.hexMode = mode.id; changed = true; }
+        ImGui::EndCombo();
+      }
+    }
+    ImGui::SetNextItemWidth(220 * scale);
+    if (ImGui::SliderInt("Sample browser: ask before reading files over (MB)", &cfg.sampleAskMB, 1, 2000)) changed = true;
     ImGui::Spacing();
     if (app::textButton("Reset to defaults")) { app::resetSettings(); follow = cfg.follow; changed = true; }
     if (changed) app::saveSettings();

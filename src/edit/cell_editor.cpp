@@ -78,7 +78,12 @@ void CellEditor::move(int rows, int cells) {
     if (next < 0 || next >= count) break;
     cell = next;
   }
-  moveTo(tick_ + rows, cell);
+  int tick = tick_ + rows;
+  if (wrapRows_) {
+    const int length = std::max(1, document_.project().song.length);
+    tick = ((tick % length) + length) % length;
+  }
+  moveTo(tick, cell);
 }
 
 bool CellEditor::onNoteCell() const {

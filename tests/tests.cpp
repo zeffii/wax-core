@@ -352,6 +352,15 @@ void testBlockEdit() {
   ed.setLane("L1", columns);
   const auto row = [&](int i) { return doc.project().lanes[0].patterns[0].rows[static_cast<std::size_t>(i)]; };
 
+  ed.moveTo(0, 0);
+  ed.move(-1, 0);
+  check(ed.tick() == 0, "Up stops on the first row");
+  ed.setWrapRows(true);
+  ed.move(-1, 0);
+  check(ed.tick() == 7, "with wrap, Up on the first row goes to the last");
+  ed.move(1, 0);
+  check(ed.tick() == 0, "with wrap, Down on the last row goes back to the first");
+  ed.setWrapRows(false);
   ed.moveTo(2, 0);
   ed.extend(1, 1);   // ticks 2..3, cells 0..1
   check(ed.selection().active && ed.selection().tick1 == 3 && ed.selection().cell1 == 1, "shift-moving selects a block");

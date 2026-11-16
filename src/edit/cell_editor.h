@@ -31,6 +31,8 @@ public:
   // Where the cursor may go. Moving ends a half-typed cell.
   void moveTo(int tick, int cell);
   void move(int rows, int cells);
+  // Up and Down wrap round the first and last row of the song (off: the cursor stops there).
+  void setWrapRows(bool on) { wrapRows_ = on; }
 
   // A selection: a block of cells from where it was started to the cursor. Moving without extending drops it.
   struct Selection { bool active = false; int tick0 = 0, tick1 = 0, cell0 = 0, cell1 = 0; };
@@ -84,7 +86,7 @@ private:
   std::string lane_;
   std::vector<Column> columns_;
   int tick_ = 0, cell_ = 0, typed_ = 0, step_ = 1;
-  bool selecting_ = false;
+  bool selecting_ = false, wrapRows_ = false;
   int anchorTick_ = 0, anchorCell_ = 0;
   std::vector<std::vector<std::string>> clipboard_;   // rows of cell texts
 

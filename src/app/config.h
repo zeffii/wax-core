@@ -26,6 +26,15 @@ struct Settings {
   float patternText = 1.0f;    // the Pattern grid's text size, as a multiple of the normal size
   bool hideEmpty = false;      // the Pattern screen leaves out columns with nothing in them
   bool tintPatterns = true;    // the Pattern screen tints each pattern's rows with the pattern's colour
+  // editing (the web's rowWrap and laneWrap): Up/Down wrap round the first and last row; Left/Right go past the last column to the next lane
+  // and, with laneWrap, from the last lane back to the first
+  bool rowWrap = false, laneWrap = false;
+  // the Sample screen (the web's sliceSensitivity, sliceMinGap, sliceReplace, sliceWhole, waveHide*, hexMode, sampleAskMB)
+  int sliceSensitivity = 50, sliceMinGap = 30;
+  bool sliceReplace = true, sliceWhole = false;
+  bool waveHideLoop = false, waveHideSel = false, waveHideSus = false;
+  std::string hexMode = "both";   // what a slice marker shows: "relative" (0000..FFFF through the sample), "absolute" (its frame) or "both"
+  int sampleAskMB = 10;           // the sample browser asks before reading files over this many megabytes
   int arrangementRow = 0;   // the Song screen's row size in ticks (Ctrl+wheel); 0: a bar
 };
 

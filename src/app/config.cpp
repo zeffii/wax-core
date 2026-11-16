@@ -61,6 +61,18 @@ void loadSettings() {
   s.patternText = std::clamp(data.value("patternText", s.patternText), 0.6f, 2.0f);
   s.notePreview = data.value("notePreview", s.notePreview);
   s.tintPatterns = data.value("tintPatterns", s.tintPatterns);
+  s.rowWrap = data.value("rowWrap", s.rowWrap);
+  s.laneWrap = data.value("laneWrap", s.laneWrap);
+  s.sliceSensitivity = std::clamp(data.value("sliceSensitivity", s.sliceSensitivity), 0, 100);
+  s.sliceMinGap = std::clamp(data.value("sliceMinGap", s.sliceMinGap), 5, 500);
+  s.sliceReplace = data.value("sliceReplace", s.sliceReplace);
+  s.sliceWhole = data.value("sliceWhole", s.sliceWhole);
+  s.waveHideLoop = data.value("waveHideLoop", s.waveHideLoop);
+  s.waveHideSel = data.value("waveHideSel", s.waveHideSel);
+  s.waveHideSus = data.value("waveHideSus", s.waveHideSus);
+  const std::string hex = data.value("hexMode", s.hexMode);
+  if (hex == "both" || hex == "relative" || hex == "absolute") s.hexMode = hex;
+  s.sampleAskMB = std::clamp(data.value("sampleAskMB", s.sampleAskMB), 1, 2000);
 }
 
 void saveSettings() {
@@ -68,7 +80,9 @@ void saveSettings() {
   if (path.empty()) return;
   const Settings& s = gSettings;
   Json data = {{"wireAudio", hexOf(s.wireAudio)}, {"wireControl", hexOf(s.wireControl)}, {"wireStereo", hexOf(s.wireStereo)},
-               {"wireParam", hexOf(s.wireParam)}, {"wireDashed", s.wireDashed}, {"playhead", s.playhead}, {"follow", s.follow}, {"arrangementRow", s.arrangementRow}, {"insertCut", s.insertCut}, {"patternAll", s.patternAll}, {"hideEmpty", s.hideEmpty}, {"patternText", s.patternText}, {"notePreview", s.notePreview}, {"tintPatterns", s.tintPatterns}};
+               {"wireParam", hexOf(s.wireParam)}, {"wireDashed", s.wireDashed}, {"playhead", s.playhead}, {"follow", s.follow}, {"arrangementRow", s.arrangementRow}, {"insertCut", s.insertCut}, {"patternAll", s.patternAll}, {"hideEmpty", s.hideEmpty}, {"patternText", s.patternText}, {"notePreview", s.notePreview}, {"tintPatterns", s.tintPatterns},
+               {"rowWrap", s.rowWrap}, {"laneWrap", s.laneWrap}, {"sliceSensitivity", s.sliceSensitivity}, {"sliceMinGap", s.sliceMinGap}, {"sliceReplace", s.sliceReplace}, {"sliceWhole", s.sliceWhole},
+               {"waveHideLoop", s.waveHideLoop}, {"waveHideSel", s.waveHideSel}, {"waveHideSus", s.waveHideSus}, {"hexMode", s.hexMode}, {"sampleAskMB", s.sampleAskMB}};
   std::ofstream(path, std::ios::trunc) << data.dump(1) << "\n";
 }
 
