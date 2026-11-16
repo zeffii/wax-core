@@ -60,15 +60,6 @@ double valueAt(const Curve& curve, double t) {
   return segmentValue(p[i], p[i + 1], curve.kindAt(i), t);
 }
 
-struct Target {
-  std::string id;
-  int slot;
-  double min, max;
-  bool log;
-  double taper;
-  bool amp;
-};
-
 Curve readCurve(const Json& c) {
   Curve curve;
   curve.on = !(c.contains("on") && c["on"].is_boolean() && !c["on"].get<bool>());
@@ -88,25 +79,42 @@ std::vector<double> sampleCurve(const Json& c, double from, double to, int count
   return out;
 }
 
+std::vector<CurveTarget> curveTargets(const std::vector<Column>& columns, const std::string& instrument, const ParamRegistry& registry) {
+  std::vector<CurveTarget> targets;
+  for (const Column& c : columns) {
+    if (c.kind != ColumnKind::Param || c.slot < 0) continue;
+    targets.push_back({c.node + "." + c.param, c.longName.empty() ? c.label : c.longName, c.slot, c.min, c.max, c.log || (c.min > 0 && c.max / c.min >= 50),
+                       (c.node == "out" && c.param == "gain") ? 2.0 : 1.0, false});
+  }
+  // Volume is the machine's channel stage (after its output node): a 0..1 level, 1 being the machine as it is set.
+  const int amp = registry.slotOf(instrument + ".mix.amp");
+  if (amp >= 0) {
+    targets.erase(std::remove_if(targets.begin(), targets.end(), [](const CurveTarget& t) { return t.id == "out.gain"; }), targets.end());
+    targets.insert(targets.begin(), {"out.gain", "Volume", amp, 0, 1, false, 2.0, true});
+  }
+  return targets;
+}
+
+double curveScaled(const CurveTarget& target, double x) {
+  const double e = std::pow(clamp01(x), target.taper);
+  return target.log ? target.min * std::pow(target.max / target.min, e) : target.min + e * (target.max - target.min);
+}
+
+double curveNormalise(const CurveTarget& target, double value) {
+  const double e = target.log ? std::log(std::max(value, target.min) / target.min) / std::log(target.max / target.min)
+                              : (value - target.min) / ((target.max - target.min) != 0 ? (target.max - target.min) : 1);
+  return clamp01(std::pow(clamp01(e), 1 / target.taper));
+}
+
 std::vector<AutoCurve> buildAutomation(const Json& curves, const std::vector<Column>& columns, const std::string& instrument,
                                        const ParamRegistry& registry, int songLength) {
   std::vector<AutoCurve> out;
   if (!curves.is_array() || curves.empty()) return out;
-  // the parameters of a lane that a curve can move: its parameter columns, plus the machine's output gain (Volume)
-  std::vector<Target> targets;
-  for (const Column& c : columns) {
-    if (c.kind != ColumnKind::Param || c.slot < 0) continue;
-    targets.push_back({c.node + "." + c.param, c.slot, c.min, c.max, c.log || (c.min > 0 && c.max / c.min >= 50), (c.node == "out" && c.param == "gain") ? 2.0 : 1.0, false});
-  }
-  const int amp = registry.slotOf(instrument + ".mix.amp");
-  if (amp >= 0) {
-    targets.erase(std::remove_if(targets.begin(), targets.end(), [](const Target& t) { return t.id == "out.gain"; }), targets.end());
-    targets.insert(targets.begin(), {"out.gain", amp, 0, 1, false, 2.0, true});
-  }
+  const std::vector<CurveTarget> targets = curveTargets(columns, instrument, registry);
   const std::size_t size = static_cast<std::size_t>(songLength) * kAutoRes + 1;
   for (const Json& c : curves) {
     const std::string id = c.value("target", "");
-    const auto t = std::find_if(targets.begin(), targets.end(), [&](const Target& x) { return x.id == id; });
+    const auto t = std::find_if(targets.begin(), targets.end(), [&](const CurveTarget& x) { return x.id == id; });
     if (t == targets.end()) continue;
     const Curve curve = readCurve(c);
     AutoCurve a;

@@ -25,6 +25,7 @@
 #include "app/sequence_view.h"
 #include "app/envelope_window.h"
 #include "app/config.h"
+#include "app/curve_view.h"
 #include "app/dx_window.h"
 #include "app/graph_view.h"
 #include "app/machine_tree.h"
@@ -96,6 +97,7 @@ struct Session {
   std::unique_ptr<RtMidiIn> midi;
   std::string midiName = "none";
   std::string keyjazzInstrument;
+  app::CurveView curveView;   // the lane curves drawn over the Song screen: the one each lane shows, what is dragged
   std::vector<std::string> playable;                                       // the machines a keyboard can play
   std::map<std::string, std::vector<std::vector<std::string>>> rows;      // lane id -> flattened rows
   std::string audioName;
@@ -910,7 +912,13 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   for (const Lane& lane : doc.project().lanes) if (lane.id == selectedLane) laneInstrument = lane.instrument;
   if (session->screen == Screen::Song) {
     ImGui::BeginChild("seqmain", ImVec2(0, 0), false, ImGuiWindowFlags_NoNav);
-    const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, session->edit ? editor.tick() : -1, follow && playing && !session->edit);
+    const app::CurveView::Targets curveTargetsOf = [&](const Lane& lane) { return curveTargets(player.engine().laneColumns(lane.id), lane.instrument, player.engine().registry()); };
+    const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, session->edit ? editor.tick() : -1, follow && playing && !session->edit, session->curveView, curveTargetsOf);
+    if (hit.curve.any) {   // a curve edited: one undo step per gesture, the lane rebuilt in the engine
+      doc.apply(std::make_unique<SetCurves>(hit.curve.lane, hit.curve.curves, hit.curve.label), hit.curve.fold);
+      const std::vector<std::string> problems = syncLanes(doc, player.engine());
+      session->editStatus = problems.empty() ? std::string() : problems.front();
+    }
     if (!hit.lane.empty()) { session->wantLane = hit.lane; session->wantTick = hit.tick; selectedLane = hit.lane; }
     ImGui::EndChild();
   } else if (session->screen == Screen::Pattern) {

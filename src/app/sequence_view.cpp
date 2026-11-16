@@ -80,7 +80,7 @@ float sequenceWidth(const Project& project) {
   return width;
 }
 
-SequenceClick drawSequenceView(const Project& project, const std::string& selectedLane, int playTick, int cursorTick, bool follow) {
+SequenceClick drawSequenceView(const Project& project, const std::string& selectedLane, int playTick, int cursorTick, bool follow, CurveView& curves, const CurveView::Targets& targets) {
   SequenceClick result;
   const float scale = ImGui::GetStyle().FontScaleDpi;
   if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::GetIO().KeyCtrl && ImGui::GetIO().MouseWheel != 0) {   // Ctrl+wheel: the size of a row, a step a notch
@@ -123,12 +123,24 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
   const ImVec2 mousePos = ImGui::GetIO().MousePos;
   const bool overStrip = hasStrip && mousePos.x >= stripMin.x && mousePos.x < stripMax.x && mousePos.y >= stripMin.y && mousePos.y < stripMax.y;
 
+  {   // the curves' view: where each lane's column is, and what the pointer is over
+    std::vector<CurveView::LaneBox> boxes;
+    float x = origin.x + gutter;
+    for (const Lane& lane : project.lanes) {
+      boxes.push_back({&lane, x, laneWidth(lane, scale), lane.id == selectedLane});
+      x += laneWidth(lane, scale);
+    }
+    const int firstShown = std::max(0, static_cast<int>((scrollY - headHeight) / rowHeight));
+    const int lastShown = std::min(rows - 1, static_cast<int>((scrollY + viewHeight) / rowHeight));
+    curves.frame(project, std::move(boxes), origin.y + headHeight, rowHeight, cell, firstShown * cell, (lastShown + 1) * cell, scale);
+  }
+
   // the click target covers the whole sheet
   ImGui::SetCursorScreenPos(origin);
   ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
   ImGui::InvisibleButton("##sheet", ImVec2(totalWidth, headHeight + rowHeight * static_cast<float>(rows)));
   ImGui::PopItemFlag();
-  if (ImGui::IsItemClicked() && !overStrip) {
+  if (ImGui::IsItemClicked() && !overStrip && !curves.claimsPointer()) {
     const ImVec2 mouse = ImGui::GetIO().MousePos;
     const float y = mouse.y - origin.y - headHeight;
     float x = mouse.x - origin.x - gutter;
@@ -201,41 +213,15 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
         }
       }
     }
-    {   // the lane's shown curve: a hairline down the lane (time down, the value across), its anchors as dots
-      const Json curves = lane.raw.is_object() ? lane.raw.value("curves", Json::array()) : Json::array();
-      if (curves.is_array() && !curves.empty()) {
-        const int pick = std::min(static_cast<int>(curves.size()) - 1, std::max(0, lane.raw.value("shown", 0)));
-        const Json& curve = curves[static_cast<std::size_t>(pick)];
-        const float pad = 5 * scale, span = std::max(1.0f, w - 2 * pad);
-        const float top = origin.y + headHeight;
-        const int ticks0 = first * cell, ticks1 = std::min(project.song.length, (last + 1) * cell);
-        const int samples = std::max(2, (last - first + 1) * 4);
-        const std::vector<double> values = sampleCurve(curve, ticks0, ticks1, samples);
-        const ImU32 ink = withAlpha(selected ? kAccent : kText, selected ? 230 : 150);
-        ImVec2 before;
-        bool drawing = false;
-        for (int i = 0; i < samples; i++) {
-          const double v = values[static_cast<std::size_t>(i)];
-          if (std::isnan(v)) { drawing = false; continue; }
-          const double tick = ticks0 + static_cast<double>(ticks1 - ticks0) * i / (samples - 1);
-          const ImVec2 at(left + pad + static_cast<float>(v) * span, top + static_cast<float>(tick / cell) * rowHeight);
-          if (drawing) draw->AddLine(before, at, ink, 1.2f * scale);
-          before = at;
-          drawing = true;
-        }
-        for (const Json& point : curve.value("pts", Json::array())) {
-          const double tick = point.value("t", 0.0);
-          if (tick < ticks0 || tick > ticks1) continue;
-          draw->AddCircleFilled(ImVec2(left + pad + static_cast<float>(point.value("v", 0.0)) * span, top + static_cast<float>(tick / cell) * rowHeight), 2.5f * scale, ink);
-        }
-      }
-    }
+    curves.draw(draw, lane, selected);
     if (cursorTick >= 0 && selected) {
       const float y = origin.y + headHeight + static_cast<float>(cursorTick / cell) * rowHeight;
       draw->AddRectFilled(ImVec2(left, y), ImVec2(left + w, y + rowHeight), kCursorCell);
     }
     left += w;
   }
+
+  if (!overStrip) result.curve = curves.interact(targets);
 
   // the head, drawn last and held at the top of the view
   const float headTop = origin.y + scrollY;

@@ -30,6 +30,22 @@ struct AutoCurve {
   std::vector<float> table;          // the value (0..1) at kAutoRes samples a tick; NaN where there is none
 };
 
+// A parameter a lane's curve can move: the lane's parameter columns, and the machine's Volume (its channel stage, "out.gain").
+struct CurveTarget {
+  std::string id;      // "node.param"
+  std::string label;
+  int slot = -1;
+  double min = 0, max = 1;
+  bool log = false;
+  double taper = 1;
+  bool amp = false;
+};
+std::vector<CurveTarget> curveTargets(const std::vector<Column>& columns, const std::string& instrument, const ParamRegistry& registry);
+
+// The value on the parameter's own scale for a position x (0..1) along it, and back.
+double curveScaled(const CurveTarget& target, double x);
+double curveNormalise(const CurveTarget& target, double value);
+
 // Every working curve of a lane. `curves` is the lane's `curves` list as written.
 std::vector<AutoCurve> buildAutomation(const Json& curves, const std::vector<Column>& columns, const std::string& instrument,
                                        const ParamRegistry& registry, int songLength);
