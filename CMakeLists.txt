@@ -34,7 +34,7 @@ add_library(waxcore
   src/seq/columns.cpp
   src/seq/names.cpp
   src/app/column_info.cpp
-  src/seq/automation.cpp
+  src/seq/automation.cpp src/seq/curve_edit.cpp
   src/seq/lane.cpp
   src/engine/runtime.cpp
   src/engine/task_pool.cpp

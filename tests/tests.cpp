@@ -16,6 +16,7 @@
 #include "edit/document.h"
 #include "edit/presets.h"
 #include "seq/loop.h"
+#include "seq/curve_edit.h"
 #include "edit/spline_ops.h"
 #include "edit/sync.h"
 #include "nodes/bezier.h"
@@ -1013,6 +1014,99 @@ void testInstrumentManage() {
   std::printf("ok: instrument manage\n");
 }
 
+// The editing side of lane curves: anchors, snapping, pins following their pattern, sections with gaps.
+void testCurveEdit() {
+  using wax::CurvePin;
+  wax::Lane lane;
+  lane.id = "l";
+  for (const char* id : {"a", "b"}) { wax::Pattern p; p.id = id; p.rows.assign(16, ""); lane.patterns.push_back(p); }
+  lane.placements = {{"a", 0, 16}, {"b", 32, 16}};
+  wax::LaneCurve curve = wax::newLaneCurve("filter.cutoff", 4, 0.25);
+  check(curve.pts.size() == 1 && curve.kinds.empty(), "a new curve has one anchor");
+  check(wax::addPoint(curve, 20, 0.75) == 1 && curve.kinds.size() == 1 && curve.kinds[0] == 'c', "a second anchor makes a curved segment");
+  check(wax::addPoint(curve, 12, 0.5) == 1 && curve.kinds.size() == 2, "an anchor between splits the segment");
+  check(wax::addPoint(curve, 12, 0.6) == 1 && curve.pts.size() == 3 && curve.pts[1].v == 0.6, "an anchor on an anchor takes its value");
+  check(std::isnan(wax::curveValueAt(curve, 2)) && std::isnan(wax::curveValueAt(curve, 21)), "no value before the first anchor or after the last");
+  check(wax::curveValueAt(curve, 4) == 0.25 && wax::curveValueAt(curve, 20) == 0.75, "the anchors' own values");
+  curve.kinds[0] = 'l';
+  check(std::abs(wax::curveValueAt(curve, 8) - 0.425) < 1e-9, "a straight segment is linear");
+  check(wax::toggleGap(curve, 1) && std::isnan(wax::curveValueAt(curve, 16)), "a gap has no value");
+  check(wax::toggleGap(curve, 1) && !std::isnan(wax::curveValueAt(curve, 16)), "and joins again");
+  // snapping: pattern edges first (a start beats an end at the same tick), then rows
+  const wax::CurveSnap edge = wax::snapTick(lane, 30.0, true, 4, 6, 64);
+  check(edge.t == 32 && edge.pin == CurvePin::Start, "near an edge it lands on the edge, pinned");
+  const wax::CurveSnap tied = wax::snapTick(lane, 16.2, true, 4, 6, 64);
+  check(tied.t == 16 && tied.pin == CurvePin::End, "the end of a pattern with nothing starting there");
+  const wax::CurveSnap row = wax::snapTick(lane, 25.0, true, 4, 3, 64);
+  check(row.t == 24 && row.pin == CurvePin::None, "away from edges it lands on a row");
+  // moving keeps order and lets go of a pin
+  wax::movePoint(curve, 1, 100, 2.0);
+  check(curve.pts[1].t == 19 && curve.pts[1].v == 1.0, "an anchor stops one tick short of the next and the value is held to 0..1");
+  check(wax::removePoint(curve, 1) && curve.pts.size() == 2 && curve.kinds.size() == 1, "removing an anchor drops a kind");
+  // pins follow the pattern edge they sat on
+  wax::LaneCurve pinned = wax::newLaneCurve("x.y", 32, 0.5);
+  pinned.pts[0].pin = CurvePin::Start;
+  wax::addPoint(pinned, 48, 0.5, CurvePin::End);
+  const std::vector<wax::CurveSpan> before = wax::curveSpans(lane);
+  lane.placements[1].start = 64;
+  const std::vector<wax::CurveSpan> after = wax::curveSpans(lane);
+  check(wax::followPins(pinned, before, after) == 0 && pinned.pts[0].t == 64 && pinned.pts[1].t == 80, "a pinned section moves with its pattern");
+  lane.placements.pop_back();
+  check(wax::followPins(pinned, after, wax::curveSpans(lane)) == 2 && pinned.pts[0].pin == CurvePin::None, "pins let go when the pattern is gone");
+  // sections, extend and skip
+  lane.placements = {{"a", 0, 16}, {"b", 32, 16}, {"a", 48, 16}};
+  wax::LaneCurve sec = wax::newLaneCurve("x.y", 0, 0.5);
+  check(wax::addSection(sec, 0, 16, 0.5) == false, "a section will not go over an anchor");
+  sec.pts.clear(); sec.kinds.clear();
+  check(wax::addSection(sec, 0, 16, 0.5) && sec.pts.size() == 2 && sec.kinds[0] == 'c', "a section: two pinned anchors joined");
+  check(wax::addSection(sec, 32, 48, 0.8) && sec.kinds[1] == 'g' && wax::curveSections(sec).size() == 2, "a second section is apart, across a gap");
+  check(wax::removeSection(sec, 0, 16) && sec.pts.size() == 2, "removing a section keeps the other");
+  wax::LaneCurve grow = wax::newLaneCurve("x.y", 0, 0.5);
+  grow.pts[0].pin = CurvePin::Start;
+  const int ext = wax::extendCurve(lane, grow, 0, 64);
+  check(ext == 1 && grow.pts[1].t == 16 && grow.pts[1].pin == CurvePin::End, "extend: an anchor at the end of the next pattern");
+  const int skip = wax::skipCurve(lane, grow, 1, 64);
+  check(skip == 3 && grow.kinds[1] == 'g' && grow.pts[2].t == 48 && grow.pts[3].t == 64, "skip: a gap over a pattern, a new section over the next");
+  // reading and writing keep what editing does not touch
+  const wax::Json written = wax::writeLaneCurve(grow);
+  check(written["target"] == "x.y" && written["pts"].size() == 4 && wax::readLaneCurve(written).pts.size() == 4, "a curve round-trips through its json");
+  std::printf("ok: curve editing\n");
+}
+
+// Curves in a document: an edit is undone as one step, and pinned anchors follow their pattern when an edit moves it.
+void testCurveDocument() {
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/curves.wax"));
+  const wax::Lane* bass = nullptr;
+  for (const wax::Lane& l : doc.project().lanes) if (l.id == "bass") bass = &l;
+  check(bass != nullptr, "the song has a bass lane");
+  wax::LaneCurve curve = wax::readLaneCurve(bass->raw["curves"][0]);
+  curve.pts.clear(); curve.kinds.clear();
+  wax::addSection(curve, 48, 64, 0.5);   // over the second pattern, pinned at both ends
+  wax::Json list = wax::Json::array();
+  list.push_back(wax::writeLaneCurve(curve));
+  doc.apply(std::make_unique<wax::SetCurves>("bass", list, "Edit curve"));
+  doc.takeChangedLanes();
+  const auto firstTick = [&]() { for (const wax::Lane& l : doc.project().lanes) if (l.id == "bass") return l.raw["curves"][0]["pts"][0]["t"].get<double>(); return -1.0; };
+  check(firstTick() == 48, "the anchor is where it was put");
+  doc.apply(std::make_unique<wax::InsertSilence>(40, 16));
+  check(firstTick() == 64, "a pinned anchor follows its pattern when silence is inserted before it");
+  check(doc.takeChangedLanes().count("bass") == 1, "the lane is rebuilt");
+  doc.undo();
+  check(firstTick() == 48, "one undo puts the pattern and the anchor back");
+  doc.redo();
+  check(firstTick() == 64, "and redo moves both again");
+  doc.undo();
+  // dragging folds into one undo step
+  wax::Json a = wax::Json::array(), b = wax::Json::array();
+  a.push_back(wax::writeLaneCurve(wax::newLaneCurve("sq.cutoff", 10, 0.1)));
+  b.push_back(wax::writeLaneCurve(wax::newLaneCurve("sq.cutoff", 12, 0.2)));
+  doc.apply(std::make_unique<wax::SetCurves>("bass", a, "Move anchor"));
+  doc.apply(std::make_unique<wax::SetCurves>("bass", b, "Move anchor"), true);
+  doc.undo();
+  check(firstTick() == 48, "a drag is one undo step");
+  std::printf("ok: curves in a document\n");
+}
+
 void testPresets() {
   wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/cloves.wax"));
   const wax::Instrument& first = doc.project().instruments[1];
@@ -1166,6 +1260,8 @@ int main() {
   testWireEdits();
   testInstrumentSetup();
   testInstrumentManage();
+  testCurveEdit();
+  testCurveDocument();
   testPresets();
   testGraphSaved();
   testExposePort();

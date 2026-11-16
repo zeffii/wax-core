@@ -25,12 +25,14 @@ struct Curve {
 
 double clamp01(double x) { return std::min(1.0, std::max(0.0, x)); }
 
+}  // namespace
+
 // The value of one segment at time tt, a bezier whose handles keep the value flat at both ends.
-double segmentValue(const Point& a, const Point& b, char kind, double tt) {
+double curveSegmentValue(double aT, double aV, double bT, double bV, char kind, double tt) {
   if (kind == 'g') return kNaN;
-  if (b.t <= a.t) return b.v;
-  const double x = (tt - a.t) / (b.t - a.t);
-  if (kind == 'l') return a.v + (b.v - a.v) * x;
+  if (bT <= aT) return bV;
+  const double x = (tt - aT) / (bT - aT);
+  if (kind == 'l') return aV + (bV - aV) * x;
   // solve the bezier's time for x (its time handles are a third-ish of the span, so a few Newton steps do)
   const double t1 = kHandle, t2 = 1 - kHandle;   // x(u) control points 0, K, 1-K, 1
   double u = x;
@@ -41,8 +43,12 @@ double segmentValue(const Point& a, const Point& b, char kind, double tt) {
     u = clamp01(u - (xu - x) / dx);
   }
   const double m = 1 - u;
-  return a.v * (m * m * m + 3 * m * m * u) + b.v * (3 * m * u * u + u * u * u);   // y control points a.v, a.v, b.v, b.v
+  return aV * (m * m * m + 3 * m * m * u) + bV * (3 * m * u * u + u * u * u);   // y control points aV, aV, bV, bV
 }
+
+namespace {
+
+double segmentValue(const Point& a, const Point& b, char kind, double tt) { return curveSegmentValue(a.t, a.v, b.t, b.v, kind, tt); }
 
 // The curve's value (0..1) at tick t: NaN before the first anchor, in a gap and after the last anchor.
 double valueAt(const Curve& curve, double t) {

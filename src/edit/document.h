@@ -3,12 +3,14 @@
 // The audio side never reads the project directly: it is told which lanes changed (see takeChangedLanes).
 #pragma once
 
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
 #include <vector>
 
 #include "project/project.h"
+#include "seq/curve_edit.h"
 
 namespace wax {
 
@@ -707,6 +709,41 @@ private:
 // The text of one cell of a row replaced, the other cells and the spacing left as they are. Throws std::out_of_range for a cell the row does not have.
 std::string withCell(const std::string& row, int cell, const std::string& text);
 
+// A lane's `curves` list replaced as a whole (an anchor added, moved, removed; a segment's kind changed; a curve added or taken away).
+// The lane is rebuilt in the engine, which bakes the curves again. Edits of one label in a row fold into one undo step (a drag).
+class SetCurves final : public Edit {
+public:
+  SetCurves(std::string lane, Json curves, std::string label) : lane_(std::move(lane)), curves_(std::move(curves)), label_(std::move(label)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return label_; }
+  std::string lane() const override { return lane_; }
+  bool absorb(const Edit& next) override;
+  const Json& curves() const { return curves_; }
+
+private:
+  std::string lane_;
+  Json curves_, old_;
+  std::string label_;
+};
+
+// An edit and the changes that came with it, undone and redone together: the pinned anchors of lane curves that followed a pattern when
+// the edit moved it (Document::apply makes these).
+class FollowedEdit final : public Edit {
+public:
+  FollowedEdit(std::unique_ptr<Edit> primary, std::vector<std::unique_ptr<Edit>> followers) : primary_(std::move(primary)), followers_(std::move(followers)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return primary_->label(); }
+  bool absorb(const Edit& next) override { return primary_->absorb(next); }
+  const Edit& primary() const { return *primary_; }
+  const std::vector<std::unique_ptr<Edit>>& followers() const { return followers_; }
+
+private:
+  std::unique_ptr<Edit> primary_;
+  std::vector<std::unique_ptr<Edit>> followers_;
+};
+
 class Document {
 public:
   explicit Document(Project project) : project_(std::move(project)) {}
@@ -750,6 +787,8 @@ private:
   bool loopChanged_ = false;
 
   void touched(const Edit& edit);
+  // Lane curves with pinned anchors follow their patterns when an edit moves them.
+  std::vector<std::unique_ptr<Edit>> pinFollowers(const std::map<std::string, std::vector<CurveSpan>>& before);
 };
 
 }  // namespace wax

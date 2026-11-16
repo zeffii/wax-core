@@ -894,7 +894,45 @@ void DeleteRow::revert(Project& project) {
   pattern.rows.insert(pattern.rows.begin() + row_, removed_);
 }
 
+void SetCurves::apply(Project& project) {
+  for (Lane& lane : project.lanes) {
+    if (lane.id != lane_) continue;
+    if (!lane.raw.is_object()) lane.raw = Json::object();
+    old_ = lane.raw.contains("curves") ? lane.raw["curves"] : Json();
+    if (curves_.is_array() && !curves_.empty()) lane.raw["curves"] = curves_; else lane.raw.erase("curves");
+  }
+}
+
+void SetCurves::revert(Project& project) {
+  for (Lane& lane : project.lanes) {
+    if (lane.id != lane_) continue;
+    if (!old_.is_null()) lane.raw["curves"] = old_; else if (lane.raw.is_object()) lane.raw.erase("curves");
+  }
+}
+
+bool SetCurves::absorb(const Edit& next) {
+  const SetCurves* other = dynamic_cast<const SetCurves*>(&next);
+  if (!other || other->lane_ != lane_ || other->label_ != label_) return false;
+  curves_ = other->curves_;   // the drag carries on: the old curves stay what undo goes back to
+  return true;
+}
+
+void FollowedEdit::apply(Project& project) {
+  primary_->apply(project);
+  for (std::unique_ptr<Edit>& follower : followers_) follower->apply(project);
+}
+
+void FollowedEdit::revert(Project& project) {
+  for (auto it = followers_.rbegin(); it != followers_.rend(); ++it) (*it)->revert(project);
+  primary_->revert(project);
+}
+
 void Document::touched(const Edit& edit) {
+  if (const FollowedEdit* followed = dynamic_cast<const FollowedEdit*>(&edit)) {   // the edit and what followed it
+    touched(followed->primary());
+    for (const std::unique_ptr<Edit>& follower : followed->followers()) touched(*follower);
+    return;
+  }
   revision_++;
   if (!edit.lane().empty()) changed_.insert(edit.lane());
   if (!edit.otherLane().empty()) changed_.insert(edit.otherLane());
@@ -905,10 +943,51 @@ void Document::touched(const Edit& edit) {
   if (!edit.graphInstrument().empty()) changedGraphs_.insert(edit.graphInstrument());
 }
 
+std::vector<std::unique_ptr<Edit>> Document::pinFollowers(const std::map<std::string, std::vector<CurveSpan>>& before) {
+  std::vector<std::unique_ptr<Edit>> out;
+  for (Lane& lane : project_.lanes) {
+    const auto was = before.find(lane.id);
+    if (was == before.end()) continue;
+    const std::vector<CurveSpan> now = curveSpans(lane);
+    const auto same = [](const CurveSpan& a, const CurveSpan& b) { return a.pattern == b.pattern && a.start == b.start && a.length == b.length; };
+    if (now.size() == was->second.size() && std::equal(now.begin(), now.end(), was->second.begin(), same)) continue;
+    const Json curves = lane.raw.value("curves", Json::array());
+    Json updated = Json::array();
+    bool changed = false;
+    for (const Json& json : curves) {
+      LaneCurve curve = readLaneCurve(json);
+      const Json unchanged = writeLaneCurve(curve);
+      followPins(curve, was->second, now);
+      const Json moved = writeLaneCurve(curve);
+      if (moved != unchanged) changed = true;
+      updated.push_back(moved);
+    }
+    if (!changed) continue;
+    std::unique_ptr<Edit> follower = std::make_unique<SetCurves>(lane.id, updated, "Pinned anchors follow");
+    follower->apply(project_);
+    touched(*follower);
+    out.push_back(std::move(follower));
+  }
+  return out;
+}
+
 void Document::apply(std::unique_ptr<Edit> edit, bool foldIntoPrevious) {
   redo_.clear();
+  std::map<std::string, std::vector<CurveSpan>> pinned;   // the lanes whose curves have pinned anchors, with their placements as they were
+  if (!dynamic_cast<const SetCurves*>(edit.get()))
+    for (const Lane& lane : project_.lanes) {
+      const Json curves = lane.raw.is_object() ? lane.raw.value("curves", Json::array()) : Json::array();
+      for (const Json& curve : curves)
+        for (const Json& point : curve.value("pts", Json::array()))
+          if (point.contains("pin")) { pinned[lane.id] = curveSpans(lane); break; }
+    }
   edit->apply(project_);
   touched(*edit);
+  std::vector<std::unique_ptr<Edit>> followers = pinned.empty() ? std::vector<std::unique_ptr<Edit>>() : pinFollowers(pinned);
+  if (!followers.empty()) {   // the pinned anchors moved with their patterns: one step with the edit
+    undo_.push_back(std::make_unique<FollowedEdit>(std::move(edit), std::move(followers)));
+    return;
+  }
   if (foldIntoPrevious && !undo_.empty() && undo_.back()->absorb(*edit)) return;
   undo_.push_back(std::move(edit));
 }
