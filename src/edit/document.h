@@ -294,6 +294,37 @@ private:
   bool replaced_ = false, duplicate_ = false;
 };
 
+// A node dropped onto a wire: `from -> to` goes, `from -> newIn` and `newOut -> to` come (the node's first input and first output). A loop
+// is refused and nothing changes. Undo puts the wires back as they were.
+class InsertOnWire final : public Edit {
+public:
+  InsertOnWire(std::string instrument, std::string from, std::string to, std::string newIn, std::string newOut)
+      : instrument_(std::move(instrument)), from_(std::move(from)), to_(std::move(to)), in_(std::move(newIn)), out_(std::move(newOut)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Put " + in_.substr(0, in_.find('.')) + " into a wire"; }
+  std::string graphInstrument() const override { return instrument_; }
+
+private:
+  std::string instrument_, from_, to_, in_, out_;
+  std::vector<Connection> before_;
+};
+
+// A node taken out of its chain: whatever fed its first input now feeds whatever its first output fed (the node keeps no wires on those
+// two ports). A loop is refused and nothing changes. Undo puts the wires back as they were.
+class PullOut final : public Edit {
+public:
+  PullOut(std::string instrument, std::string in, std::string out) : instrument_(std::move(instrument)), in_(std::move(in)), out_(std::move(out)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Take " + in_.substr(0, in_.find('.')) + " out of its chain"; }
+  std::string graphInstrument() const override { return instrument_; }
+
+private:
+  std::string instrument_, in_, out_;
+  std::vector<Connection> before_;
+};
+
 // A wire cut.
 class Disconnect final : public Edit {
 public:

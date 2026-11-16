@@ -1009,6 +1009,19 @@ void testWireEdits() {
   check(wires().size() == before.size(), "moving a wire onto itself changes nothing");
   doc.undo();
   check(wires().size() == before.size() && wires().front().from == first.from, "undo puts the wire back in its place");
+  // a node put into a wire, and taken out again (the node's ports only need names for the wires)
+  const auto has = [&](const std::string& from, const std::string& to) { for (const wax::Connection& c : wires()) if (c.from == from && c.to == to) return true; return false; };
+  doc.apply(std::make_unique<wax::InsertOnWire>(id, first.from, first.to, "zz.in", "zz.out"));
+  check(wires().size() == before.size() + 1 && !has(first.from, first.to) && has(first.from, "zz.in") && has("zz.out", first.to), "a node dropped on a wire is put into it");
+  doc.apply(std::make_unique<wax::PullOut>(id, "zz.in", "zz.out"));
+  check(wires().size() == before.size() && has(first.from, first.to) && !has(first.from, "zz.in"), "taking it out joins its neighbours again");
+  doc.undo();
+  check(has(first.from, "zz.in") && has("zz.out", first.to) && !has(first.from, first.to), "undo of the pull-out puts the node back in the wire");
+  doc.undo();
+  check(wires().size() == before.size() && has(first.from, first.to), "undo of the insert puts the wire back");
+  bool looped = false;   // a node placed so that the wire would feed itself is refused and nothing changes
+  try { doc.apply(std::make_unique<wax::InsertOnWire>(id, first.from, first.to, "zz.in", first.to.substr(0, first.to.find('.')) + ".o")); } catch (const std::exception&) { looped = true; }
+  check(looped && wires().size() == before.size() && has(first.from, first.to), "a loop through the new node is refused");
   std::printf("ok: wire edits\n");
 }
 

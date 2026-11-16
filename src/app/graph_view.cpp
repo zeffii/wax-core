@@ -212,6 +212,49 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
   }
   const bool dragging = !state.wiring.empty() || !state.wiringIn.empty() || state.rewire.started;
   const auto lifted = [&](const Connection& c) { return state.rewire.started && c.from == state.rewire.from && c.to == state.rewire.to; };
+  // While a tile is dragged: the wire it is over (it is put into that wire when let go), and whether it is far out of its own chain (its
+  // neighbours are then joined up). Only a node with an audio input and an audio output, and a wire that carries audio, take part.
+  const Tile* dragTile = nullptr;
+  std::string chainIn, chainOut;   // the dragged node's first input and first output, when it qualifies
+  if (!state.held.empty()) {
+    const auto found = tiles.find(state.held);
+    if (found != tiles.end() && found->second.node->type != "out" && !found->second.type->inputs.empty() && !found->second.type->outputs.empty()) {
+      const Tile& t = found->second;
+      const std::string in = t.type->inputs.front(), out = t.type->outputs.front();
+      const PortKind kIn = kindOf(t, in), kOut = kindOf(t, out);
+      if ((kIn == PortKind::Audio || kIn == PortKind::Stereo) && (kOut == PortKind::Audio || kOut == PortKind::Stereo)) {
+        dragTile = &t; chainIn = t.node->id + "." + in; chainOut = t.node->id + "." + out;
+      }
+    }
+  }
+  state.dropFrom.clear(); state.dropTo.clear(); state.dropPull = false;
+  if (dragTile && state.dragMoved && !state.dragFree && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+    const ImVec2 centre = centreOf(*dragTile);
+    float best = 16 * scale;
+    for (const WireEnds& w : wires) {
+      if (nodeOfAddress(w.c->from) == state.held || nodeOfAddress(w.c->to) == state.held) continue;
+      if (w.kind != PortKind::Audio && w.kind != PortKind::Stereo) continue;
+      const float arm = wireArm(w.p0, w.p1, scale);
+      for (int k = 0; k <= 24; k++) {
+        const ImVec2 pt = bezierAt(w.p0, w.p1, arm, static_cast<float>(k) / 24);
+        const float d = std::hypot(centre.x - pt.x, centre.y - pt.y);
+        if (d < best) { best = d; state.dropFrom = w.c->from; state.dropTo = w.c->to; }
+      }
+    }
+    const WireEnds* feed = nullptr; const WireEnds* sink = nullptr;
+    for (const WireEnds& w : wires) {
+      if (!feed && w.c->to == chainIn) feed = &w;
+      if (!sink && w.c->from == chainOut) sink = &w;
+    }
+    if (feed && sink && state.dropFrom.empty()) {
+      const ImVec2 a = feed->p0, b = sink->p1;
+      const float dx = b.x - a.x, dy = b.y - a.y, u = std::clamp(((centre.x - a.x) * dx + (centre.y - a.y) * dy) / std::max(1e-3f, dx * dx + dy * dy), 0.0f, 1.0f);
+      const bool far = settings().graphPullOut && std::hypot(a.x + u * dx - centre.x, a.y + u * dy - centre.y) > 70 * scale;
+      state.dropPull = far || state.dragForce;
+      if (state.dropPull) drawWire(dl, a, b, kWarm, 1.0f * std::max(1.0f, scale), true, scale);
+    }
+    state.message = !state.dropFrom.empty() ? "Release to put " + state.held + " into this wire" : state.dropPull ? "Release to take " + state.held + " out of its chain" : std::string();
+  }
   const Connection* hoverWire = nullptr;
   if (windowHovered && hover.node.empty() && !dragging) {
     float best = 6 * scale;
@@ -227,8 +270,8 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
   for (const WireEnds& w : wires) {
     if (lifted(*w.c)) continue;
     const bool chosenWire = w.c->from == state.wireFrom && w.c->to == state.wireTo;
-    const float width = (w.kind == PortKind::Stereo ? 3.0f : 1.75f) * 0.65f * std::max(1.0f, scale) * (chosenWire || w.c == hoverWire ? 1.8f : 1.0f);
-    drawWire(dl, w.p0, w.p1, chosenWire ? kWarm : kindColour(w.kind), width, settings().wireDashed && (w.kind == PortKind::Control || w.kind == PortKind::Param), scale);
+    const float width = (w.kind == PortKind::Stereo ? 3.0f : 1.75f) * 0.65f * std::max(1.0f, scale) * (chosenWire || w.c == hoverWire || (w.c->from == state.dropFrom && w.c->to == state.dropTo && !state.dropFrom.empty()) ? 1.8f : 1.0f);
+    drawWire(dl, w.p0, w.p1, chosenWire || (w.c->from == state.dropFrom && w.c->to == state.dropTo && !state.dropFrom.empty()) ? kWarm : kindColour(w.kind), width, settings().wireDashed && (w.kind == PortKind::Control || w.kind == PortKind::Param), scale);
   }
   std::string hoverText;   // what the thing under the mouse is, as in the web app's status line
   {
@@ -321,7 +364,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     ImGui::PushID(n.id.c_str());
     ImGui::InvisibleButton("tile", ImVec2(std::max(1.0f, w), std::max(1.0f, h)));
     ImGui::PopID();
-    if (ImGui::IsItemClicked() && hover.node.empty()) { picked = n.id; state.held = n.id; state.grabX = io.MousePos.x - t.min.x; state.grabY = io.MousePos.y - t.min.y; }
+    if (ImGui::IsItemClicked() && hover.node.empty()) { picked = n.id; state.held = n.id; state.dragFree = false; state.dragMoved = false; state.dragForce = io.KeyShift; state.grabX = io.MousePos.x - t.min.x; state.grabY = io.MousePos.y - t.min.y; }
     if (ImGui::IsItemHovered() && hover.node.empty()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     if (n.type != "out" && ImGui::BeginPopupContextItem("tilemenu")) {
       if (textButton("delete")) { doc.apply(std::make_unique<DeleteNode>(instrumentId, n.id)); if (picked == n.id) picked.clear(); ImGui::CloseCurrentPopup(); ImGui::EndPopup(); ImGui::EndChild(); return true; }
@@ -417,7 +460,13 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
 
   // dragging the held tile; it lands on the grid unless Ctrl is held
   if (!state.held.empty()) {
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { state.dragFree = true; state.message = "Moving " + state.held + " only: its wires stay as they are"; }
     if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+      if (!state.dropFrom.empty()) tryApply(std::make_unique<InsertOnWire>(instrumentId, state.dropFrom, state.dropTo, chainIn, chainOut));
+      else if (state.dropPull) tryApply(std::make_unique<PullOut>(instrumentId, chainIn, chainOut));
+      if (!state.dropFrom.empty() || state.dropPull) { if (state.message.rfind("Release", 0) == 0) state.message.clear(); }
+      else if (state.message.rfind("Moving", 0) == 0) state.message.clear();
+      state.dropFrom.clear(); state.dropTo.clear(); state.dropPull = false; state.dragMoved = false;
       state.held.clear();
     } else {
       float nx = (io.MousePos.x - state.grabX - origin.x) / scale, ny = (io.MousePos.y - state.grabY - origin.y) / scale;
@@ -427,6 +476,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       if (held && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 3) && (std::fabs(nx - held->x) > 0.5 || std::fabs(ny - held->y) > 0.5 || !held->placed)) {
         doc.apply(std::make_unique<MoveNode>(instrumentId, state.held, std::max(0.0f, nx), std::max(0.0f, ny)), true);
         moved = true;
+        state.dragMoved = true;
       }
     }
   }

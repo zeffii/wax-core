@@ -29,6 +29,7 @@ struct Settings {
   // editing (the web's rowWrap and laneWrap): Up/Down wrap round the first and last row; Left/Right go past the last column to the next lane
   // and, with laneWrap, from the last lane back to the first
   bool rowWrap = false, laneWrap = false;
+  bool graphPullOut = false;   // the web's graphPullOut: dragging a node far out of its chain takes it out (Shift+drag always does)
   // the Sample screen (the web's sliceSensitivity, sliceMinGap, sliceReplace, sliceWhole, waveHide*, hexMode, sampleAskMB)
   int sliceSensitivity = 50, sliceMinGap = 30;
   bool sliceReplace = true, sliceWhole = false;

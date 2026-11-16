@@ -281,26 +281,26 @@ void startExport(Session& session, const std::string& path) {
   });
 }
 
-// A project with nothing in it but the master lane: the master's own machine, no samples, patterns or arrangement.
-Project emptyProject(const Project& from) {
-  Json file = Json::parse(serializeProject(from));
-  file["song"]["name"] = "untitled";
-  file["song"]["length"] = 256;
-  file["song"].erase("loop");
-  file["samples"] = Json::object();
-  Json instruments = Json::object();
-  instruments[std::string(kMaster)] = file["instruments"][std::string(kMaster)];
-  file["instruments"] = instruments;
-  Json lanes = Json::array();
-  for (Json lane : file["lanes"]) {
-    if (lane.value("id", std::string()) != kMaster) continue;
-    lane["patterns"] = Json::object();
-    lane["placements"] = Json::array();
-    lane.erase("mutes"); lane.erase("offs");
-    lanes.push_back(lane);
-  }
-  file["lanes"] = lanes;
-  return parseProject(file.dump());
+// A new song: nothing in it but the master lane (the tempo node and the output), as the web app starts one. Save asks for a file.
+Project blankProject() {
+  static const char* const kBlank = R"({
+    "format": "webtracker", "version": 1,
+    "song": {"name": "untitled", "bpm": 120, "ticksPerBeat": 4, "length": 256},
+    "instruments": {"master": {
+      "graph": {"nodes": [
+        {"id": "m", "type": "tempo", "x": 40, "y": 108, "params": {"bpm": 120, "swing": 50, "tpb": 4, "volume": 1}},
+        {"id": "out", "type": "out", "x": 240, "y": 108}], "connections": []},
+      "noteColumns": 0,
+      "exposed": [
+        {"node": "m", "param": "bpm", "label": "BPM", "bits": 16}, {"node": "m", "param": "swing", "label": "Swg"},
+        {"node": "m", "param": "tpb", "label": "TPB"}, {"node": "m", "param": "volume", "label": "Vol"},
+        {"node": "m", "param": "limit", "label": "Lim", "long": "Limiter", "bits": 4}, {"node": "m", "param": "ceiling", "label": "Ceil", "long": "Ceiling"},
+        {"node": "m", "param": "boost", "label": "Gain", "long": "Limiter gain"}, {"node": "m", "param": "release", "label": "Rel", "long": "Limiter release", "scale": "log"}],
+      "commands": []}},
+    "samples": {},
+    "lanes": [{"id": "master", "instrument": "master", "patterns": {}, "placements": []}]
+  })";
+  return parseProject(kBlank);
 }
 
 void drawFrame(Session* session, const Options& options, const std::string& status, float& meterL, float& meterR, std::map<ImGuiKey, int>& held,
@@ -331,11 +331,11 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     const float hs = ImGui::GetStyle().FontScaleDpi;
     ImGui::AlignTextToFramePadding();   // the words in this row sit on the same baseline as the text inside the boxes
     const float lineY = ImGui::GetCursorPosY();
-    {   // the small Wax mark at the top left (the rail's width, so the File button starts over the browser), the File button beside it
+    {   // the small Wax mark at the top left, in the rail's width; the File button beside it starts right of the rail's line
       const float width = 34 * hs, aspect = 820.0f / 2320.0f, frame = ImGui::GetFrameHeight();
       const ImVec2 at = ImGui::GetCursorScreenPos();
       app::drawIcon("wax-logo", ImVec2(at.x + 3 * hs, at.y + (frame - width * aspect) / 2), width, aspect, app::kText, ImGui::GetWindowDrawList());
-      ImGui::Dummy(ImVec2(40 * hs, frame));
+      ImGui::Dummy(ImVec2(40 * hs + ImGui::GetStyle().ItemSpacing.x / 2 + ImGui::CalcTextSize("M").x, frame));   // (File starts right of the rail's line, a character's width past it)
       ImGui::SameLine(0, 0);
       ImGui::SetCursorPosY(lineY);
     }
@@ -1249,6 +1249,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (ImGui::Checkbox("Control wires are dashed", &cfg.wireDashed)) changed = true;
     group("Editing", "How the cursor moves.");
     if (ImGui::Checkbox("Up and Down wrap round the first and last row", &cfg.rowWrap)) changed = true;
+    if (ImGui::Checkbox("Graph: dragging a node far out of its chain takes it out", &cfg.graphPullOut)) changed = true;
     if (ImGui::Checkbox("Left and Right wrap round the first and last lane (All lanes view)", &cfg.laneWrap)) changed = true;
     group("Backup", "Snapshots of the song in the preferences folder; File > Backups opens one.");
     if (ImGui::Checkbox("Automatic backups", &cfg.backupOn)) changed = true;
@@ -1516,6 +1517,10 @@ int main(int argc, char** argv) {
     }
   };
   if (!options.path.empty()) open(options.path);
+  else {   // no file given: a new, empty song (File > Open, or a file dropped on the window, replaces it)
+    try { session = std::make_unique<Session>(blankProject(), std::string(), options); SDL_SetWindowTitle(window, "Wax - untitled"); }
+    catch (const std::exception& e) { status = std::string("Could not start a new song: ") + e.what(); }
+  }
 
   float meterL = 0, meterR = 0;
   bool titleUnsaved = false;
@@ -1558,10 +1563,9 @@ int main(int argc, char** argv) {
     }
     if (gRequest == DialogRequest::New) {   // start over with an empty song (the old one is replaced: unsaved changes are lost)
       gRequest = DialogRequest::None;
-      if (session) {
-        Project blank = emptyProject(session->doc->project());
+      {
         session.reset();
-        try { session = std::make_unique<Session>(std::move(blank), std::string(), options); status.clear(); SDL_SetWindowTitle(window, "Wax - untitled"); }
+        try { session = std::make_unique<Session>(blankProject(), std::string(), options); status.clear(); SDL_SetWindowTitle(window, "Wax - untitled"); }
         catch (const std::exception& e) { status = std::string("Could not start a new song: ") + e.what(); }
       }
     }

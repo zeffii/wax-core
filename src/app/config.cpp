@@ -65,6 +65,7 @@ void loadSettings() {
   s.backupMinutes = std::clamp(data.value("backupMinutes", s.backupMinutes), 1, 60);
   s.backupKeep = std::clamp(data.value("backupKeep", s.backupKeep), 5, 200);
   s.rowWrap = data.value("rowWrap", s.rowWrap);
+  s.graphPullOut = data.value("graphPullOut", s.graphPullOut);
   s.laneWrap = data.value("laneWrap", s.laneWrap);
   s.sliceSensitivity = std::clamp(data.value("sliceSensitivity", s.sliceSensitivity), 0, 100);
   s.sliceMinGap = std::clamp(data.value("sliceMinGap", s.sliceMinGap), 5, 500);
@@ -84,7 +85,7 @@ void saveSettings() {
   const Settings& s = gSettings;
   Json data = {{"wireAudio", hexOf(s.wireAudio)}, {"wireControl", hexOf(s.wireControl)}, {"wireStereo", hexOf(s.wireStereo)},
                {"wireParam", hexOf(s.wireParam)}, {"wireDashed", s.wireDashed}, {"playhead", s.playhead}, {"follow", s.follow}, {"arrangementRow", s.arrangementRow}, {"insertCut", s.insertCut}, {"patternAll", s.patternAll}, {"hideEmpty", s.hideEmpty}, {"patternText", s.patternText}, {"notePreview", s.notePreview}, {"tintPatterns", s.tintPatterns},
-               {"backupOn", s.backupOn}, {"backupMinutes", s.backupMinutes}, {"backupKeep", s.backupKeep}, {"rowWrap", s.rowWrap}, {"laneWrap", s.laneWrap}, {"sliceSensitivity", s.sliceSensitivity}, {"sliceMinGap", s.sliceMinGap}, {"sliceReplace", s.sliceReplace}, {"sliceWhole", s.sliceWhole},
+               {"backupOn", s.backupOn}, {"backupMinutes", s.backupMinutes}, {"backupKeep", s.backupKeep}, {"rowWrap", s.rowWrap}, {"graphPullOut", s.graphPullOut}, {"laneWrap", s.laneWrap}, {"sliceSensitivity", s.sliceSensitivity}, {"sliceMinGap", s.sliceMinGap}, {"sliceReplace", s.sliceReplace}, {"sliceWhole", s.sliceWhole},
                {"waveHideLoop", s.waveHideLoop}, {"waveHideSel", s.waveHideSel}, {"waveHideSus", s.waveHideSus}, {"hexMode", s.hexMode}, {"sampleAskMB", s.sampleAskMB}};
   std::ofstream(path, std::ios::trunc) << data.dump(1) << "\n";
 }

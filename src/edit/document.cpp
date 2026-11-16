@@ -440,6 +440,45 @@ void Connect::revert(Project& project) {
   }
 }
 
+namespace {
+// Adds a wire unless it is there already; a loop throws.
+void addWire(Graph& g, const std::string& from, const std::string& to) {
+  for (const Connection& c : g.connections) if (c.from == from && c.to == to) return;
+  if (reaches(g, nodePart(to), nodePart(from))) throw std::runtime_error("That would make a loop.");
+  g.connections.push_back({from, to});
+}
+}  // namespace
+
+void InsertOnWire::apply(Project& project) {
+  Graph& g = graphOf(project, instrument_);
+  before_ = g.connections;
+  try {
+    const auto it = std::find_if(g.connections.begin(), g.connections.end(), [&](const Connection& c) { return c.from == from_ && c.to == to_; });
+    if (it == g.connections.end()) throw std::runtime_error("That wire is gone.");
+    g.connections.erase(it);
+    addWire(g, from_, in_);
+    addWire(g, out_, to_);
+  } catch (...) { g.connections = before_; throw; }
+}
+
+void InsertOnWire::revert(Project& project) { graphOf(project, instrument_).connections = before_; }
+
+void PullOut::apply(Project& project) {
+  Graph& g = graphOf(project, instrument_);
+  before_ = g.connections;
+  try {
+    std::vector<std::string> feeds, sinks;
+    for (const Connection& c : g.connections) {
+      if (c.to == in_) feeds.push_back(c.from);
+      if (c.from == out_) sinks.push_back(c.to);
+    }
+    g.connections.erase(std::remove_if(g.connections.begin(), g.connections.end(), [&](const Connection& c) { return c.to == in_ || c.from == out_; }), g.connections.end());
+    for (const std::string& f : feeds) for (const std::string& t : sinks) if (nodePart(f) != nodePart(t)) addWire(g, f, t);
+  } catch (...) { g.connections = before_; throw; }
+}
+
+void PullOut::revert(Project& project) { graphOf(project, instrument_).connections = before_; }
+
 void SetInstrumentSetup::apply(Project& project) {
   if (voices_ < 1 || voices_ > 16) throw std::out_of_range("voices must be 1 to 16");
   Graph& g = graphOf(project, instrument_);
