@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <memory>
 
+#include "app/config.h"
 #include "app/theme.h"
 
 namespace wax::app {
@@ -134,7 +135,46 @@ void drawScale(float trackTop, float trackHeight, float scale) {
 
 }  // namespace
 
-float mixerHeight() { return 178.0f * ImGui::GetStyle().FontScaleDpi; }
+float mixerHeight() { return settings().mixerHeight * ImGui::GetStyle().FontScaleDpi; }
+float mixerGripHeight() { return 10.0f; }
+
+namespace {
+
+constexpr float kHideBelow = 20.0f, kMinShown = 60.0f, kDefaultHeight = 178.0f;   // web pixels
+
+// The bar on the mixer's top edge: a thin accent line with a short handle in the middle. Drag up or down for the height; all the way down
+// hides the mixer (the height it had is kept); a double-click goes back to the standard height.
+void drawGrip(MixerState& state) {
+  const float scale = ImGui::GetStyle().FontScaleDpi;
+  const float width = ImGui::GetContentRegionAvail().x;
+  // (a child of its own, so the line is drawn over the panels above, not under them)
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+  ImGui::BeginChild("##mixergripbar", ImVec2(width, 6), false, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+  ImGui::PopStyleVar();
+  const ImVec2 at = ImGui::GetCursorScreenPos();
+  ImGui::InvisibleButton("##mixergrip", ImVec2(width, 6));
+  const bool hot = ImGui::IsItemHovered() || ImGui::IsItemActive();
+  if (hot) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+  if (ImGui::IsItemActivated()) state.dragHeight = settings().mixerHeight;
+  if (ImGui::IsItemActive()) {
+    state.dragHeight -= ImGui::GetIO().MouseDelta.y / scale;   // up makes it taller
+    if (state.dragHeight < kHideBelow) { state.hide = true; state.dragHeight = settings().mixerHeight; }
+    else {
+      const float most = std::max(kMinShown, ImGui::GetIO().DisplaySize.y / scale * 0.6f);
+      settings().mixerHeight = std::clamp(state.dragHeight, kMinShown, most);
+    }
+  }
+  if (ImGui::IsItemDeactivated()) saveSettings();
+  if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) { settings().mixerHeight = kDefaultHeight; saveSettings(); }
+  ImDrawList* draw = ImGui::GetForegroundDrawList();   // (the panels above reach down over this bar: draw over them)
+  const float y = std::floor(at.y) + 3.5f;   // (the middle of a pixel row: a one-pixel line is then drawn whole)
+  draw->AddLine(ImVec2(at.x, y), ImVec2(at.x + width, y), hot ? kAccent : accentAlpha(120), 1.0f);
+  const float mid = at.x + width * 0.5f, half = 18 * scale;
+  draw->AddLine(ImVec2(mid - half, y), ImVec2(mid + half, y), kAccent, hot ? 4.0f : 3.0f);   // the handle
+  ImGui::EndChild();
+}
+
+}  // namespace
 
 bool drawMixer(MixerState& state, Document& doc, Engine& engine, const std::string& selectedLane) {
   Context cx{state, doc, engine};
@@ -144,6 +184,7 @@ bool drawMixer(MixerState& state, Document& doc, Engine& engine, const std::stri
   const float lineHeight = ImGui::GetTextLineHeight();
   if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) state.draggingAddress.clear();
 
+  drawGrip(state);
   ImGui::BeginChild("mixer", ImVec2(0, mixerHeight()), false, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_HorizontalScrollbar);
   drawCarve(cx);
   ImGui::SameLine(0, 0);

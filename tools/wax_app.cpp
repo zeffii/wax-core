@@ -783,7 +783,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   }
   const bool mixerShown = session->showMixer && (session->screen == Screen::Song || session->screen == Screen::Pattern || session->screen == Screen::Instrument);
   const float statusH = ImGui::GetTextLineHeightWithSpacing() + 6 * scale;
-  const float below = -(statusH + (mixerShown ? app::mixerHeight() + 10 : 0.0f));
+  const float below = -(statusH + (mixerShown ? app::mixerHeight() + app::mixerGripHeight() : 0.0f));
   ImGui::BeginChild("rail", ImVec2(40 * scale, below), false);
   {
     const struct { const char* label; Screen screen; } entries[] = {{"Song", Screen::Song}, {"Pattern", Screen::Pattern}, {"Instrument", Screen::Instrument}, {"Sample", Screen::Sample}, {"Info", Screen::Info}, {"Config", Screen::Config}};
@@ -1536,6 +1536,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   if (app::drawVectorWindow(session->vector, doc, player.engine())) { syncData(doc, player.engine()); syncParams(doc, player.engine()); }
   if (!session->panel.dxNode.empty()) { app::showDx(session->dx, laneInstrument, session->panel.dxNode); session->panel.dxNode.clear(); }
   if (app::drawDxWindow(session->dx, doc, player.engine())) { syncData(doc, player.engine()); syncParams(doc, player.engine()); }
+  if (session->mixer.hide) { session->showMixer = false; session->mixer.hide = false; }   // (the grip was pulled right down)
   if (mixerShown && app::drawMixer(session->mixer, doc, player.engine(), selectedLane)) {
     syncParams(doc, player.engine());
     const std::vector<std::string> problems = syncLanes(doc, player.engine());

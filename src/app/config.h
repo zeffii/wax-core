@@ -17,6 +17,7 @@ struct Settings {
   ImU32 wireParam = IM_COL32(0xf4, 0x85, 0x7b, 255);
   bool wireDashed = true;
   bool follow = true;   // the grids scroll with the playing row
+  float mixerHeight = 178.0f;   // the mixer's height in web pixels (the grip on its top edge changes it; pulled under 20 it hides)
   bool insertCut = false;   // Insert silence cuts a pattern that runs across the cursor row (off: it stays whole)
   bool patternAll = false;     // the Pattern screen shows every lane side by side (off: one lane, picked by its tab)
   static constexpr bool kNotePreviewDefault = true;   // never off by default
