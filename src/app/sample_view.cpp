@@ -9,6 +9,7 @@
 #include "app/theme.h"
 #include "app/widgets.h"
 #include "imgui.h"
+#include "project/onsets.h"
 #include "project/samples.h"
 #include "project/spectrogram.h"
 
@@ -111,6 +112,25 @@ bool runTool(SampleView& v, Document& document, const std::string& tool, const c
   return true;
 }
 
+// What auto-slice would do with the settings now: the hits it finds, and the markers it would add (one on each hit, and one at the start of the
+// range when the first hit is well after it). Worked out again only when a setting, the selection or the sample changes.
+void updateAutoSlice(SampleView& v, const EditableSample& s, int revision) {
+  const bool whole = v.sliceWhole || v.selTo <= v.selFrom;
+  const int from = whole ? 0 : v.selFrom, to = whole ? s.frames() : v.selTo;
+  const std::string key = v.selected + ":" + std::to_string(revision) + ":" + std::to_string(v.sliceSensitivity) + ":" + std::to_string(v.sliceGap) + ":" + std::to_string(from) + ":" + std::to_string(to);
+  if (key == v.sliceKey) return;
+  v.sliceKey = key;
+  OnsetSettings settings;
+  settings.from = from; settings.to = to; settings.sensitivity = v.sliceSensitivity / 100.0; settings.minGapMs = v.sliceGap;
+  v.sliceHits = detectOnsets(s.left, s.right, s.rate, settings);
+  v.sliceMarks.clear();
+  if (!v.sliceHits.empty()) {
+    if (v.sliceHits.front() - from > static_cast<int>(std::lround(0.02 * s.rate))) v.sliceMarks.push_back(from);
+    v.sliceMarks.insert(v.sliceMarks.end(), v.sliceHits.begin(), v.sliceHits.end());
+  }
+  v.sliceFrom = from; v.sliceTo = to;
+}
+
 void copySelection(SampleView& v, Document& document, bool cut) {
   if (!(v.selTo > v.selFrom)) { v.status = "Select a range first (drag on the waveform), then copy it."; return; }
   try {
@@ -205,6 +225,9 @@ bool drawSampleScreen(SampleView& v, Document& document, Preview& preview, float
     ImGui::TextColored(dim, "%d frames   %.2f s   %s", frames, s.rate > 0 ? frames / s.rate : 0.0, stereo ? "stereo" : "mono");
     ImGui::SameLine(0, 18 * scale);
     if (textButton(v.spectrogram ? "Waveform" : "Spectrogram")) v.spectrogram = !v.spectrogram;
+    ImGui::SameLine(0, 18 * scale);
+    if (textButton("Auto-slice")) v.sliceOpen = true;
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Mark a slice at each hit (Shift+E)");
     ImGui::SameLine(0, 18 * scale);
     if (textButton("Remove")) {
       const std::vector<std::string> users = instrumentsPlaying(document.project(), v.selected);
@@ -362,6 +385,11 @@ bool drawSampleScreen(SampleView& v, Document& document, Preview& preview, float
     for (const int f : {r.start, r.end}) draw->AddLine(ImVec2(frameToX(f), origin.y), ImVec2(frameToX(f), origin.y + size.y), r.colour, 1.5f);
   }
   const std::vector<int> savedSlices = sliceMarkers(s);
+  if (v.sliceOpen) {   // the markers auto-slice would add, faint, with the range it replaces shaded
+    updateAutoSlice(v, s, v.cacheRevision);
+    if (v.sliceReplace) draw->AddRectFilled(ImVec2(frameToX(v.sliceFrom), origin.y), ImVec2(frameToX(v.sliceTo), origin.y + 3), kSliceColour);
+    for (const int f : v.sliceMarks) draw->AddLine(ImVec2(frameToX(f), origin.y), ImVec2(frameToX(f), origin.y + size.y), withAlpha(kSliceColour, 130), 1.0f);
+  }
   const std::vector<int>& slices = v.drag == SampleView::Drag::Slice ? v.dragSlices : savedSlices;
   for (std::size_t i = 0; i < slices.size(); i++) {
     const float x = frameToX(slices[i]);
@@ -459,7 +487,8 @@ bool drawSampleScreen(SampleView& v, Document& document, Preview& preview, float
   }
 
   // ---- the keys (the text boxes have the keyboard when one is active) ----
-  if (!io.WantTextInput) {
+  if (!io.WantTextInput && !v.sliceOpen) {
+    if (io.KeyShift && !io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_E, false)) v.sliceOpen = true;
     const auto tool = [&](ImGuiKey key, const char* name, const char* label) { if (io.KeyShift && !io.KeyCtrl && ImGui::IsKeyPressed(key, false)) changed |= runTool(v, document, name, label); };
     tool(ImGuiKey_C, "crop", "Crop"); tool(ImGuiKey_T, "crop", "Crop"); tool(ImGuiKey_X, "cut", "Cut"); tool(ImGuiKey_S, "silence", "Silence");
     tool(ImGuiKey_R, "reverse", "Reverse"); tool(ImGuiKey_N, "normalise", "Normalise"); tool(ImGuiKey_I, "fadeIn", "Fade in"); tool(ImGuiKey_O, "fadeOut", "Fade out");
@@ -506,6 +535,36 @@ bool drawSampleScreen(SampleView& v, Document& document, Preview& preview, float
   }
   if (v.heldKey >= 0 && (!ImGui::IsKeyDown(static_cast<ImGuiKey>(v.heldKey)) || io.WantTextInput)) { preview.stop(); v.heldKey = -1; }
 
+  if (v.sliceOpen && !ImGui::IsPopupOpen("Auto-slice")) ImGui::OpenPopup("Auto-slice");
+  if (ImGui::BeginPopupModal("Auto-slice", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+    updateAutoSlice(v, s, v.cacheRevision);
+    ImGui::TextColored(dim, "Marks a slice at each hit of the %s.", v.sliceWhole || v.selTo <= v.selFrom ? "whole sample" : "selection");
+    ImGui::SetNextItemWidth(220 * scale);
+    ImGui::SliderInt("Sensitivity (%)", &v.sliceSensitivity, 0, 100);
+    ImGui::SetNextItemWidth(220 * scale);
+    ImGui::SliderInt("Shortest gap (ms)", &v.sliceGap, 5, 500);
+    ImGui::Checkbox("Replace the markers in range", &v.sliceReplace);
+    ImGui::Checkbox("Operate on the whole sample", &v.sliceWhole);
+    const bool whole = v.sliceWhole || v.selTo <= v.selFrom;
+    if (v.sliceHits.empty()) ImGui::TextColored(dim, "No hits found%s: raise the sensitivity or shorten the gap.", whole ? "" : " in the selection");
+    else ImGui::Text("%d hits found%s.", static_cast<int>(v.sliceHits.size()), whole ? "" : " in the selection");
+    ImGui::Separator();
+    if (!v.sliceHits.empty() && textButton("Slice")) {
+      std::vector<int> next;
+      for (const int f : sliceMarkers(s)) if (!v.sliceReplace || f < v.sliceFrom || f >= v.sliceTo) next.push_back(f);   // markers outside the range stay
+      next.insert(next.end(), v.sliceMarks.begin(), v.sliceMarks.end());
+      if (commit(v, document, "Auto-slice", false, [&](EditableSample& e) { setSliceMarkers(e, next); })) {
+        changed = true;
+        v.activeSlice = -1;
+        v.status = "Found " + std::to_string(v.sliceHits.size()) + " onsets: " + std::to_string(sliceMarkers(readSample(document.project().samples[v.selected])).size()) + " slice markers now.";
+      }
+      v.sliceOpen = false;
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::SameLine(0, 16 * scale);
+    if (textButton("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) { v.sliceOpen = false; ImGui::CloseCurrentPopup(); }
+    ImGui::EndPopup();
+  }
   if (!v.status.empty()) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(kWarm), "%s", v.status.c_str());
   else ImGui::TextColored(dim, "drag: select   Alt+drag: loop   Ctrl+drag: sustain   Alt+click: slice   Ctrl+wheel: zoom");
   ImGui::EndGroup();

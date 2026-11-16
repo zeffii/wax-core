@@ -28,6 +28,7 @@
 #include "io/wav.h"
 #include "project/project.h"
 #include "project/sample_edit.h"
+#include "project/onsets.h"
 #include "project/spectrogram.h"
 #include "project/save.h"
 
@@ -1274,6 +1275,27 @@ void testSpectrogram() {   // the numbers come from the web app's computeSpectro
   check(heat[0] == 127 && heat[1] == 26 && heat[2] == 246 && wax::spectrogramHeat(255)[0] == 255 && wax::spectrogramHeat(0)[2] == 0, "the heat colours");
 }
 
+void testOnsets() {   // the frames come from the web app's detectOnsets on the same signal
+  const int rate = 22050, n = 22050;
+  std::vector<float> d(n, 0.0f), r(n, 0.0f);
+  long long seed = 12345;
+  const auto rnd = [&]() { seed = (seed * 16807) % 2147483647LL; return static_cast<double>(seed) / 2147483647.0 - 0.5; };
+  for (const int at : {2000, 7000, 12500, 17000})
+    for (int i = 0; i < 3000; i++) {
+      const double e = std::exp(-i / 400.0);
+      d[static_cast<std::size_t>(at + i)] = static_cast<float>(d[static_cast<std::size_t>(at + i)] + (std::sin(i * 0.4) * 0.6 + rnd() * 0.3) * e);
+      r[static_cast<std::size_t>(at + i)] = static_cast<float>(r[static_cast<std::size_t>(at + i)] + std::sin(i * 0.2) * 0.2 * e);
+    }
+  check(wax::detectOnsets(d, {}, rate) == std::vector<int>({1979, 6979, 12479, 16979}), "onsets: four hits found where the web app finds them");
+  wax::OnsetSettings loud;
+  loud.sensitivity = 0.8; loud.minGapMs = 100;
+  check(wax::detectOnsets(d, r, rate, loud) == std::vector<int>({1979, 6979, 12479, 16979}), "onsets: stereo, other settings");
+  wax::OnsetSettings part;
+  part.from = 5000; part.to = 20000; part.sensitivity = 0.3;
+  check(wax::detectOnsets(d, {}, rate, part) == std::vector<int>({6979, 12479, 16979}), "onsets: only inside the range");
+  check(wax::detectOnsets(std::vector<float>(d.begin(), d.begin() + 500), {}, rate).empty(), "onsets: too short to look at");
+}
+
 void testSampleLoading() {
   check(wax::sampleIdFromName("My Kick (01).wav") == "My_Kick_01_" && wax::sampleIdFromName("808.wav") == "_808" && wax::sampleIdFromName("...") == "_" && wax::sampleIdFromName(".wav") == "sample" && wax::sampleIdFromName("") == "sample", "a file name becomes an id");
   check(wax::sampleIdFromName("a_very_long_sample_name_that_goes_on_and_on.wav").size() == 24, "an id is at most 24 characters");
@@ -1447,6 +1469,7 @@ int main(int argc, char** argv) {
   if (argc > 1 && std::string(argv[1]) == "--samples") {   // just the sample tests (the whole run takes a long while)
     testSampleLoading();
     testSpectrogram();
+    testOnsets();
     testSampleEdit();
     testLiveSampler();
     if (failures) std::printf("%d check%s failed\n", failures, failures == 1 ? "" : "s");
@@ -1472,6 +1495,7 @@ int main(int argc, char** argv) {
   testCurveDocument();
   testSampleLoading();
   testSpectrogram();
+  testOnsets();
   testSampleEdit();
   testPresets();
   testGraphSaved();

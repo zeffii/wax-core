@@ -38,6 +38,14 @@ struct SampleView {
   bool spectrogram = false;            // the display shows the spectrogram instead of the waveform
   std::string spectrumKey;             // what the spectrogram picture on show was made for (its pixels are kept as a texture)
 
+  // auto-slice: the dialog's settings (the web app's Config keys sliceSensitivity, sliceMinGap, sliceReplace, sliceWhole) and what they would mark
+  bool sliceOpen = false;
+  int sliceSensitivity = 50, sliceGap = 30;
+  bool sliceReplace = true, sliceWhole = false;
+  std::vector<int> sliceHits, sliceMarks;
+  int sliceFrom = 0, sliceTo = 0;
+  std::string sliceKey;
+
   int heldKey = -1;                    // the piano key playing the sample (ImGuiKey), -1 for none
 };
 

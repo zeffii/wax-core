@@ -10,6 +10,8 @@ namespace {
 constexpr int kSize = 1024;   // FFT length in frames
 constexpr double kPi = 3.14159265358979323846;
 
+}  // namespace
+
 // In-place radix-2 FFT of re/im (length a power of two).
 void fft(std::vector<double>& re, std::vector<double>& im) {
   const int n = static_cast<int>(re.size());
@@ -34,8 +36,6 @@ void fft(std::vector<double>& re, std::vector<double>& im) {
     }
   }
 }
-
-}  // namespace
 
 std::vector<std::uint8_t> computeSpectrogram(const std::vector<float>& left, const std::vector<float>& right, int from, int to, int cols, int rows) {
   std::vector<std::uint8_t> out(static_cast<std::size_t>(std::max(0, cols)) * static_cast<std::size_t>(std::max(0, rows)), 0);
