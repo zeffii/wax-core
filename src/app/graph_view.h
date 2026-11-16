@@ -27,6 +27,8 @@ struct GraphViewState {
   // goes into that wire when let go) and whether it is far enough out of its chain (its neighbours are then joined) are kept until release
   bool dragFree = false, dragForce = false, dragMoved = false, dropPull = false;
   std::string dropFrom, dropTo;
+  std::string hoverKey;      // the port the mouse rests on (with its side), and which of its wires Tab has lit
+  int pickWire = 0;
   std::set<std::string> group;   // nodes picked together (lasso, or Shift+click): they move, duplicate and go as one
   std::string lastPicked;    // the node picked before the last click (a Shift+click starts the group from it)
   bool lassoing = false;     // a lasso is being dragged on empty space

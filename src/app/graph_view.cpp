@@ -255,6 +255,16 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     }
     state.message = !state.dropFrom.empty() ? "Release to put " + state.held + " into this wire" : state.dropPull ? "Release to take " + state.held + " out of its chain" : std::string();
   }
+  // A port with several wires: Tab chooses which one is lit, and a press on the port picks that one up.
+  const Connection* litWire = nullptr;
+  {
+    const std::string key = hover.node.empty() ? std::string() : hover.node + "." + hover.port + (hover.output ? ">" : "<");
+    if (key != state.hoverKey) { state.hoverKey = key; state.pickWire = 0; }
+    std::vector<const Connection*> here;
+    if (!key.empty()) for (const Connection& c : graph.connections) if ((hover.output ? c.from : c.to) == hover.node + "." + hover.port) here.push_back(&c);
+    if (here.size() > 1 && windowHovered && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_Tab, false)) state.pickWire = (state.pickWire + (io.KeyShift ? static_cast<int>(here.size()) - 1 : 1)) % static_cast<int>(here.size());
+    if (here.size() > 1) litWire = here[static_cast<std::size_t>(state.pickWire) % here.size()];
+  }
   const Connection* hoverWire = nullptr;
   if (windowHovered && hover.node.empty() && !dragging) {
     float best = 6 * scale;
@@ -270,7 +280,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
   for (const WireEnds& w : wires) {
     if (lifted(*w.c)) continue;
     const bool chosenWire = w.c->from == state.wireFrom && w.c->to == state.wireTo;
-    const float width = (w.kind == PortKind::Stereo ? 3.0f : 1.75f) * 0.65f * std::max(1.0f, scale) * (chosenWire || w.c == hoverWire || (w.c->from == state.dropFrom && w.c->to == state.dropTo && !state.dropFrom.empty()) ? 1.8f : 1.0f);
+    const float width = (w.kind == PortKind::Stereo ? 3.0f : 1.75f) * 0.65f * std::max(1.0f, scale) * (chosenWire || w.c == hoverWire || w.c == litWire || (w.c->from == state.dropFrom && w.c->to == state.dropTo && !state.dropFrom.empty()) ? 1.8f : 1.0f);
     drawWire(dl, w.p0, w.p1, chosenWire || (w.c->from == state.dropFrom && w.c->to == state.dropTo && !state.dropFrom.empty()) ? kWarm : kindColour(w.kind), width, settings().wireDashed && (w.kind == PortKind::Control || w.kind == PortKind::Param), scale);
   }
   std::string hoverText;   // what the thing under the mouse is, as in the web app's status line
@@ -289,7 +299,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       int count = 0;
       for (const Connection& c : graph.connections) count += hover.output ? c.from == address : c.to == address;
       hoverText = std::string(hover.output ? "Output " : "Input ") + address + ", " + kindText(kindOf(t->second, hover.port));
-      if (count) hoverText += count > 1 ? " - " + std::to_string(count) + " wires: drag to move the first (Shift+drag makes a new wire)" : " - drag to move its wire (Shift+drag makes a new wire)";
+      if (count) hoverText += count > 1 ? " - " + std::to_string(count) + " wires: Tab picks one, drag moves it (Shift+drag makes a new wire)" : " - drag to move its wire (Shift+drag makes a new wire)";
     } else if (hoverWire) {
       const auto a = tiles.find(nodeOfAddress(hoverWire->from));
       hoverText = "Wire " + hoverWire->from + " to " + hoverWire->to + ", " + kindText(kindOf(a->second, portOfAddress(hoverWire->from)));
@@ -386,6 +396,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       const std::string address = hover.node + "." + hover.port;
       const Connection* first = nullptr;
       for (const Connection& c : graph.connections) if (!first && (hover.output ? c.from == address : c.to == address)) first = &c;
+      if (litWire) first = litWire;   // (Tab chose among several)
       state.held.clear();
       state.wireFrom.clear(); state.wireTo.clear();
       if (first && !io.KeyShift) {
@@ -517,7 +528,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       }
     }
     int way = 0;   // Tab and Shift+Tab step through the nodes left to right; Alt+arrows go to the nearest one that way
-    const bool tab = ImGui::IsKeyPressed(ImGuiKey_Tab, false);
+    const bool tab = ImGui::IsKeyPressed(ImGuiKey_Tab, false) && hover.node.empty();
     const ImGuiKey arrows[4] = {ImGuiKey_LeftArrow, ImGuiKey_RightArrow, ImGuiKey_UpArrow, ImGuiKey_DownArrow};
     if (io.KeyAlt && !io.KeyCtrl) for (int k = 0; k < 4; k++) if (ImGui::IsKeyPressed(arrows[k], false)) way = k + 1;
     if ((tab || way) && !graph.nodes.empty()) {
