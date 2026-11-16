@@ -624,14 +624,25 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       if (!any) ImGui::TextColored(dim, "none yet: pick a file below");
       ImGui::PopFont();
       ImGui::Separator();
-      const app::SampleBrowserResult picked = app::drawSampleBrowser(session->sampleBrowser, player.preview(), std::filesystem::path(options.path).parent_path(), 10);
+      const app::SampleBrowserResult picked = app::drawSampleBrowser(session->sampleBrowser, player.preview(), std::filesystem::path(options.path).parent_path(), 10, session->screen == Screen::Sample ? session->sampleView.selected : std::string());
       if (picked.load) {
         try {
           const StereoAudio audio = readWav(picked.file.string());
           const bool stereo = audio.left != audio.right;
-          const std::string id = uniqueSampleId(doc.project().samples, sampleIdFromName(picked.file.filename().string()));
-          doc.apply(std::make_unique<AddSample>(id, encodeSample(audio.sampleRate, audio.left, stereo ? audio.right : std::vector<float>())));
-          session->editStatus = "Loaded " + id + ". Add a Sampler from Shift+I to play it.";
+          const Json encoded = encodeSample(audio.sampleRate, audio.left, stereo ? audio.right : std::vector<float>());
+          if (picked.replace && doc.project().samples.contains(session->sampleView.selected)) {   // new audio in an existing sample: its levels stay, its loops and markers were places in the old audio
+            const std::string id = session->sampleView.selected;
+            EditableSample next = readSample(encoded);
+            const EditableSample old = readSample(doc.project().samples[id]);
+            for (const char* key : {"volume", "globalVolume", "pan"}) if (old.props.contains(key)) next.props[key] = old.props[key];
+            doc.apply(std::make_unique<SetSample>(id, writeSample(next, doc.project().samples[id]), "Replace sample " + id));
+            session->sampleView.selFrom = session->sampleView.selTo = session->sampleView.head = 0;
+            session->editStatus = "Replaced " + id + ".";
+          } else {
+            const std::string id = uniqueSampleId(doc.project().samples, sampleIdFromName(picked.file.filename().string()));
+            doc.apply(std::make_unique<AddSample>(id, encodeSample(audio.sampleRate, audio.left, stereo ? audio.right : std::vector<float>())));
+            session->editStatus = "Loaded " + id + ". Add a Sampler from Shift+I to play it.";
+          }
         } catch (const std::exception& e) {
           session->editStatus = e.what();
         }

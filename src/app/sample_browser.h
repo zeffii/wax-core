@@ -35,11 +35,13 @@ struct SampleBrowserState {
 
 struct SampleBrowserResult {
   bool load = false;                // the picked file should be loaded into the project
+  bool replace = false;             // ...into the sample named in `replaceId` instead of as a new one
   std::filesystem::path file;
 };
 
 // Draws the browser in `height` pixels of the current window. `start` is the folder to open at first. `limitMB`: files over this size wait for a click.
-SampleBrowserResult drawSampleBrowser(SampleBrowserState& state, Preview& preview, const std::filesystem::path& start, double limitMB);
+// `replaceId`: the sample the Sample screen has chosen; when not empty a "Replace" button offers to put the file into it (levels kept, loops and markers gone).
+SampleBrowserResult drawSampleBrowser(SampleBrowserState& state, Preview& preview, const std::filesystem::path& start, double limitMB, const std::string& replaceId = std::string());
 
 // The sound files this reads: .wav (16, 24 or 32-bit float).
 bool isSoundFile(const std::filesystem::path& file);

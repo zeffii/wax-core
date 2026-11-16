@@ -86,7 +86,7 @@ std::string sizeText(std::uintmax_t bytes) {
 
 }  // namespace
 
-SampleBrowserResult drawSampleBrowser(SampleBrowserState& state, Preview& preview, const fs::path& start, double limitMB) {
+SampleBrowserResult drawSampleBrowser(SampleBrowserState& state, Preview& preview, const fs::path& start, double limitMB, const std::string& replaceId) {
   SampleBrowserResult result;
   const float scale = ImGui::GetStyle().FontScaleDpi;
   if (state.folder.empty()) {
@@ -156,6 +156,9 @@ SampleBrowserResult drawSampleBrowser(SampleBrowserState& state, Preview& previe
       if (textButton(preview.playing() ? "Stop" : "Play")) { if (preview.playing()) preview.stop(); else preview.start(state.clip); }
       ImGui::SameLine(0, 12 * scale);
       if (textButton("Load as a new sample")) { result.load = true; result.file = state.folder / picked->name; }
+      if (!replaceId.empty()) {   // (on its own line: the panel is narrow)
+        if (textButton(("Replace " + replaceId).c_str())) { result.load = true; result.replace = true; result.file = state.folder / picked->name; }
+      }
     }
   }
   if (!state.error.empty()) ImGui::TextColored(ImVec4(0.9f, 0.4f, 0.4f, 1), "%s", state.error.c_str());
