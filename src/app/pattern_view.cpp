@@ -42,7 +42,7 @@ PatternViewResult drawPatternView(const std::vector<PatternLane>& lanes, int tic
   int columns = 0;
   for (const PatternLane& lane : lanes) { firstColumn.push_back(columns + 1); columns += static_cast<int>(lane.labels->size()); }
   const bool several = lanes.size() > 1;
-  const ImGuiTableFlags flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX | ImGuiTableFlags_BordersInnerV |
+  const ImGuiTableFlags flags = ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX |
                                 ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings;
   const ImGuiTableFlags tableFlags = cursor.hideEmpty ? flags | ImGuiTableFlags_Hideable : flags;   // (hiding columns needs the flag)
   const float infoHeight = ImGui::GetTextLineHeightWithSpacing();   // room for the line under the grid
@@ -105,8 +105,17 @@ PatternViewResult drawPatternView(const std::vector<PatternLane>& lanes, int tic
         const int laneColumns = static_cast<int>(lane.labels->size());
         const ImU32 patternTint = static_cast<std::size_t>(tick) < lane.tint.size() ? lane.tint[static_cast<std::size_t>(tick)] : 0;
         const bool cursorLane = static_cast<int>(li) == cursor.lane;
+        bool laneStarted = false;
         for (int c = 0; c < laneColumns; c++) {
           if (!ImGui::TableSetColumnIndex(firstColumn[li] + c)) continue;   // (a column left out)
+          if (!laneStarted) {   // a thin line between lanes, at the left of the lane's first column (none between the columns of a lane: only a meta machine's own spacer column marks a gap)
+            laneStarted = true;
+            if (li > 0) {
+              const ImVec2 at = ImGui::GetCursorScreenPos();
+              const ImGuiStyle& style = ImGui::GetStyle();
+              ImGui::GetWindowDrawList()->AddLine(ImVec2(at.x - style.CellPadding.x, at.y - style.CellPadding.y), ImVec2(at.x - style.CellPadding.x, at.y + rowHeight - style.CellPadding.y), lineAlpha(160));
+            }
+          }
           if (patternTint) ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, patternTint);
           const bool here = cursor.show && cursorLane && tick == cursor.tick && c == cursor.cell;
           if (cursor.show && cursorLane && cursor.selected && tick >= cursor.tick0 && tick <= cursor.tick1 && c >= cursor.cell0 && c <= cursor.cell1)
