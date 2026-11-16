@@ -278,16 +278,26 @@ if(WAX_LIVE)
     endif()
     FetchContent_Declare(sdl3 GIT_REPOSITORY https://github.com/libsdl-org/SDL.git GIT_TAG release-3.4.8 GIT_SHALLOW TRUE)
     FetchContent_MakeAvailable(sdl3)
+    # Text is drawn through FreeType (hinted, so it stays sharp); without it ImGui falls back to its own rasteriser, which is softer.
+    find_package(Freetype)
     add_library(waximgui STATIC
       third_party/imgui/imgui.cpp third_party/imgui/imgui_draw.cpp third_party/imgui/imgui_tables.cpp
       third_party/imgui/imgui_widgets.cpp third_party/imgui/imgui_impl_sdl3.cpp third_party/imgui/imgui_impl_sdlrenderer3.cpp)
     target_include_directories(waximgui PUBLIC third_party/imgui third_party)
     target_link_libraries(waximgui PUBLIC SDL3::SDL3)
+    if(FREETYPE_FOUND)
+      target_sources(waximgui PRIVATE third_party/imgui/misc/freetype/imgui_freetype.cpp)
+      target_compile_definitions(waximgui PUBLIC IMGUI_ENABLE_FREETYPE)
+      target_link_libraries(waximgui PUBLIC Freetype::Freetype)
+      set_source_files_properties(third_party/imgui/misc/freetype/imgui_freetype.cpp PROPERTIES COMPILE_OPTIONS "$<IF:$<CXX_COMPILER_ID:MSVC>,/W0,-w>")
+    else()
+      message(WARNING "FreeType not found: text will be softer. (Windows: vcpkg install freetype)")
+    endif()
     set_source_files_properties(
       third_party/imgui/imgui.cpp third_party/imgui/imgui_draw.cpp third_party/imgui/imgui_tables.cpp
       third_party/imgui/imgui_widgets.cpp third_party/imgui/imgui_impl_sdl3.cpp third_party/imgui/imgui_impl_sdlrenderer3.cpp
       PROPERTIES COMPILE_OPTIONS "$<IF:$<CXX_COMPILER_ID:MSVC>,/W0,-w>")
-    add_executable(wax-app tools/wax_app.cpp src/app/theme.cpp src/app/pattern_view.cpp src/app/widgets.cpp src/app/param_panel.cpp src/app/sequence_view.cpp src/app/minimap.cpp src/app/vector_window.cpp src/app/song_keys.cpp src/app/mixer_view.cpp src/app/envelope_editor.cpp src/app/envelope_window.cpp
+    add_executable(wax-app tools/wax_app.cpp src/app/theme.cpp src/app/fonts.cpp src/app/pattern_view.cpp src/app/widgets.cpp src/app/param_panel.cpp src/app/sequence_view.cpp src/app/minimap.cpp src/app/vector_window.cpp src/app/song_keys.cpp src/app/mixer_view.cpp src/app/envelope_editor.cpp src/app/envelope_window.cpp
   src/app/dx_window.cpp src/app/gate_window.cpp src/app/chord_window.cpp src/app/wavetable_window.cpp src/app/shape_window.cpp
   src/app/graph_view.cpp
   src/app/node_look.cpp src/app/shortcut_sheet.cpp src/app/pattern_list.cpp src/app/curve_view.cpp src/app/sample_browser.cpp src/app/sample_view.cpp src/app/pattern_colour.cpp src/app/config.cpp src/app/insert_menu.cpp src/app/machine_tree.cpp src/app/icons.cpp src/app/node_help.cpp src/app/node_envelope.cpp src/app/node_pictures.cpp src/app/node_response.cpp)
