@@ -108,6 +108,9 @@ struct Options {
 // One song, loaded: the project, the engine that plays it, the sound card and the MIDI input.
 enum class Screen { Song, Pattern, Instrument, Sample, Info, Config };
 
+// The x of the thin line to the right of the rail (the rail is 40 units wide and starts at `left`).
+static float railLineX(float left, float scale) { return std::floor(left + 40 * scale + ImGui::GetStyle().ItemSpacing.x / 2) + 0.5f; }
+
 struct Session {
   Project project;
   std::unique_ptr<Player> player;
@@ -556,7 +559,13 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   drawMeter("##l", meterL, ImVec2(200 * ImGui::GetStyle().FontScaleDpi, 8));
   drawMeter("##r", meterR, ImVec2(200 * ImGui::GetStyle().FontScaleDpi, 8));
   ImGui::EndGroup();
-  ImGui::Separator();
+  {   // the header's line starts at the rail's line (which runs up to the top of the window) and goes on to the right edge
+    const float scale = ImGui::GetStyle().FontScaleDpi;
+    const ImVec2 at = ImGui::GetCursorScreenPos();
+    const float from = railLineX(at.x, scale), y = std::floor(at.y) + 0.5f;
+    ImGui::GetWindowDrawList()->AddLine(ImVec2(from, y), ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(), y), ImGui::GetColorU32(ImGuiCol_Separator), 1.0f);
+    ImGui::Dummy(ImVec2(0, 1));
+  }
 
   // The computer keyboard plays notes unless a text box has it. With Enter pressed it also types into the cell under the cursor.
   ImGuiIO& io = ImGui::GetIO();
@@ -897,19 +906,22 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     const struct { const char* icon; const char* tip; Screen screen; } icons[] = {
         {"arrange", "Song: the arrangement (F1)", Screen::Song}, {"patterns", "Pattern (F2)", Screen::Pattern},
         {"instruments", "Instrument (F3)", Screen::Instrument}, {"samples", "Sample (F4)", Screen::Sample}, {"info", "Song info (F10)", Screen::Info}};
-    for (const auto& entry : icons) if (app::iconButton(entry.icon, entry.tip, session->screen == entry.screen, 24)) session->screen = entry.screen;
+    const float centred = (40 - 24) * 0.5f * scale;   // the icons sit centred under the logo
+    for (const auto& entry : icons) { ImGui::SetCursorPosX(centred); if (app::iconButton(entry.icon, entry.tip, session->screen == entry.screen, 24)) session->screen = entry.screen; }
     // the other domain, at the bottom of the rail (above the mixer when it shows): the shortcut sheet and the settings
     const float iconStep = 24 * scale + ImGui::GetStyle().ItemSpacing.y;
     ImGui::SetCursorPosY(std::max(ImGui::GetCursorPosY(), ImGui::GetWindowHeight() - 2 * iconStep));
+    ImGui::SetCursorPosX(centred);
     if (app::iconButton("keys-toggle", "Shortcuts: the keys of this screen, beside it", session->showKeys, 24)) session->showKeys = !session->showKeys;
+    ImGui::SetCursorPosX(centred);
     if (app::iconButton("config", "Config (F11)", session->screen == Screen::Config, 24)) session->screen = Screen::Config;
     (void)entries;
   }
   ImGui::EndChild();
   {   // a thin line between the rail and what is to the right of it
     const ImVec2 railMin = ImGui::GetItemRectMin(), railMax = ImGui::GetItemRectMax();
-    const float x = std::floor(railMax.x + ImGui::GetStyle().ItemSpacing.x / 2) + 0.5f;
-    ImGui::GetWindowDrawList()->AddLine(ImVec2(x, railMin.y), ImVec2(x, railMax.y), app::lineAlpha(255), 1.0f);
+    const float x = railLineX(railMin.x, scale);
+    ImGui::GetWindowDrawList()->AddLine(ImVec2(x, ImGui::GetWindowPos().y), ImVec2(x, railMax.y), app::lineAlpha(255), 1.0f);   // (from the top of the window)
   }
   ImGui::SameLine();
   // The browser, down the left of every screen as in the web app: tabs for the lists (patterns, machines, samples), and under them
