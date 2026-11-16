@@ -737,7 +737,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     const auto found = tiles.find(n.id);
     if (found == tiles.end() || !(n.keepView || n.id == picked)) continue;
     if (hasResponse(n.type)) drawNodeResponse(dl, font, n, *found->second.type, found->second.min, found->second.max, dl->GetClipRectMin(), dl->GetClipRectMax(), scale, state.response);
-    if (hasPicture(n.type)) drawNodePicture(dl, font, n, *found->second.type, found->second.min, found->second.max, dl->GetClipRectMin(), dl->GetClipRectMax(), scale, timing);
+    if (hasPicture(n.type)) drawNodePicture(dl, font, n, *found->second.type, found->second.min, found->second.max, dl->GetClipRectMin(), dl->GetClipRectMax(), scale, timing, state.response);
     if (!hasEnvelopes(n.type)) continue;
     drawNodeEnvelopes(dl, font, n, *found->second.type, found->second.min, found->second.max, dl->GetClipRectMin(), dl->GetClipRectMax(), scale);
   }

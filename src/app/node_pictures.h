@@ -4,9 +4,11 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "imgui.h"
 
+#include "app/node_response.h"
 #include "core/node.h"
 #include "project/project.h"
 
@@ -17,6 +19,10 @@ struct PictureTiming { double tickMs = 0; int perBeat = 4; };
 
 bool hasPicture(const std::string& nodeType);
 
-void drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, ImVec2 tileMin, ImVec2 tileMax, ImVec2 areaMin, ImVec2 areaMax, float scale, const PictureTiming& timing);
+// Draws the picture for `node`; what the mouse can take hold of in it is added to `handles` (their param names start with '@').
+void drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, ImVec2 tileMin, ImVec2 tileMax, ImVec2 areaMin, ImVec2 areaMax, float scale, const PictureTiming& timing, ResponseHandles& handles);
+
+// The parameter changes dragging `handle` to the screen point `at` makes.
+std::vector<std::pair<std::string, double>> dragPictureHandle(const ResponseHandles::Handle& handle, const GraphNode& node, const NodeType& type, ImVec2 at);
 
 }  // namespace wax::app

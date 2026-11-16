@@ -15,7 +15,7 @@ namespace wax::app {
 
 // What the mouse can take hold of in the picture last drawn.
 struct ResponseHandles {
-  struct Handle { std::string node, param; int band = 0; ImVec2 pos{0, 0}; };   // band 0: a cut (param is "lowcut" or "highcut")
+  struct Handle { std::string node, param; int band = 0; ImVec2 pos{0, 0}; float gx = 0, gy = 0, gw = 1, gh = 1; };   // g*: the picture's own rectangle, for pictures that are not the equaliser's   // band 0: a cut (param is "lowcut" or "highcut")
   std::vector<Handle> list;
   std::string node;                    // the node the picture belongs to
   float px = 0, py = 0, pw = 1, ph = 1;   // the plot's rectangle

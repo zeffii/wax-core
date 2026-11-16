@@ -1,4 +1,5 @@
 #include "app/node_response.h"
+#include "app/node_pictures.h"
 
 #include <algorithm>
 #include <cmath>
@@ -90,7 +91,6 @@ void drawNodeResponse(ImDrawList* dl, ImFont* font, const GraphNode& node, const
   const float px = x0 + 30 * scale, pw = w - 42 * scale, py = y0 + 20 * scale, ph = h - 44 * scale;
   const auto xf = [&](double f) { return px + static_cast<float>(std::log(f / kFLo) / std::log(kFHi / kFLo)) * pw; };
   const auto yd = [&](double db) { return py + ph / 2 - static_cast<float>(std::max(-kRangeDb, std::min(kRangeDb, db)) / kRangeDb) * (ph / 2); };
-  handles = {};
   handles.node = node.id; handles.px = px; handles.py = py; handles.pw = pw; handles.ph = ph;
 
   dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x0 + w, y0 + h), kBg);
@@ -149,6 +149,7 @@ std::vector<std::pair<std::string, double>> dragResponse(const ResponseHandles& 
     for (const ParamSpec& spec : type.params) if (spec.name == name) return std::min(spec.max, std::max(spec.min, v));
     return v;
   };
+  if (!handle.param.empty() && handle.param[0] == '@') return dragPictureHandle(handle, node, type, at);
   const double freq = kFLo * std::pow(kFHi / kFLo, std::min(1.0, std::max(0.0, static_cast<double>((at.x - handles.px) / handles.pw))));
   std::vector<std::pair<std::string, double>> changes = {{handle.param, clampTo(handle.param, freq)}};
   if (handle.band == 0) return changes;

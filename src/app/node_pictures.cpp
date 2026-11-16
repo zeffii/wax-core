@@ -4,9 +4,11 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <map>
 #include <vector>
 
 #include "app/theme.h"
+#include "nodes/spacecore.h"
 
 namespace wax::app {
 namespace {
@@ -196,14 +198,116 @@ void drawHaas(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeTyp
   dl->AddText(font, f.size, ImVec2(f.x0 + 8 * scale, f.y0 + f.h - 14 * scale), textAlpha(190), text);
 }
 
+// ---- reflect: the room from above, and the echoes in time ----
+
+constexpr double kSoundSpeed = 343;
+
+void drawReflect(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale, ResponseHandles& handles) {
+  const float W = f.w, PAD = 14 * scale, planH = 250 * scale, echoH = 110 * scale;
+  const double rw = valueOf(node, type, "width"), rd = valueOf(node, type, "depth"), rh = valueOf(node, type, "height"), absorb = valueOf(node, type, "absorb"), taps = valueOf(node, type, "taps");
+  const double sx = valueOf(node, type, "srcx"), sy = valueOf(node, type, "srcy"), lx = valueOf(node, type, "lisx"), ly = valueOf(node, type, "lisy");
+  const space::Room room = space::reflections(rw, rd, rh, sx, sy, lx, ly, absorb, taps);
+  const float k = std::min((W - 2 * PAD - 120 * scale) / static_cast<float>(rw), (planH - 2 * PAD) / static_cast<float>(rd));
+  const float x0 = f.x0 + PAD + 20 * scale, y0 = f.y0 + PAD + 14 * scale, pw = static_cast<float>(rw) * k, pd = static_cast<float>(rd) * k;
+  char text[96];
+  dl->AddRect(ImVec2(x0, y0), ImVec2(x0 + pw, y0 + pd), withAlpha(kText, 180), 0, 0, 2.0f);
+  dl->AddRectFilled(ImVec2(x0 + pw - 5 * scale, y0 + pd - 5 * scale), ImVec2(x0 + pw + 5 * scale, y0 + pd + 5 * scale), textAlpha(128));   // the corner to drag
+  std::snprintf(text, sizeof text, "%.1f m", rw);
+  dl->AddText(font, f.size, ImVec2(x0 + pw / 2 - 14 * scale, y0 + pd + 5 * scale), textAlpha(150), text);
+  std::snprintf(text, sizeof text, "%.1f m", rd);
+  dl->AddText(font, f.size, ImVec2(x0 + pw + 8 * scale, y0 + pd / 2), textAlpha(150), text);
+  const ImVec2 s(x0 + static_cast<float>(sx) * pw, y0 + static_cast<float>(sy) * pd), l(x0 + static_cast<float>(lx) * pw, y0 + static_cast<float>(ly) * pd);
+  dl->AddLine(s, l, withAlpha(kOrange, 90));
+  dl->AddCircleFilled(s, 7 * scale, kOrange);
+  dl->AddTriangleFilled(ImVec2(l.x, l.y - 9 * scale), ImVec2(l.x + 7 * scale, l.y + 6 * scale), ImVec2(l.x - 7 * scale, l.y + 6 * scale), kBlue);
+  dl->AddText(font, f.size, ImVec2(s.x + 10 * scale, s.y - 5 * scale), textAlpha(180), "sound");
+  dl->AddText(font, f.size, ImVec2(l.x + 10 * scale, l.y - 5 * scale), textAlpha(180), "you");
+  handles.list.push_back({node.id, "@src", 0, s, f.x0 + PAD + 20 * scale, y0, pw, pd});
+  handles.list.push_back({node.id, "@lis", 0, l, f.x0 + PAD + 20 * scale, y0, pw, pd});
+  handles.list.push_back({node.id, "@size", 0, ImVec2(x0 + pw, y0 + pd), x0, y0, pw, pd});
+  // the echoes in time, after the dry sound
+  const float y1 = f.y0 + 14 * scale + planH + 8 * scale;
+  double last = 0.03;
+  for (const space::Tap& t : room.list) last = std::max(last, t.delay - room.direct);
+  const double tmax = last * 1.05;
+  dl->AddLine(ImVec2(f.x0 + PAD, y1 + echoH + 0.5f), ImVec2(f.x0 + W - PAD, y1 + echoH + 0.5f), textAlpha(64));
+  for (const space::Tap& t : room.list) {
+    const float x = f.x0 + PAD + static_cast<float>((t.delay - room.direct) / tmax) * (W - 2 * PAD), tall = static_cast<float>(std::clamp(t.gain, 0.0, 1.0)) * (echoH - 8 * scale);
+    dl->AddLine(ImVec2(x, y1 + echoH), ImVec2(x, y1 + echoH - tall), t.pan < -0.2 ? kBlue : t.pan > 0.2 ? kPink : textAlpha(180), 2.0f);
+  }
+  std::snprintf(text, sizeof text, "0     %d ms after the dry sound   (left blue, right pink)", static_cast<int>(std::lround(tmax * 1000)));
+  dl->AddText(font, f.size, ImVec2(f.x0 + PAD, y1 + echoH + 4 * scale), textAlpha(150), text);
+  std::snprintf(text, sizeof text, "direct %.1f ms (%.1f m)   %d reflections", room.direct * 1000, room.direct * kSoundSpeed, static_cast<int>(room.list.size()));
+  dl->AddText(font, f.size, ImVec2(f.x0 + 8 * scale, f.y0 + f.h - 14 * scale), textAlpha(190), text);
+}
+
+// ---- rotary: the horn and the drum turning ----
+
+struct Rotors { double hornAngle = 0, drumAngle = 0.5, hornSpeed = 0, drumSpeed = 0; };
+
+void drawRotary(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale, ResponseHandles& handles) {
+  static std::map<std::string, Rotors> state;   // the rotors keep turning between frames, at the speeds the node's own rule gives them
+  Rotors& r = state[node.id];
+  const double seconds = std::min(0.1, static_cast<double>(ImGui::GetIO().DeltaTime));
+  const int speed = static_cast<int>(std::lround(valueOf(node, type, "speed")));
+  const double target = speed <= 0 ? 0 : speed == 1 ? valueOf(node, type, "slow") : valueOf(node, type, "fast"), inertia = std::max(0.05, valueOf(node, type, "inertia"));
+  const auto next = [&](double now, double want, double rise, double fall) { return now + (want - now) * (1 - std::exp(-seconds / (((want > now ? rise : fall) * inertia) / 3))); };
+  r.hornSpeed = next(r.hornSpeed, target * 1.0, 0.9, 1.3);
+  r.drumSpeed = next(r.drumSpeed, target * 0.86, 4.5, 5.5);
+  r.hornAngle = std::fmod(r.hornAngle + 1.0 * r.hornSpeed * seconds + 1, 1.0);
+  r.drumAngle = std::fmod(r.drumAngle - r.drumSpeed * seconds + 1, 1.0);
+  const float radius = 46 * scale, cy = f.y0 + 84 * scale;
+  const double spread = valueOf(node, type, "spread");
+  char text[48];
+  for (int rotor = 0; rotor < 2; rotor++) {
+    const float cx = f.x0 + (rotor ? 218 : 82) * scale;
+    const double angle = (rotor ? r.drumAngle : r.hornAngle) * 2 * kPi - kPi / 2;
+    const ImU32 colour = rotor ? kBlue : kOrange;
+    dl->AddCircle(ImVec2(cx, cy), radius, textAlpha(90), 48);
+    const ImVec2 tip(cx + static_cast<float>(std::cos(-angle)) * radius, cy - static_cast<float>(std::sin(-angle)) * radius);
+    dl->AddLine(ImVec2(cx, cy), tip, colour, 1.5f * std::max(1.0f, scale));
+    dl->AddCircleFilled(tip, 4 * scale, colour);
+    dl->AddCircleFilled(ImVec2(cx, cy), 2 * scale, colour);
+    const double off = spread * 0.25 * 2 * kPi;   // the two microphones in front, `spread` apart
+    for (const int side : {-1, 1}) dl->AddCircleFilled(ImVec2(cx + static_cast<float>(std::sin(side * off)) * (radius + 12 * scale), cy + static_cast<float>(std::cos(side * off)) * (radius + 12 * scale)), 2.5f * scale, textAlpha(200));
+    const double hz = rotor ? r.drumSpeed : r.hornSpeed;
+    std::snprintf(text, sizeof text, hz < 1 ? "%s  %.2f Hz" : "%s  %.1f Hz", rotor ? "drum" : "horn", hz);
+    dl->AddText(font, f.size, ImVec2(cx - 30 * scale, cy + radius + 22 * scale), textAlpha(190), text);
+  }
+  const char* names[3] = {"stop", "slow", "fast"};   // the switch
+  for (int i = 0; i < 3; i++) {
+    const ImVec2 at(f.x0 + (80 + i * 70) * scale, f.y0 + f.h - 16 * scale);
+    dl->AddText(font, f.size, ImVec2(at.x - 12 * scale, at.y - 6 * scale), i == speed ? kAccent : textAlpha(190), names[i]);
+    handles.list.push_back({node.id, std::string("@speed") + static_cast<char>('0' + i), 0, at});
+  }
+}
+
 }  // namespace
 
-bool hasPicture(const std::string& nodeType) { return nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas"; }
+bool hasPicture(const std::string& nodeType) { return nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary"; }
 
-void drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, ImVec2 tileMin, ImVec2 tileMax, ImVec2 areaMin, ImVec2 areaMax, float scale, const PictureTiming& timing) {
+void drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, ImVec2 tileMin, ImVec2 tileMax, ImVec2 areaMin, ImVec2 areaMax, float scale, const PictureTiming& timing, ResponseHandles& handles) {
   if (node.type == "prismacanyon") drawCanyon(dl, font, node, type, frameFor(dl, font, node.id + " echoes", 360, 20 + 30 * kCanyonLines + 24, tileMin, tileMax, areaMin, areaMax, scale), scale, timing);
   else if (node.type == "ensemble") drawEnsemble(dl, font, node, type, frameFor(dl, font, node.id + " delays", 320, 150, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "haas") drawHaas(dl, font, node, type, frameFor(dl, font, node.id + " sides", 400, 280, tileMin, tileMax, areaMin, areaMax, scale), scale);
+  else if (node.type == "reflect") drawReflect(dl, font, node, type, frameFor(dl, font, node.id + " room", 560, 384, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
+  else if (node.type == "rotary") drawRotary(dl, font, node, type, frameFor(dl, font, node.id + " cabinet", 300, 190, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
+}
+
+std::vector<std::pair<std::string, double>> dragPictureHandle(const ResponseHandles::Handle& handle, const GraphNode& node, const NodeType& type, ImVec2 at) {
+  const auto clampTo = [&](const std::string& name, double v) {
+    for (const ParamSpec& spec : type.params) if (spec.name == name) return std::min(spec.max, std::max(spec.min, v));
+    return v;
+  };
+  const double fx = std::clamp(static_cast<double>((at.x - handle.gx) / handle.gw), 0.0, 1.0), fy = std::clamp(static_cast<double>((at.y - handle.gy) / handle.gh), 0.0, 1.0);
+  if (handle.param == "@src") return {{"srcx", fx}, {"srcy", fy}};
+  if (handle.param == "@lis") return {{"lisx", fx}, {"lisy", fy}};
+  if (handle.param == "@size") {   // the corner: pixels per metre is the plan's width over the room's width
+    const double k = handle.gw / std::max(0.1, valueOf(node, type, "width"));
+    return {{"width", clampTo("width", std::round((at.x - handle.gx) / k * 2) / 2)}, {"depth", clampTo("depth", std::round((at.y - handle.gy) / k * 2) / 2)}};
+  }
+  if (handle.param.rfind("@speed", 0) == 0) return {{"speed", static_cast<double>(handle.param.back() - '0')}};
+  return {};
 }
 
 }  // namespace wax::app

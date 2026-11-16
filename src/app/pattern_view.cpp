@@ -47,11 +47,15 @@ PatternViewResult drawPatternView(const std::vector<PatternLane>& lanes, int tic
                                 ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings;
   const ImGuiTableFlags tableFlags = cursor.hideEmpty ? flags | ImGuiTableFlags_Hideable : flags;   // (hiding columns needs the flag)
   const float infoHeight = ImGui::GetTextLineHeightWithSpacing();   // room for the line under the grid
-  if (!ImGui::BeginTable("pattern", columns + 1, tableFlags, ImVec2(0, std::max(60.0f, ImGui::GetContentRegionAvail().y - infoHeight)))) return result;
+  // The gap between two columns is one character: half of it as padding on each side.
+  const float charWidth = ImGui::CalcTextSize("0").x;
+  ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(charWidth / 2, ImGui::GetStyle().CellPadding.y));
+  const bool began = ImGui::BeginTable("pattern", columns + 1, tableFlags, ImVec2(0, std::max(60.0f, ImGui::GetContentRegionAvail().y - infoHeight)));
+  ImGui::PopStyleVar();
+  if (!began) return result;
   ImGui::TableSetupScrollFreeze(1, several ? 2 : 1);
   // Every column has the width of its widest text (the heading or any cell of any row), worked out from all the rows: left to the table, a
   // column would be as wide as the rows on show, and widen or narrow as the grid scrolls.
-  const float charWidth = ImGui::CalcTextSize("0").x;
   const auto letters = [](const std::string& text) { int n = 0; for (const unsigned char ch : text) if ((ch & 0xC0) != 0x80) n++; return n; };
   ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 3 * charWidth);
   for (const PatternLane& lane : lanes) {
@@ -135,7 +139,7 @@ PatternViewResult drawPatternView(const std::vector<PatternLane>& lanes, int tic
             if (li > 0) {
               const ImVec2 at = ImGui::GetCursorScreenPos();
               const ImGuiStyle& style = ImGui::GetStyle();
-              ImGui::GetWindowDrawList()->AddLine(ImVec2(at.x - style.CellPadding.x, at.y - style.CellPadding.y), ImVec2(at.x - style.CellPadding.x, at.y + rowHeight - style.CellPadding.y), lineAlpha(160));
+              ImGui::GetWindowDrawList()->AddLine(ImVec2(at.x - charWidth / 2, at.y - style.CellPadding.y), ImVec2(at.x - charWidth / 2, at.y + rowHeight - style.CellPadding.y), lineAlpha(160));
             }
           }
           if (patternTint) ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, patternTint);
