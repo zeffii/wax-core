@@ -258,3 +258,4 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 
 ## Retrofit todo (decisions to settle in both apps)
 - Enter (or Ctrl+Enter) on the Song screen where no pattern is under the cursor: native creates a new pattern there and solo-edits it; the web app says "No pattern here." Decide which one both apps do, then make them match (the web's solo-edit key code is in src/seq/seqview.js, `key === 'enter'`).
+- Rule for all of the above: the web app's key handlers are the ground truth for what a key does (src/seq/seqview.js and src/seq/view.js for the Song and Pattern screens, src/main.js for the global keys), not its shortcut lists or ours, which may have drifted. When a key differs, port the handler's behaviour, then fix the sheet. (Spot check: seqview.js line 502 has a second Enter case, "open the pattern under the cursor in the grid, or start a new one", so the web may already create a pattern in one mode.)
