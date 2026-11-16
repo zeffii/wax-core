@@ -225,3 +225,5 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 
 - Pictures: reflect (the room from above: drag the sound, the listener and the room's corner; the echoes in time) and rotary (horn and drum turning at the speeds the node's rule gives them, the stop/slow/fast switch is clickable). Picture handles use params starting with '@' (`dragPictureHandle`).
 - Pattern view: the gap between two columns is exactly one character (cell padding is half a character each side).
+
+- Pattern view text size: Ctrl + mouse wheel over the pattern grows or shrinks its text (50% to 300%, kept while the app runs; not yet saved in the preferences).

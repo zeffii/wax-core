@@ -35,7 +35,7 @@ static bool columnUsed(const std::vector<std::vector<std::string>>& rows, int c)
   return false;
 }
 
-PatternViewResult drawPatternView(const std::vector<PatternLane>& lanes, int ticksPerBeat, int beatsPerBar, int playTick, bool follow, const CursorView& cursor) {
+static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, int ticksPerBeat, int beatsPerBar, int playTick, bool follow, const CursorView& cursor) {
   PatternViewResult result;
   if (lanes.empty() || !lanes.front().rows || !lanes.front().labels) return result;
   const std::vector<std::vector<std::string>>& rows = *lanes.front().rows;   // (every lane has the song's rows)
@@ -173,6 +173,20 @@ PatternViewResult drawPatternView(const std::vector<PatternLane>& lanes, int tic
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(kDimText), "%s", cursor.info.c_str());
     ImGui::PopFont();
   }
+  return result;
+}
+
+// Ctrl + mouse wheel over the pattern makes its text bigger or smaller (the rest of the window keeps its size).
+PatternViewResult drawPatternView(const std::vector<PatternLane>& lanes, int ticksPerBeat, int beatsPerBar, int playTick, bool follow, const CursorView& cursor) {
+  static float zoom = 1.0f;
+  ImGuiIO& io = ImGui::GetIO();
+  if (io.KeyCtrl && io.MouseWheel != 0 && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) {
+    zoom = std::min(3.0f, std::max(0.5f, zoom * (io.MouseWheel > 0 ? 1.1f : 1.0f / 1.1f)));
+    io.MouseWheel = 0;   // (the grid does not scroll as well)
+  }
+  ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * zoom);
+  PatternViewResult result = drawPatternGrid(lanes, ticksPerBeat, beatsPerBar, playTick, follow, cursor);
+  ImGui::PopFont();
   return result;
 }
 
