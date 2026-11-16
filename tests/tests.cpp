@@ -1056,6 +1056,29 @@ void testWireEdits() {
     doc.undo();
     check(wax::serializeProject(doc.project()) == saved, "one undo takes the added node and its wiring away");
   }
+  {   // remove-and-join, a group move and a duplicate
+    std::vector<std::unique_ptr<wax::Edit>> follow;
+    follow.push_back(std::make_unique<wax::InsertOnWire>(id, first.from, first.to, "zq.in", "zq.out"));
+    doc.apply(std::make_unique<wax::FollowedEdit>(std::make_unique<wax::AddNode>(id, "osc", "zq", 5, 5), std::move(follow)));
+    const std::string inserted = wax::serializeProject(doc.project());
+    std::vector<std::unique_ptr<wax::Edit>> after;
+    after.push_back(std::make_unique<wax::DeleteNode>(id, "zq"));
+    doc.apply(std::make_unique<wax::FollowedEdit>(std::make_unique<wax::JoinAround>(id, std::vector<std::string>{"zq.in"}, "zq.out"), std::move(after)));
+    check(has(first.from, first.to) && !has(first.from, "zq.in"), "removing a node and joining the wires round it");
+    doc.undo();
+    check(wax::serializeProject(doc.project()) == inserted, "undo brings the node and its wires back");
+    doc.apply(std::make_unique<wax::MoveNodes>(id, std::vector<wax::MoveNodes::Place>{{"zq", 100, 110}}), true);
+    doc.apply(std::make_unique<wax::MoveNodes>(id, std::vector<wax::MoveNodes::Place>{{"zq", 120, 130}}), true);
+    doc.undo();
+    check(wax::serializeProject(doc.project()) == inserted, "a group drag is one undo step");
+    const std::size_t nodesBefore = [&] { for (const wax::Instrument& i : doc.project().instruments) if (i.id == id) return i.graph.nodes.size(); return std::size_t(0); }();
+    doc.apply(std::make_unique<wax::DuplicateNodes>(id, std::vector<std::pair<std::string, std::string>>{{"zq", "zq2"}}));
+    const std::size_t nodesAfter = [&] { for (const wax::Instrument& i : doc.project().instruments) if (i.id == id) return i.graph.nodes.size(); return std::size_t(0); }();
+    check(nodesAfter == nodesBefore + 1, "a duplicate adds a node");
+    doc.undo();
+    check(wax::serializeProject(doc.project()) == inserted, "undo of the duplicate takes the copy away");
+    doc.undo();
+  }
   std::printf("ok: wire edits\n");
 }
 

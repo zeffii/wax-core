@@ -457,6 +457,59 @@ private:
   bool beforePlaced_ = false, captured_ = false;
 };
 
+// Several nodes' tiles moved together (a group drag): each to its own x, y. A drag folds into one undo step.
+class MoveNodes final : public Edit {
+public:
+  struct Place { std::string node; double x, y; };
+  MoveNodes(std::string instrument, std::vector<Place> places) : instrument_(std::move(instrument)), places_(std::move(places)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Move " + std::to_string(places_.size()) + " nodes"; }
+  bool absorb(const Edit& next) override;
+
+private:
+  struct Before { double x, y; bool placed; };
+  std::string instrument_;
+  std::vector<Place> places_;
+  std::vector<Before> before_;
+};
+
+// Nodes copied with all their settings (parameters, ports, data, sample choices): `copies` pairs each node with the id its copy gets, and the
+// copies sit `dx`, `dy` away. The wires between the copied nodes are copied too. Undo takes the copies away.
+class DuplicateNodes final : public Edit {
+public:
+  DuplicateNodes(std::string instrument, std::vector<std::pair<std::string, std::string>> copies, double dx = 30, double dy = 30)
+      : instrument_(std::move(instrument)), copies_(std::move(copies)), dx_(dx), dy_(dy) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return copies_.size() == 1 ? "Duplicate " + copies_.front().first : "Duplicate " + std::to_string(copies_.size()) + " nodes"; }
+  std::string graphInstrument() const override { return instrument_; }
+
+private:
+  std::string instrument_;
+  std::vector<std::pair<std::string, std::string>> copies_;
+  double dx_, dy_;
+  std::vector<Connection> before_;
+  Json rawBefore_;
+};
+
+// The wires round a node that is about to go: whatever fed any of its `inputs` now feeds whatever its `output` fed (a mixer's inputs all go on,
+// summed). The node's own wires are left for the DeleteNode that follows. A loop is refused and nothing changes.
+class JoinAround final : public Edit {
+public:
+  JoinAround(std::string instrument, std::vector<std::string> inputs, std::string output) : instrument_(std::move(instrument)), inputs_(std::move(inputs)), output_(std::move(output)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Join the wires round " + output_.substr(0, output_.find('.')); }
+  std::string graphInstrument() const override { return instrument_; }
+
+private:
+  std::string instrument_;
+  std::vector<std::string> inputs_;
+  std::string output_;
+  std::vector<Connection> before_;
+};
+
 // A DX bank, replaced as a whole (the 4096 bytes of 32 packed voices, as the node's data.bank holds them). While a control is dragged each
 // step folds into the one before, so a drag is a single undo.
 class SetBank final : public Edit {

@@ -303,7 +303,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     const auto found = tiles.find(n.id);
     if (found == tiles.end()) continue;
     const Tile& t = found->second;
-    const bool chosen = n.id == picked;
+    const bool chosen = n.id == picked || state.group.count(n.id) > 0;
     const float w = t.max.x - t.min.x, h = t.max.y - t.min.y;
     const ImVec2 mid = centreOf(t);
     const float lineWidth = (chosen ? 2.0f : 1.0f) * std::max(1.0f, scale);
@@ -364,7 +364,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     ImGui::PushID(n.id.c_str());
     ImGui::InvisibleButton("tile", ImVec2(std::max(1.0f, w), std::max(1.0f, h)));
     ImGui::PopID();
-    if (ImGui::IsItemClicked() && hover.node.empty()) { picked = n.id; state.held = n.id; state.dragFree = false; state.dragMoved = false; state.dragForce = io.KeyShift; state.grabX = io.MousePos.x - t.min.x; state.grabY = io.MousePos.y - t.min.y; }
+    if (ImGui::IsItemClicked() && hover.node.empty()) { if (!io.KeyShift && !state.group.count(n.id)) state.group.clear(); state.lassoing = false; state.lastPicked = picked; picked = n.id; state.held = n.id; state.dragFree = false; state.dragMoved = false; state.dragForce = io.KeyShift; state.grabX = io.MousePos.x - t.min.x; state.grabY = io.MousePos.y - t.min.y; }
     if (ImGui::IsItemHovered() && hover.node.empty()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     if (n.type != "out" && ImGui::BeginPopupContextItem("tilemenu")) {
       if (textButton("replace...")) { state.replacing = n.id; openInsertMenu(state.replaceMenu, "replacenode"); ImGui::CloseCurrentPopup(); }
@@ -403,6 +403,8 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       state.wireFrom.clear(); state.wireTo.clear();   // (a click on a tile)
     } else {
       state.wireFrom.clear(); state.wireTo.clear();
+      state.group.clear();
+      state.lassoing = true; state.lassoFrom = ImVec2(io.MousePos.x - origin.x, io.MousePos.y - origin.y);
     }
   }
   const auto tryApply = [&](std::unique_ptr<Edit> edit) {
@@ -459,6 +461,88 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     state.wireFrom.clear(); state.wireTo.clear();
   }
 
+  if (state.lassoing) {   // a lasso on empty space: the nodes it touches become the group
+    const ImVec2 a(origin.x + state.lassoFrom.x, origin.y + state.lassoFrom.y), b = io.MousePos;
+    const ImVec2 lo(std::min(a.x, b.x), std::min(a.y, b.y)), hi(std::max(a.x, b.x), std::max(a.y, b.y));
+    if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+      dl->AddRect(lo, hi, accentAlpha(200), 0, 0, 1.0f);
+      dl->AddRectFilled(lo, hi, accentAlpha(25));
+    } else {
+      if (hi.x - lo.x >= 4 * scale || hi.y - lo.y >= 4 * scale)
+        for (const auto& [id, t] : tiles) if (t.min.x < hi.x && t.max.x > lo.x && t.min.y < hi.y && t.max.y > lo.y && t.node->type != "out") state.group.insert(id);
+      state.lassoing = false;
+    }
+  }
+  // Keys, while the mouse is over the graph and no text box has the keyboard: Delete or Ctrl+X removes the picked node(s) (Alt+R joins the
+  // wires round them first), Ctrl+D duplicates, Tab and Alt+arrows pick the next node.
+  if (windowHovered && !io.WantTextInput && state.wireFrom.empty() && state.held.empty()) {
+    std::vector<std::string> ids(state.group.begin(), state.group.end());
+    if (ids.empty() && !picked.empty()) ids.push_back(picked);
+    ids.erase(std::remove_if(ids.begin(), ids.end(), [&](const std::string& id) { const auto t = tiles.find(id); return t == tiles.end() || t->second.node->type == "out"; }), ids.end());
+    const bool remove = ImGui::IsKeyPressed(ImGuiKey_Delete, false) || ImGui::IsKeyPressed(ImGuiKey_Backspace, false) || (io.KeyCtrl && !io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_X, false));
+    const bool join = io.KeyAlt && !io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_R, false);
+    if ((remove || join) && !ids.empty()) {
+      std::vector<std::unique_ptr<Edit>> edits;
+      for (const std::string& id : ids) {
+        if (join) {
+          const Tile& t = tiles.at(id);
+          std::vector<std::string> inputs;
+          for (const std::string& in : t.type->inputs) if (kindOf(t, in) != PortKind::Control) inputs.push_back(id + "." + in);
+          if (!inputs.empty() && !t.type->outputs.empty()) edits.push_back(std::make_unique<JoinAround>(instrumentId, inputs, id + "." + t.type->outputs.front()));
+        }
+        edits.push_back(std::make_unique<DeleteNode>(instrumentId, id));
+      }
+      std::unique_ptr<Edit> first = std::move(edits.front());
+      edits.erase(edits.begin());
+      tryApply(edits.empty() ? std::move(first) : std::make_unique<FollowedEdit>(std::move(first), std::move(edits)));
+      if (state.message.empty()) { picked.clear(); state.group.clear(); state.message = ids.size() == 1 ? "Removed " + ids.front() : "Removed " + std::to_string(ids.size()) + " nodes"; }
+    }
+    if (io.KeyCtrl && !io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_D, false) && !ids.empty()) {
+      std::set<std::string> used;
+      for (const GraphNode& n : graph.nodes) used.insert(n.id);
+      std::vector<std::pair<std::string, std::string>> copies;
+      for (const std::string& id : ids) {
+        const std::string type = tiles.at(id).node->type;
+        std::string fresh = type;
+        for (int k = 1; used.count(fresh); k++) fresh = type + std::to_string(k);
+        used.insert(fresh);
+        copies.emplace_back(id, fresh);
+      }
+      tryApply(std::make_unique<DuplicateNodes>(instrumentId, copies));
+      if (state.message.empty()) {
+        state.group.clear();
+        if (copies.size() > 1) for (const auto& c : copies) state.group.insert(c.second);
+        picked = copies.back().second;
+        state.message = copies.size() == 1 ? "Duplicated as " + picked : "Duplicated " + std::to_string(copies.size()) + " nodes";
+      }
+    }
+    int way = 0;   // Tab and Shift+Tab step through the nodes left to right; Alt+arrows go to the nearest one that way
+    const bool tab = ImGui::IsKeyPressed(ImGuiKey_Tab, false);
+    const ImGuiKey arrows[4] = {ImGuiKey_LeftArrow, ImGuiKey_RightArrow, ImGuiKey_UpArrow, ImGuiKey_DownArrow};
+    if (io.KeyAlt && !io.KeyCtrl) for (int k = 0; k < 4; k++) if (ImGui::IsKeyPressed(arrows[k], false)) way = k + 1;
+    if ((tab || way) && !graph.nodes.empty()) {
+      std::vector<const Tile*> order;
+      for (const auto& [id, t] : tiles) order.push_back(&t);
+      std::sort(order.begin(), order.end(), [](const Tile* a, const Tile* b) { const ImVec2 ca = centreOf(*a), cb = centreOf(*b); return ca.x != cb.x ? ca.x < cb.x : ca.y < cb.y; });
+      const auto here = std::find_if(order.begin(), order.end(), [&](const Tile* t) { return t->node->id == picked; });
+      const Tile* next = nullptr;
+      if (here == order.end()) next = order.front();
+      else if (tab) next = order[(static_cast<std::size_t>(here - order.begin()) + (io.KeyShift ? order.size() - 1 : 1)) % order.size()];
+      else {
+        const ImVec2 c = centreOf(**here);
+        float best = 1e30f;
+        for (const Tile* t : order) {
+          if (t == *here) continue;
+          const float dx = centreOf(*t).x - c.x, dy = centreOf(*t).y - c.y;
+          const float along = way == 1 ? -dx : way == 2 ? dx : way == 3 ? -dy : dy, across = way <= 2 ? std::fabs(dy) : std::fabs(dx);
+          if (along <= 0) continue;
+          if (along + 2 * across < best) { best = along + 2 * across; next = t; }
+        }
+      }
+      if (next) { picked = next->node->id; state.group.clear(); }
+    }
+  }
+
   // dragging the held tile; it lands on the grid unless Ctrl is held
   if (!state.held.empty()) {
     if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { state.dragFree = true; state.message = "Moving " + state.held + " only: its wires stay as they are"; }
@@ -467,6 +551,10 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       else if (state.dropPull) tryApply(std::make_unique<PullOut>(instrumentId, chainIn, chainOut));
       if (!state.dropFrom.empty() || state.dropPull) { if (state.message.rfind("Release", 0) == 0) state.message.clear(); }
       else if (state.message.rfind("Moving", 0) == 0) state.message.clear();
+      if (!state.dragMoved && state.dragForce) {   // Shift+click, no drag: the node joins (or leaves) the group
+        if (state.group.empty() && !state.lastPicked.empty() && state.lastPicked != state.held) state.group.insert(state.lastPicked);
+        if (!state.group.erase(state.held)) state.group.insert(state.held);
+      }
       state.dropFrom.clear(); state.dropTo.clear(); state.dropPull = false; state.dragMoved = false;
       state.held.clear();
     } else {
@@ -475,7 +563,14 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       const GraphNode* held = nullptr;
       for (const GraphNode& n : graph.nodes) if (n.id == state.held) held = &n;
       if (held && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 3) && (std::fabs(nx - held->x) > 0.5 || std::fabs(ny - held->y) > 0.5 || !held->placed)) {
-        doc.apply(std::make_unique<MoveNode>(instrumentId, state.held, std::max(0.0f, nx), std::max(0.0f, ny)), true);
+        if (state.group.size() > 1 && state.group.count(state.held) && !state.dragForce) {   // the group moves by as much as the held tile
+          const float dx = std::max(0.0f, nx) - static_cast<float>(held->x), dy = std::max(0.0f, ny) - static_cast<float>(held->y);
+          std::vector<MoveNodes::Place> places;
+          for (const GraphNode& n : graph.nodes) if (state.group.count(n.id)) places.push_back({n.id, std::max(0.0, n.x + dx), std::max(0.0, n.y + dy)});
+          doc.apply(std::make_unique<MoveNodes>(instrumentId, places), true);
+        } else {
+          doc.apply(std::make_unique<MoveNode>(instrumentId, state.held, std::max(0.0f, nx), std::max(0.0f, ny)), true);
+        }
         moved = true;
         state.dragMoved = true;
       }

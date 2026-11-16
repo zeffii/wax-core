@@ -3,6 +3,7 @@
 // are processors, the circle is the voice stage and the speaker is the output.
 #pragma once
 
+#include <set>
 #include <string>
 
 #include "imgui.h"
@@ -26,6 +27,10 @@ struct GraphViewState {
   // goes into that wire when let go) and whether it is far enough out of its chain (its neighbours are then joined) are kept until release
   bool dragFree = false, dragForce = false, dragMoved = false, dropPull = false;
   std::string dropFrom, dropTo;
+  std::set<std::string> group;   // nodes picked together (lasso, or Shift+click): they move, duplicate and go as one
+  std::string lastPicked;    // the node picked before the last click (a Shift+click starts the group from it)
+  bool lassoing = false;     // a lasso is being dragged on empty space
+  ImVec2 lassoFrom{0, 0};    // where it started, relative to the graph's top left
   std::string wireFrom, wireTo;   // the selected wire (Delete cuts it)
   std::string message;       // the last thing that went wrong (a refused wire), shown under the graph until the next click
   ImVec2 addAt{0, 0};        // where the add-node menu was opened (web pixels)
@@ -39,7 +44,7 @@ struct GraphViewState {
 
 // `picked` is the node chosen (in/out). As in the web app: drag from an output port to an input port (or the other way from a free input);
 // drag a port that has wires to pick up a wire by that end (drop it on another port to move it, anywhere else to unplug it, Esc puts it
-// back; Shift+drag starts a new wire instead); click a wire to select it and press Delete to cut it; drag a tile onto a wire to put it into that wire (a node far out of its chain, or Shift+drag, takes it out: its neighbours are joined; Esc during the drag moves it alone); right-click a tile for delete or replace (the node becomes another type: its wires, values and exposed columns follow). Wiring changes go through `doc` (the caller runs syncGraphs). Returns true when a node moved.
+// back; Shift+drag starts a new wire instead); click a wire to select it and press Delete to cut it; drag on empty space to lasso nodes (Shift+click adds one); a group moves together; Ctrl+D duplicates, Delete or Ctrl+X removes, Alt+R removes and joins the wires round; Tab and Alt+arrows pick the next node; drag a tile onto a wire to put it into that wire (a node far out of its chain, or Shift+drag, takes it out: its neighbours are joined; Esc during the drag moves it alone); right-click a tile for delete or replace (the node becomes another type: its wires, values and exposed columns follow). Wiring changes go through `doc` (the caller runs syncGraphs). Returns true when a node moved.
 bool drawGraphView(GraphViewState& state, Document& doc, const std::string& instrument, std::string& picked, float height);
 
 }  // namespace wax::app

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <map>
 #include <set>
 #include "edit/document.h"
 #include "project/samples.h"
@@ -944,6 +945,80 @@ bool MoveNode::absorb(const Edit& next) {
   x_ = other->x_; y_ = other->y_;
   return true;
 }
+
+void MoveNodes::apply(Project& project) {
+  const bool first = before_.empty();
+  for (std::size_t i = 0; i < places_.size(); i++) {
+    GraphNode& node = findGraphNode(project, instrument_, places_[i].node);
+    if (first) before_.push_back({node.x, node.y, node.placed});
+    node.x = places_[i].x; node.y = places_[i].y; node.placed = true;
+  }
+}
+
+void MoveNodes::revert(Project& project) {
+  for (std::size_t i = 0; i < places_.size() && i < before_.size(); i++) {
+    GraphNode& node = findGraphNode(project, instrument_, places_[i].node);
+    node.x = before_[i].x; node.y = before_[i].y; node.placed = before_[i].placed;
+  }
+}
+
+bool MoveNodes::absorb(const Edit& next) {
+  const auto* other = dynamic_cast<const MoveNodes*>(&next);
+  if (!other || other->instrument_ != instrument_ || other->places_.size() != places_.size()) return false;
+  for (std::size_t i = 0; i < places_.size(); i++) if (places_[i].node != other->places_[i].node) return false;
+  places_ = other->places_;
+  return true;
+}
+
+void DuplicateNodes::apply(Project& project) {
+  Instrument& instrument = instrumentNamed(project, instrument_);
+  Graph& g = instrument.graph;
+  before_ = g.connections; rawBefore_ = instrument.raw;
+  std::map<std::string, std::string> renamed;
+  for (const auto& [from, to] : copies_) {
+    const auto found = std::find_if(g.nodes.begin(), g.nodes.end(), [&](const GraphNode& n) { return n.id == from; });
+    if (found == g.nodes.end() || found->type == "out") continue;
+    GraphNode copy = *found;
+    copy.id = to; copy.x += dx_; copy.y += dy_; copy.placed = true;
+    g.nodes.push_back(copy);
+    renamed[from] = to;
+    if (instrument.raw.is_object() && instrument.raw.contains("samples") && instrument.raw["samples"].is_object() && instrument.raw["samples"].contains(from)) {
+      const Json choice = instrument.raw["samples"][from];
+      instrument.raw["samples"][to] = choice;
+    }
+  }
+  std::vector<Connection> wires;
+  for (const Connection& c : g.connections) {
+    const auto a = renamed.find(nodePart(c.from)), b = renamed.find(nodePart(c.to));
+    if (a != renamed.end() && b != renamed.end()) wires.push_back({a->second + c.from.substr(c.from.find('.')), b->second + c.to.substr(c.to.find('.'))});
+  }
+  g.connections.insert(g.connections.end(), wires.begin(), wires.end());
+}
+
+void DuplicateNodes::revert(Project& project) {
+  Instrument& instrument = instrumentNamed(project, instrument_);
+  for (const auto& copy : copies_) {
+    const auto at = std::find_if(instrument.graph.nodes.begin(), instrument.graph.nodes.end(), [&](const GraphNode& n) { return n.id == copy.second; });
+    if (at != instrument.graph.nodes.end()) instrument.graph.nodes.erase(at);
+  }
+  instrument.graph.connections = before_;
+  instrument.raw = rawBefore_;
+}
+
+void JoinAround::apply(Project& project) {
+  Graph& g = graphOf(project, instrument_);
+  before_ = g.connections;
+  try {
+    std::vector<std::string> feeds, sinks;
+    for (const Connection& c : g.connections) {
+      if (std::find(inputs_.begin(), inputs_.end(), c.to) != inputs_.end()) feeds.push_back(c.from);
+      if (c.from == output_) sinks.push_back(c.to);
+    }
+    for (const std::string& f : feeds) for (const std::string& t : sinks) if (nodePart(f) != nodePart(t)) addWire(g, f, t);
+  } catch (...) { g.connections = before_; throw; }
+}
+
+void JoinAround::revert(Project& project) { graphOf(project, instrument_).connections = before_; }
 
 SetBank::SetBank(std::string instrument, std::string node, std::vector<int> bytes, std::string what)
     : instrument_(std::move(instrument)), node_(std::move(node)), what_(std::move(what)), bytes_(std::move(bytes)) {}
