@@ -289,6 +289,7 @@ if(WAX_LIVE)
       FetchContent_Declare(freetype GIT_REPOSITORY https://github.com/freetype/freetype.git GIT_TAG VER-2-13-3 GIT_SHALLOW TRUE)
       FetchContent_MakeAvailable(freetype)
       set(WAX_FREETYPE freetype)
+      target_compile_options(freetype PRIVATE "$<IF:$<CXX_COMPILER_ID:MSVC>,/W0,-w>")   # (its own warnings are not ours to fix)
     endif()
     add_library(waximgui STATIC
       third_party/imgui/imgui.cpp third_party/imgui/imgui_draw.cpp third_party/imgui/imgui_tables.cpp
