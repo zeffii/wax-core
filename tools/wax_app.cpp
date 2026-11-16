@@ -1184,7 +1184,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     laneInstrument = session->instrument;
     ImGui::BeginChild("instmain", ImVec2(0, 0), false);
     if (session->panel.instrument != laneInstrument) { session->panel.instrument = laneInstrument; session->panel.node.clear(); }
-    session->graphView.dockMin = session->panel.exposedMin; session->graphView.dockMax = session->panel.exposedMax;
+    session->graphView.dockMin = session->panel.dock.min; session->graphView.dockMax = session->panel.dock.max;
     app::drawGraphView(session->graphView, doc, laneInstrument, session->panel.node, 0);
     const ImVec2 graphMin = ImGui::GetWindowPos(), graphMax(graphMin.x + ImGui::GetWindowWidth(), graphMin.y + ImGui::GetWindowHeight());
     ImGui::EndChild();
@@ -1330,6 +1330,15 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     session->keyjazzInstrument = laneInstrument;
     player.setInstrument(laneInstrument);
   }
+  if (session->screen == Screen::Song || session->screen == Screen::Pattern) {   // the floating parameter windows: the cursor lane's machine, and the pinned ones
+    const ImGuiViewport* view = ImGui::GetMainViewport();
+    const ImVec2 areaMin(view->WorkPos.x + 60 * scale, view->WorkPos.y + 40 * scale), areaMax(view->WorkPos.x + view->WorkSize.x, view->WorkPos.y + view->WorkSize.y - 40 * scale);
+    if (app::drawFloatPanels(session->panel, doc, player.engine(), laneInstrument, areaMin, areaMax)) {
+      syncParams(doc, player.engine());
+      const std::vector<std::string> problems = syncLanes(doc, player.engine());
+      if (!problems.empty()) session->editStatus = problems.front();
+    }
+  }
   if (!session->panel.drawNode.empty()) { app::showEnvelopes(session->envelopes, laneInstrument, session->panel.drawNode); session->panel.drawNode.clear(); }
   ImGui::Separator();
   {
@@ -1409,6 +1418,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (app::iconButton("browser-toggle", "Browser: the patterns and machines, down the left of every screen (Alt+B)", session->showBrowser, 16)) session->showBrowser = !session->showBrowser;
     ImGui::SameLine(0, 10 * scale);
     if (app::iconButton("mixer-toggle", "Mixer: a fader for each lane, along the bottom of the Song and Pattern screens", session->showMixer, 16)) session->showMixer = !session->showMixer;
+    ImGui::SameLine(0, 10 * scale);
+    if (app::textButton("params", session->panel.followOpen)) session->panel.followOpen = !session->panel.followOpen;   // the floating parameter window of the cursor lane's machine (Song and Pattern screens)
     ImGui::SameLine(0, 10 * scale);
     const double limitOn = player.engine().registry().slotOf("master.m.limit") >= 0 ? player.engine().registry().get("master.m.limit") : 0;
     if (app::textButton("Lim", limitOn > 0.5)) { doc.apply(std::make_unique<SetParam>("master", "m", "limit", limitOn > 0.5 ? 0.0 : 1.0)); syncParams(doc, player.engine()); }

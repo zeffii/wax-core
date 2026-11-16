@@ -320,38 +320,43 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
 }  // namespace wax::app
 
 namespace wax::app {
+namespace {
 
-bool drawExposedDock(ParamPanelState& state, Document& doc, const Engine& engine, const std::string& instrumentId, ImVec2 areaMin, ImVec2 areaMax) {
+// A window of the exposed sliders of `instrumentId` (nothing is drawn when it exposes nothing). `closed` is set when its X was pressed; `pinState`:
+// 0 no pin button, 1 "pin", 2 "unpin" (`pinPressed` is set when pressed).
+bool drawExposedWindow(ParamPanelState& state, ExposedWindow& win, const char* windowId, const std::string& title, Document& doc, const Engine& engine,
+                       const std::string& instrumentId, ImVec2 areaMin, ImVec2 areaMax, ImVec2 firstAt, bool* open, int pinState, bool* pinPressed) {
   const float scale = ImGui::GetStyle().FontScaleDpi;
   const Instrument* instrument = findInstrument(doc.project(), instrumentId);
-  state.exposedMin = state.exposedMax = ImVec2(0, 0);
+  win.min = win.max = ImVec2(0, 0);
   if (!instrument || instrument->exposed.empty()) return false;
   const NodeRegistry& types = builtinNodes();
 
   const float width = kNormalWidth * 1.1f * scale;
   // dragged about by its title, and wider or narrower by its edge; its height is its rows' (see pinHeight)
-  if (!state.exposedPlaced) {
-    ImGui::SetNextWindowPos(ImVec2(areaMin.x + 12 * scale, areaMin.y + 12 * scale), ImGuiCond_Always);
+  if (!win.placed) {
+    ImGui::SetNextWindowPos(firstAt, ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(width, 0), ImGuiCond_Always);
   }
-  float height = wantedHeight(state.exposedContent, static_cast<int>(instrument->exposed.size()), areaMax.y - areaMin.y, scale);
+  float height = wantedHeight(win.content, static_cast<int>(instrument->exposed.size()) + (pinState ? 1 : 0), areaMax.y - areaMin.y, scale);
   ImGui::SetNextWindowSizeConstraints(ImVec2(kMinWidth * scale, 0), ImVec2(kMaxWidth * 3 * scale, FLT_MAX), pinHeight, &height);
   ImGui::PushStyleColor(ImGuiCol_TitleBg, colour(kAccent));
   ImGui::PushStyleColor(ImGuiCol_TitleBgActive, colour(kAccent));
   ImGui::PushStyleColor(ImGuiCol_Text, colour(kHiFg));
-  const bool visible = ImGui::Begin("exposed###exposed", nullptr, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings);
+  const bool visible = ImGui::Begin((title + "###" + windowId).c_str(), open, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings);
   ImGui::PopStyleColor(3);
-  state.exposedPlaced = true;
-  state.exposedMin = ImGui::GetWindowPos();
-  state.exposedMax = ImVec2(state.exposedMin.x + ImGui::GetWindowWidth(), state.exposedMin.y + ImGui::GetWindowHeight());
+  win.placed = true;
+  win.min = ImGui::GetWindowPos();
+  win.max = ImVec2(win.min.x + ImGui::GetWindowWidth(), win.min.y + ImGui::GetWindowHeight());
   bool changed = false;
   if (visible) {
     ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 0.85f);
+    if (pinState && textButton(pinState == 2 ? "unpin" : "pin")) *pinPressed = true;
     const float total = ImGui::GetContentRegionAvail().x;
     float nameW = 0;   // as wide as the longest label (and its port dot), not a share of the panel
     for (const Exposed& e : instrument->exposed) nameW = std::max(nameW, ImGui::CalcTextSize((e.label.empty() ? e.param : e.label).c_str()).x);
     nameW = std::min(nameW + 14 * scale, total * 0.5f);
-    const RowKeys keys = panelKeys(state.exposedCursor, static_cast<int>(instrument->exposed.size()));
+    const RowKeys keys = panelKeys(win.cursor, static_cast<int>(instrument->exposed.size()));
     int index = -1;
     for (const Exposed& e : instrument->exposed) {   // a row for each column the machine's patterns have
       index++;
@@ -364,13 +369,44 @@ bool drawExposedDock(ParamPanelState& state, Document& doc, const Engine& engine
         const std::string wiredTo = node->id + ".@" + spec.name;
         bool wired = false;
         for (const Connection& c : instrument->graph.connections) if (c.to == wiredTo) wired = true;
-        if (drawRow(state, doc, engine, instrument, instrumentId, node, spec, e.label.empty() ? spec.name : e.label, wired, total, nameW, index == state.exposedCursor ? &keys : nullptr, index == state.exposedCursor)) changed = true;
+        if (drawRow(state, doc, engine, instrument, instrumentId, node, spec, e.label.empty() ? spec.name : e.label, wired, total, nameW, index == win.cursor ? &keys : nullptr, index == win.cursor)) changed = true;
       }
     }
     ImGui::PopFont();
-    state.exposedContent = measuredContent();
+    win.content = measuredContent();
   }
   ImGui::End();
+  return changed;
+}
+
+}  // namespace
+
+bool drawExposedDock(ParamPanelState& state, Document& doc, const Engine& engine, const std::string& instrumentId, ImVec2 areaMin, ImVec2 areaMax) {
+  const float scale = ImGui::GetStyle().FontScaleDpi;
+  return drawExposedWindow(state, state.dock, "exposed", "exposed", doc, engine, instrumentId, areaMin, areaMax, ImVec2(areaMin.x + 12 * scale, areaMin.y + 12 * scale), nullptr, 0, nullptr);
+}
+
+bool drawFloatPanels(ParamPanelState& state, Document& doc, const Engine& engine, const std::string& followInstrument, ImVec2 areaMin, ImVec2 areaMax) {
+  const float scale = ImGui::GetStyle().FontScaleDpi;
+  bool changed = false;
+  int count = 0;
+  std::string unpin;
+  for (auto& [id, win] : state.pinned) {   // a window for each pinned machine
+    bool open = true, pressed = false;
+    const ImVec2 at(areaMin.x + (28 + 28 * count) * scale, areaMin.y + (28 + 28 * count) * scale);
+    count++;
+    if (drawExposedWindow(state, win, ("pin." + id).c_str(), id + " \xc2\xb7 parameters", doc, engine, id, areaMin, areaMax, at, &open, 2, &pressed)) changed = true;
+    if (!open || pressed) unpin = id;
+  }
+  if (!unpin.empty()) state.pinned.erase(unpin);
+  if (state.followOpen && !followInstrument.empty()) {   // the cursor lane's machine, with a pin
+    bool open = true, pressed = false;
+    const bool alreadyPinned = state.pinned.count(followInstrument) > 0;
+    const ImVec2 at(areaMax.x - (kNormalWidth * 1.1f + 24) * scale, areaMin.y + 12 * scale);
+    if (drawExposedWindow(state, state.follow, "follow", followInstrument + " \xc2\xb7 parameters", doc, engine, followInstrument, areaMin, areaMax, at, &open, alreadyPinned ? 2 : 1, &pressed)) changed = true;
+    if (!open) state.followOpen = false;
+    if (pressed) { if (alreadyPinned) state.pinned.erase(followInstrument); else state.pinned[followInstrument] = ExposedWindow(); }
+  }
   return changed;
 }
 

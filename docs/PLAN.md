@@ -202,3 +202,5 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 - Nudge: the first time an instrument's graph is shown with the exposed dock over some of its nodes, the whole graph moves clear of the dock (down when that fits the view, else right), as one MoveNodes edit (the web's `nudgeClear`).
 
 - Parameter view keys (both panels): while the mouse is over a panel and no text box has the keyboard, Up/Down choose a row (a thin accent mark at its left), PageUp/PageDown jump eight, Left/Right change it by 1% of its range (Shift 5x, Ctrl 0.2x; whole steps for integers), Home/End set the minimum/maximum, Enter opens the row menu. Alt+arrows stay the graph's. Not yet: a pin/float copy of a panel for other machines.
+
+- Floating parameter windows on the Song and Pattern screens (`drawFloatPanels`): the status bar's "params" button shows a window with the exposed sliders of the cursor lane's machine (follows the lane); its "pin" keeps a window for that machine open (several can be pinned; X or "unpin" puts one away). Same rows, keys, buttons and dragging as the exposed dock. Pins are not saved yet; pop-out windows not ported.
