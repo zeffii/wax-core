@@ -93,7 +93,7 @@ int main(int argc, char** argv) {
     if (!dryPath.empty()) {   // no device: the callback by hand, in odd sizes, like a sound card's
       if (seconds <= 0) seconds = 10;
       StereoAudio audio;
-      audio.sampleRate = rate;
+      audio.sampleRate = static_cast<int>(rate);
       const long total = static_cast<long>(seconds * rate);
       std::vector<float> chunk(2 * 441);
       if (!noPlay) player.ring().push({LiveCommand::Play, 0, 1});

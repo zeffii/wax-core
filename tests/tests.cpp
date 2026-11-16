@@ -951,10 +951,10 @@ void testInsertSilence() {
     wax::Document cutting(wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax"));
     const wax::Project before = cutting.project();
     int crossing = -1, laneAt = -1, cutTick = 0;
-    for (std::size_t i = 0; i < before.lanes.size() && crossing < 0; i++)
-      for (std::size_t k = 0; k < before.lanes[i].placements.size(); k++) {
-        const wax::Placement& p = before.lanes[i].placements[k];
-        if (p.length >= 32) { crossing = static_cast<int>(k); laneAt = static_cast<int>(i); cutTick = p.start + 16; break; }
+    for (std::size_t lane = 0; lane < before.lanes.size() && crossing < 0; lane++)
+      for (std::size_t k = 0; k < before.lanes[lane].placements.size(); k++) {
+        const wax::Placement& p = before.lanes[lane].placements[k];
+        if (p.length >= 32) { crossing = static_cast<int>(k); laneAt = static_cast<int>(lane); cutTick = p.start + 16; break; }
       }
     if (crossing >= 0) {
       cutting.apply(std::make_unique<wax::InsertSilence>(cutTick, 16, true));
@@ -1598,8 +1598,8 @@ void testSequenceOps() {
     check(kept, "msg: saved and loaded again with its text and fold state");
     {   // a message saved under its first name, note, loads as msg
       Json saved; { std::ifstream in(file); in >> saved; }
-      for (auto& [id, instrument] : saved["instruments"].items())
-        for (Json& n : instrument["graph"]["nodes"]) if (n.value("type", "") == "msg") n["type"] = "note";
+      for (auto& [id, savedInstrument] : saved["instruments"].items())
+        for (Json& n : savedInstrument["graph"]["nodes"]) if (n.value("type", "") == "msg") n["type"] = "note";
       { std::ofstream out(file); out << saved.dump(); }
       bool migrated = false;
       for (const GraphNode& n : loadProject(file).instruments.front().graph.nodes) if (n.type == "msg") migrated = true;
