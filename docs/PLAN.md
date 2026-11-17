@@ -259,4 +259,5 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 ## Retrofit todo (decisions to settle in both apps)
 - (Settled) Song screen: Enter opens the pattern (a new one where none is), Ctrl+Enter solo-edits it ("No pattern here." where none is), as in the web app.
 - (Settled) Pattern screen Esc, as in the web: drops a selection; then leaves solo-edit; then goes back to the Song screen.
+- (Planned) Twin filter machine: two multimode filters, series/parallel morph, harmonic lock, split modulation. Spec in `docs/twin-filter.md`; panel sketch agreed first; the web app gets the same node.
 - Rule for all of the above: the web app's key handlers are the ground truth for what a key does (src/seq/seqview.js and src/seq/view.js for the Song and Pattern screens, src/main.js for the global keys), not its shortcut lists or ours, which may have drifted. When a key differs, port the handler's behaviour, then fix the sheet.
