@@ -72,7 +72,7 @@ for (const kind of Object.keys(GLYPH_SIZE)) {
     glyphData.push(`{"${name}", "${kind}", ${first}, ${strokeData.length - first}}`);
   }
 }
-out.push(`static const float kGlyphPoints[] = {${pointData.join(', ')}};`);
+out.push(`static const float kGlyphPoints[] = {${pointData.map(v => `${v}f`).join(', ')}};`);
 out.push(`static const GlyphStroke kGlyphStrokes[] = {${strokeData.join(', ')}};`);
 out.push(`static const GlyphEntry kGlyphs[] = {${glyphData.join(', ')}};`);
 const looks = types.map(d => `{"${d.type}", "${d.shape ?? 'box'}", "${d.glyph ?? ''}", ${d.size ? d.size.w : 0}, ${d.size ? d.size.h : 0}}`);
