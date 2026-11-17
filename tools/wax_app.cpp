@@ -1630,7 +1630,21 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     ImGui::SameLine(std::max(ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x + 20 * scale, ImGui::GetWindowWidth() - 520 * scale));   // (to the right of what was written, or at the right edge)
     if (session->audio) {
       const double load = session->audio->load();
-      ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(load > 0.7 ? app::kWarm : app::kDimText), "cpu %.0f%%  late %ld", 100 * load, session->audio->lateBuffers());
+      // The numbers are right-aligned in cells as wide as their largest value, so what follows them stays where it is.
+      const ImVec4 colour = ImGui::ColorConvertU32ToFloat4(load > 0.7 ? app::kWarm : app::kDimText);
+      const auto cell = [&](const char* label, const char* widest, const char* value) {
+        const float width = ImGui::CalcTextSize(widest).x;
+        ImGui::TextColored(colour, "%s", label);
+        ImGui::SameLine(0, 0);
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + width - ImGui::CalcTextSize(value).x);
+        ImGui::TextColored(colour, "%s", value);
+      };
+      char cpu[16], late[16];
+      std::snprintf(cpu, sizeof cpu, "%.0f%%", 100 * load);
+      std::snprintf(late, sizeof late, "%ld", session->audio->lateBuffers());
+      cell("cpu ", "100%", cpu);
+      ImGui::SameLine(0, 0);
+      cell("  late ", "0000", late);
       ImGui::SameLine(0, 14 * scale);
     }
     if (app::iconButton("browser-toggle", "Browser: the patterns and machines, down the left of every screen (Alt+B)", session->showBrowser, 16)) session->showBrowser = !session->showBrowser;
