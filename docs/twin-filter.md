@@ -41,3 +41,9 @@ Noise and feedback join at the input.
 ## Panel
 Sketch agreed first (flat, thin lines, text and dots, sliders; sections side by side in one row that scrolls sideways): input, filter 1,
 routing, filter 2, modulation, output. A small response curve over each filter and over the routing; Bezier envelope pictures in modulation.
+
+### Response view
+One log-frequency view (20 Hz to 20 kHz) over the routing section: both filters' curves, a dot on each cutoff, and thin vertical lines at the overtones
+above each cutoff (2x, 3x, ... with the number at the line's end; fainter the higher they go). Filter 1's lines run down from the top, filter 2's up from
+the bottom; where the two filters share an overtone (a whole-number ratio under the lock) the line runs the full height and is brighter, which shows
+at a glance when the lock is in tune. The lines follow freq, ratio and detune live.
