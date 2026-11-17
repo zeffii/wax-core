@@ -121,6 +121,7 @@ void registerWoodblock(NodeRegistry& registry);   // woodblock
 void registerCompressor(NodeRegistry& registry);   // compressor
 void registerFlanger(NodeRegistry& registry);   // flanger
 void registerFilterPro(NodeRegistry& registry);   // filterpro
+void registerTwinFilter(NodeRegistry& registry);   // twin
 void registerOberheim(NodeRegistry& registry);   // oberheim
 void registerFourpole(NodeRegistry& registry);   // fourpole
 void registerSampler(NodeRegistry& registry);   // sampler

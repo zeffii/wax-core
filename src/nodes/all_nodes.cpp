@@ -107,6 +107,7 @@ const NodeRegistry& builtinNodes() {
     registerCompressor(r);
     registerFlanger(r);
     registerFilterPro(r);
+    registerTwinFilter(r);
     registerOberheim(r);
     registerFourpole(r);
     registerSampler(r);

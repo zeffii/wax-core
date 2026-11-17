@@ -80,6 +80,7 @@ add_library(waxcore
   src/nodes/compressor.cpp
   src/nodes/flanger.cpp
   src/nodes/filterpro.cpp
+  src/nodes/twinfilter.cpp
   src/nodes/oberheim.cpp
   src/nodes/fourpole.cpp
   src/nodes/sampler.cpp

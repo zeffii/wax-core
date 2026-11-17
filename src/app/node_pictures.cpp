@@ -20,6 +20,7 @@
 #include "nodes/pulsarcore.h"
 #include "project/sample_edit.h"
 #include "nodes/spacecore.h"
+#include "nodes/twin_response.h"
 
 namespace wax::app {
 namespace {
@@ -836,13 +837,75 @@ void drawDrawnHit(ImDrawList* dl, ImFont* font, const GraphNode& node, const Nod
   else hit("the hit", static_cast<int>(v("root")), std::min(1500.0, std::max(150.0, rows[1].ms * 1.05)));
 }
 
+// ---- twin: the two filters' curves and the pair, with the overtones above each cutoff ----
+
+void drawTwin(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale, ResponseHandles& handles) {
+  constexpr double kTop = 24, kBottom = -48, kFLo = twin::kFLow, kFHi = twin::kFHigh;
+  const ImU32 teal = hsl(175, 0.6f, 0.52f), amber = hsl(40, 0.95f, 0.62f);
+  const float px = f.x0 + 34 * scale, pw = f.w - 34 * scale - 14 * scale, py = f.y0 + 34 * scale, ph = f.h - 34 * scale - 40 * scale, mid = py + ph / 2;
+  const twin::Get get = [&](const char* name) { return valueOf(node, type, name); };
+  double f1, f2; twin::cutoffs(get, f1, f2);
+  const auto xf = [&](double hz) { return px + static_cast<float>(std::log(hz / kFLo) / std::log(kFHi / kFLo)) * pw; };
+  const auto yd = [&](double db) { return py + ph - static_cast<float>((std::clamp(db, kBottom, kTop) - kBottom) / (kTop - kBottom)) * ph; };
+  const auto vline = [&](double hz, float y0, float y1, ImU32 colour) { const float x = std::round(xf(hz)) + 0.5f; dl->AddLine(ImVec2(x, y0), ImVec2(x, y1), colour); };
+  for (const double hz : {50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10000.0}) vline(hz, py, py + ph, textAlpha(hz == 100 || hz == 1000 || hz == 10000 ? 40 : 22));
+  for (const auto& [hz, name] : {std::pair<double, const char*>{100, "100"}, {1000, "1k"}, {10000, "10k"}}) dl->AddText(font, f.size, ImVec2(xf(hz) - 6 * scale, py + ph + 4 * scale), textAlpha(170), name);
+  dl->AddLine(ImVec2(px, std::round(yd(0)) + 0.5f), ImVec2(px + pw, std::round(yd(0)) + 0.5f), textAlpha(80));
+  for (const int db : {24, 0, -24, -48}) { char t[8]; std::snprintf(t, sizeof t, "%s%d", db > 0 ? "+" : "", db); dl->AddText(font, f.size, ImVec2(f.x0 + 4 * scale, yd(db) - f.size / 2), textAlpha(150), t); }
+  dl->AddText(font, f.size, ImVec2(f.x0 + 100 * scale, f.y0 + 4 * scale), teal, "filter 1");
+  dl->AddText(font, f.size, ImVec2(f.x0 + 150 * scale, f.y0 + 4 * scale), amber, "filter 2");
+  dl->AddText(font, f.size, ImVec2(f.x0 + 200 * scale, f.y0 + 4 * scale), textAlpha(170), "both");
+
+  // the overtones: filter 1's from the top, filter 2's from the bottom, shared ones the full height
+  const std::vector<twin::Shared> shared = twin::sharedOvertones(f1, f2);
+  const auto hang = [&](double base, ImU32 colour, bool fromTop, bool first) {
+    for (const twin::Overtone& o : twin::overtones(base)) {
+      if (o.f < kFLo) continue;
+      bool isShared = false;
+      for (const twin::Shared& s : shared) if ((first ? s.a : s.b) == o.n) isShared = true;
+      const int alpha = static_cast<int>(255 * std::max(0.12, 0.6 - o.n * 0.05));
+      if (isShared) vline(o.f, py + 12 * scale, py + ph, textAlpha(180));
+      else if (fromTop) vline(o.f, py + 12 * scale, mid, withAlpha(colour, alpha));
+      else vline(o.f, mid, py + ph, withAlpha(colour, alpha));
+      char t[8]; std::snprintf(t, sizeof t, "%dx", o.n);
+      dl->AddText(font, f.size, ImVec2(xf(o.f) - 5 * scale, fromTop ? py + 1 * scale : py + ph - 12 * scale), isShared ? textAlpha(220) : withAlpha(colour, std::min(255, alpha + 50)), t);
+    }
+  };
+  hang(f1, teal, true, true); hang(f2, amber, false, false);
+
+  const int steps = std::max(8, static_cast<int>(pw));
+  const auto curve = [&](const std::function<double(double)>& db, ImU32 colour, float width) {
+    std::vector<ImVec2> line;
+    for (int i = 0; i <= steps; i += 2) { const double hz = kFLo * std::pow(kFHi / kFLo, static_cast<double>(i) / steps); line.push_back(ImVec2(px + static_cast<float>(i) / steps * pw, yd(db(hz)))); }
+    dl->AddPolyline(line.data(), static_cast<int>(line.size()), colour, 0, width);
+  };
+  curve([&](double hz) { return twin::filterDb(hz, get, 1); }, withAlpha(teal, 140), 1.0f);
+  curve([&](double hz) { return twin::filterDb(hz, get, 2); }, withAlpha(amber, 140), 1.0f);
+  curve([&](double hz) { return twin::responseDb(hz, get); }, kText, 2.0f * std::max(1.0f, scale));
+  for (int n = 1; n <= 2; n++) {   // a dot on each cutoff: drag it sideways (while locked, the second sets the ratio)
+    const double hz = n == 1 ? f1 : f2;
+    const ImVec2 at(xf(hz), yd(twin::filterDb(hz, get, n)));
+    dl->AddCircleFilled(at, 4.5f * scale, n == 1 ? teal : amber);
+    handles.list.push_back({node.id, n == 1 ? "@twin1" : "@twin2", n, at, px, py, pw, ph});
+  }
+  char text[128];
+  const bool locked = std::lround(get("lock")) == 1;
+  std::snprintf(text, sizeof text, "filter 1 %.0f Hz   filter 2 %.0f Hz%s", f1, f2, locked ? "   (locked)" : "");
+  dl->AddText(font, f.size, ImVec2(f.x0 + 8 * scale, f.y0 + f.h - 16 * scale), textAlpha(190), text);
+  if (!shared.empty()) {
+    std::snprintf(text, sizeof text, "%d shared, first at %.0f Hz", static_cast<int>(shared.size()), shared[0].f);
+    dl->AddText(font, f.size, ImVec2(f.x0 + f.w - 150 * scale, f.y0 + f.h - 16 * scale), textAlpha(190), text);
+  }
+}
+
 }  // namespace
 
-bool hasPicture(const std::string& nodeType) { return nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu" || nodeType == "membrane" || nodeType == "granular" || nodeType == "kaleidoscope" || nodeType == "drumsynth" || nodeType == "drumsynth2" || nodeType == "hat2" || nodeType == "pulsar" || nodeType == "pulsetrain"; }
+bool hasPicture(const std::string& nodeType) { return nodeType == "twin" || nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu" || nodeType == "membrane" || nodeType == "granular" || nodeType == "kaleidoscope" || nodeType == "drumsynth" || nodeType == "drumsynth2" || nodeType == "hat2" || nodeType == "pulsar" || nodeType == "pulsetrain"; }
 
 float drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, ImVec2 tileMin, ImVec2 tileMax, ImVec2 areaMin, ImVec2 areaMax, float scale, const PictureTiming& timing, ResponseHandles& handles) {
   gBelow = 0;
   if (node.type == "prismacanyon") drawCanyon(dl, font, node, type, frameFor(dl, font, node.id + " echoes", 360, 20 + 30 * kCanyonLines + 24, tileMin, tileMax, areaMin, areaMax, scale), scale, timing);
+  else if (node.type == "twin") drawTwin(dl, font, node, type, frameFor(dl, font, node.id + " response", 480, 260, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "ensemble") drawEnsemble(dl, font, node, type, frameFor(dl, font, node.id + " delays", 320, 150, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "haas") drawHaas(dl, font, node, type, frameFor(dl, font, node.id + " sides", 400, 280, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "reflect") drawReflect(dl, font, node, type, frameFor(dl, font, node.id + " room", 560, 384, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
@@ -869,6 +932,14 @@ std::vector<std::pair<std::string, double>> dragPictureHandle(const ResponseHand
   if (handle.param == "@size") {   // the corner: pixels per metre is the plan's width over the room's width
     const double k = handle.gw / std::max(0.1, valueOf(node, type, "width"));
     return {{"width", clampTo("width", std::round((at.x - handle.gx) / k * 2) / 2)}, {"depth", clampTo("depth", std::round((at.y - handle.gy) / k * 2) / 2)}};
+  }
+  if (handle.param == "@twin1" || handle.param == "@twin2") {   // along the axis: filter 1's cutoff, filter 2's, or (locked) the ratio between them
+    const double hz = std::clamp(twin::kFLow * std::pow(twin::kFHigh / twin::kFLow, fx), 20.0, 18000.0);
+    if (handle.param == "@twin1") return {{"cutoff1", std::round(hz)}};
+    if (std::lround(valueOf(node, type, "lock")) != 1) return {{"cutoff2", std::round(hz)}};
+    const twin::Get get = [&](const char* name) { return valueOf(node, type, name); };
+    double f1, f2; twin::cutoffs(get, f1, f2);
+    return {{"ratio", clampTo("ratio", std::round(hz / f1 / std::pow(2.0, valueOf(node, type, "detune") / 1200) * 1000) / 1000)}};
   }
   if (handle.param.rfind("@kal", 0) == 0) {   // an end of the band, or the band as a whole (its width stays); the picture spans 27.5 Hz to 14 kHz
     const double lo = std::log2(27.5), hi = std::log2(14080), octave = lo + fx * (hi - lo);
