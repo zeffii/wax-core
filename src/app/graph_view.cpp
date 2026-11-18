@@ -566,7 +566,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     const auto found = tiles.find(handle.node);
     if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && found != tiles.end()) {
       onHandle = true;
-      for (const auto& [name, value] : dragResponse(state.response, handle, *found->second.node, *found->second.type, io.MousePos)) {
+      for (const auto& [name, value] : dragResponse(state.response, handle, *found->second.node, *found->second.type, handleDragPoint(state.response, io.MousePos, io.KeyShift))) {
         if (value != found->second.node->param(name, value + 1)) { doc.apply(std::make_unique<SetParam>(instrumentId, handle.node, name, value), !state.responseFresh); state.responseFresh = false; state.paramEdited = true; }
       }
     } else state.responseDrag = -1;
@@ -575,6 +575,15 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     for (std::size_t i = 0; i < state.response.list.size(); i++) {
       const ImVec2 d(state.response.list[i].pos.x - io.MousePos.x, state.response.list[i].pos.y - io.MousePos.y);
       if (std::sqrt(d.x * d.x + d.y * d.y) < best) { best = std::sqrt(d.x * d.x + d.y * d.y); state.responseDrag = static_cast<int>(i); state.responseFresh = true; onHandle = true; }
+    }
+    if (state.responseDrag >= 0) beginHandleDrag(state.response, io.MousePos);
+    if (state.responseDrag >= 0 && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {   // a double-click puts what the handle edits back to its default
+      const ResponseHandles::Handle& handle = state.response.list[static_cast<std::size_t>(state.responseDrag)];
+      const auto target = tiles.find(handle.node);
+      if (target != tiles.end()) {
+        for (const auto& [name, value] : resetHandle(state.response, handle, *target->second.node, *target->second.type)) { doc.apply(std::make_unique<SetParam>(instrumentId, handle.node, name, value)); state.paramEdited = true; }
+        state.responseDrag = -1;
+      }
     }
     if (state.responseDrag >= 0 && state.response.list[static_cast<std::size_t>(state.responseDrag)].param == "@draw") {   // a drawing's title: open the drawings window
       state.openDrawings = state.response.list[static_cast<std::size_t>(state.responseDrag)].node;

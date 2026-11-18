@@ -5,6 +5,7 @@
 #include <cmath>
 #include <map>
 
+#include "app/map_handle.h"
 #include "app/picture_canvas.h"
 #include "app/theme.h"
 #include "nodes/fft.h"
@@ -188,6 +189,17 @@ void drawNotepan(const Canvas& c, const GraphNode& node, const NodeType& type, c
     if (shape == 2) c.circle(kPanCX, kPanCY, kPanR + 10, withAlphaF(pink, 0.6f));
     else c.arc(kPanCX, kPanCY, kPanR + 10, a0 - half - static_cast<float>(amp * kPi), a1 - half + static_cast<float>(amp * kPi), withAlphaF(pink, 0.6f));
   }
+  // the field's two edges are dragged round the circle for the range; the end of the rotation ring for how far it swings (amp)
+  const auto onCircle = [&](double angle, float radius) { return c.at(kPanCX + static_cast<float>(std::sin(angle)) * radius, kPanCY - static_cast<float>(std::cos(angle)) * radius); };
+  c.dot(kPanCX + static_cast<float>(std::sin(a1)) * kPanR, kPanCY - static_cast<float>(std::cos(a1)) * kPanR, 3.5f, orange);
+  c.dot(kPanCX + static_cast<float>(std::sin(a0)) * kPanR, kPanCY - static_cast<float>(std::cos(a0)) * kPanR, 3.5f, orange);
+  addHandle(handles, node, "@sp.nphigh", onCircle(a1, kPanR), c.at(kPanCX, kPanCY), ImVec2(c.scale, 0));
+  addHandle(handles, node, "@sp.nplow", onCircle(a0, kPanR), c.at(kPanCX, kPanCY), ImVec2(c.scale, 0));
+  if (std::fabs(rate) > 0.001 && shape != 2) {
+    const double end = a1 + amp * kPi;
+    c.dot(kPanCX + static_cast<float>(std::sin(end)) * (kPanR + 10), kPanCY - static_cast<float>(std::cos(end)) * (kPanR + 10), 3.5f, pink);
+    addHandle(handles, node, "@sp.npamp", onCircle(end, kPanR + 10), c.at(kPanCX, kPanCY), ImVec2(c.scale, 0));
+  }
   std::vector<PanVoice> dots = live.voices;
   for (const PanVoice& v : dots) {
     const float back = static_cast<float>(std::max(0.0, -std::cos(v.angle))), x = kPanCX + static_cast<float>(std::sin(v.angle)) * kPanR, y = kPanCY - static_cast<float>(std::cos(v.angle)) * kPanR;
@@ -284,7 +296,7 @@ void drawSympathy(const Canvas& c, const GraphNode& node, const NodeType& type, 
 // ---- specpan ----
 constexpr float kSpecW = 360, kSpecH = 150, kSpecPL = 22, kSpecPR = 8, kSpecPT = 14, kSpecPB = 18;
 
-void drawSpecpan(const Canvas& c, const GraphNode& node, const NodeType& type) {
+void drawSpecpan(const Canvas& c, const GraphNode& node, const NodeType& type, ResponseHandles& handles) {
   const int shape = static_cast<int>(std::lround(valueOf(node, type, "shape")));
   const double spread = valueOf(node, type, "spread"), rotate = valueOf(node, type, "rotate"), lowMono = valueOf(node, type, "lowMono");
   std::array<double, specpan::kBands> custom{}, pans{};
@@ -312,6 +324,18 @@ void drawSpecpan(const Canvas& c, const GraphNode& node, const NodeType& type) {
   const float xm = xOf(lowMono);   // the mono region
   c.fill(kSpecPL, kSpecPT, xm - kSpecPL, ph, withAlphaF(ink, 0.12f));
   c.label("mono", kSpecPL + 3, kSpecPT + 2, ink, 0.6f);
+  c.dot(xm, kSpecPT + ph - 4, 3, withAlphaF(ink, 0.8f));   // the mono edge: along the axis is the frequency below which everything is centred
+  addMapHandle(handles, node, c.at(xm, kSpecPT + ph - 4), c.at(kSpecPL, 0), ImVec2(pw * c.scale, 1), axis("lowMono", 20, 20000, 'g', 1));
+  if (shape == 3 && std::fabs(rotate) < 1e-6) {   // the custom shape: each bar's end is dragged up (left) or down (right) for that band's pan
+    const double reach = std::max(0.05, spread);
+    for (int k = 0; k < specpan::kBands; k++) {
+      const float x0 = xOf(std::max(edges[static_cast<std::size_t>(k)], lowMono)), x1 = xOf(edges[static_cast<std::size_t>(k) + 1]);
+      if (x1 - x0 < 1) continue;
+      const float end = mid + static_cast<float>(std::clamp(pans[static_cast<std::size_t>(k)], -1.0, 1.0) * reach) * (ph / 2);
+      c.dot((x0 + x1) / 2, end, 2.5f, withAlphaF(ink, 0.9f));
+      addMapHandle(handles, node, c.at((x0 + x1) / 2, end), c.at(0, mid - static_cast<float>(reach) * ph / 2), ImVec2(1, static_cast<float>(reach) * ph * c.scale), "", axis("b" + std::to_string(k + 1), -1, 1, 'l', 0.01));
+    }
+  }
 }
 
 // ---- filterpro ----
@@ -429,7 +453,7 @@ void drawSpacePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const
   else if (node.type == "ringmod") drawRingmod(canvas, node, type, timing, handles);
   else if (node.type == "notepan") drawNotepan(canvas, node, type, timing, handles);
   else if (node.type == "sympathy") drawSympathy(canvas, node, type, timing, handles);
-  else if (node.type == "specpan") drawSpecpan(canvas, node, type);
+  else if (node.type == "specpan") drawSpecpan(canvas, node, type, handles);
   else if (node.type == "filterpro") drawFilterpro(canvas, node, type, timing, handles);
 }
 
@@ -451,6 +475,13 @@ std::vector<std::pair<std::string, double>> dragSpaceHandle(const ResponseHandle
     return {{"freq", clampTo(type, "freq", std::round(std::clamp(f, 0.1, 5000.0) * 10) / 10)}};
   }
   if (handle.param == "@sp.npcentre") return {{"centre", clampTo(type, "centre", std::round(std::clamp((at.x - handle.gx) / handle.gw, -1.0f, 1.0f) * 100) / 100)}};
+  if (handle.param == "@sp.nphigh" || handle.param == "@sp.nplow" || handle.param == "@sp.npamp") {   // gx, gy: the circle's centre; gw: pixels per web pixel
+    const double x = (at.x - handle.gx) / handle.gw, y = (at.y - handle.gy) / handle.gw, round = std::atan2(x, -y), centre = valueOf(node, type, "centre"), range = valueOf(node, type, "range");
+    if (handle.param == "@sp.nphigh") return {{"range", clampTo(type, "range", std::round((round / (kPi / 2) - centre) * 100) / 100)}};
+    if (handle.param == "@sp.nplow") return {{"range", clampTo(type, "range", std::round((centre - round / (kPi / 2)) * 100) / 100)}};
+    const double edge = std::clamp(centre + range, -1.0, 1.0) * kPi / 2;   // the ring starts at the field's high edge
+    return {{"amp", clampTo(type, "amp", std::round(std::fabs(round - edge) / kPi * 100) / 100)}};
+  }
   if (handle.param == "@sp.symroot") {
     const double hz = std::pow(2.0, kSymLo + fx * (kSymHi - kSymLo));
     return {{"root", clampTo(type, "root", std::clamp(std::round(69 + 12 * std::log2(hz / 440)), 24.0, 84.0))}};

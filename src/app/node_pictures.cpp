@@ -10,6 +10,7 @@
 #include <memory>
 #include <vector>
 
+#include "app/map_handle.h"
 #include "app/picture_slot.h"
 #include "app/pogue_picture.h"
 #include "app/space_pictures.h"
@@ -66,7 +67,7 @@ Frame frameFor(ImDrawList* dl, ImFont* font, const std::string& title, float w, 
 
 constexpr int kCanyonLines = 4, kCanyonRepeats = 8;
 
-void drawCanyon(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale, const PictureTiming& timing) {
+void drawCanyon(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale, const PictureTiming& timing, ResponseHandles& handles) {
   const float PL = 30 * scale, PR = 36 * scale, PT = 20 * scale, ROW = 30 * scale, pw = f.w - PL - PR;
   const double time = valueOf(node, type, "time"), intensity = valueOf(node, type, "intensity"), cutoff = valueOf(node, type, "cutoff");
   std::array<double, kCanyonLines> levels{}, pans{}, damps{};
@@ -133,6 +134,7 @@ void drawCanyon(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeT
       const ImU32 colour = hsl(hues[k - 1], static_cast<float>(0.7 + 0.2 * v), static_cast<float>(0.38 + 0.28 * v), static_cast<int>((0.1 + 0.9 * v) * paler * 255));
       dl->AddRectFilled(ImVec2(std::round(xx) - 1, floor - tall), ImVec2(std::round(xx) + 2, floor + 1), colour);
       dl->AddRectFilled(ImVec2(std::round(xx) - 3, floor - 1), ImVec2(std::round(xx) + 4, floor + 1), colour);
+      if (m == k) addMapHandle(handles, node, ImVec2(xx, floor - tall), ImVec2(xx, floor), ImVec2(1, -(ROW - 8 * scale)), "", axis("level" + std::to_string(k), 0, 1, 'b'));   // the first repeat's tip: how loud the line is
     }
     // the pan: a short track at the right, the dot left or right of its middle, and the cutoff the line is left with
     const float px = f.x0 + f.w - PR + 14 * scale, pc = px + static_cast<float>(pans[static_cast<std::size_t>(k - 1)]) * 9 * scale;
@@ -141,12 +143,14 @@ void drawCanyon(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeT
     const double hz = cutoff * std::pow(2.0, -4 * damps[static_cast<std::size_t>(k - 1)]);
     if (hz >= 1000) std::snprintf(text, sizeof text, hz >= 10000 ? "%.0fk" : "%.1fk", hz / 1000); else std::snprintf(text, sizeof text, "%d", static_cast<int>(std::lround(hz)));
     dl->AddText(font, f.size, ImVec2(px - 11 * scale, rowTop + 15 * scale), textAlpha(140), text);
+    addMapHandle(handles, node, ImVec2(pc, rowTop + 9.5f * scale), ImVec2(px - 9 * scale, 0), ImVec2(18 * scale, 1), axis("pan" + std::to_string(k), -1, 1, 'l', 0.01));   // the pan dot
+    addMapHandle(handles, node, ImVec2(px, rowTop + 19 * scale), ImVec2(0, rowTop + 4 * scale), ImVec2(1, ROW - 8 * scale), "", axis("damp" + std::to_string(k), 0, 1, 'l', 0.01));   // the cutoff the line is left with: down is darker
   }
 }
 
 // ---- ensemble: how long each of three delays is over a few seconds ----
 
-void drawEnsemble(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale) {
+void drawEnsemble(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale, ResponseHandles& handles) {
   constexpr double kBaseMs = 6, kSlowMs = 1.6, kFastMs = 0.22, kLow = 3.5, kHigh = 8.5, kSeconds = 4;
   const float PL = 34 * scale, PR = 8 * scale, TOP = 20 * scale, BOTTOM = 18 * scale, span = f.w - PL - PR, tall = f.h - TOP - BOTTOM;
   const double slow = valueOf(node, type, "slow"), fast = valueOf(node, type, "fast"), depth = valueOf(node, type, "depth"), shimmer = valueOf(node, type, "shimmer");
@@ -168,6 +172,10 @@ void drawEnsemble(ImDrawList* dl, ImFont* font, const GraphNode& node, const Nod
     }
     dl->AddPolyline(pts.data(), static_cast<int>(pts.size()), colours[line], 0, 1.3f * std::max(1.0f, scale));
   }
+  // the first delay's first peak: along the axis is the time it takes (the slow rate), up and down how far it swings (the depth)
+  const double peakAt = slow > 0 ? std::min(kSeconds, 1 / (4 * slow)) : kSeconds;
+  ResponseHandles::Handle handle{node.id, "@ens", 0, ImVec2(f.x0 + PL + static_cast<float>(peakAt / kSeconds) * span, yOf(kBaseMs + depth * kSlowMs)), f.x0 + PL, f.y0 + TOP, span, tall};
+  handles.list.push_back(handle);
 }
 
 // ---- haas: the early and late pulses, and the comb they make in mono ----
@@ -305,7 +313,7 @@ void drawRotary(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeT
 
 // ---- khufu: two cycles of the three registers, and what they add up to ----
 
-void drawKhufu(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale) {
+void drawKhufu(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale, ResponseHandles& handles) {
   const float PL = 8 * scale, PR = 8 * scale, top = 22 * scale, span = f.w - PL - PR;
   const char* names[3] = {"low", "mid", "high"};
   const ImU32 colours[3] = {kBlue, kOrange, hsl(145, 0.55f, 0.45f)};
@@ -338,6 +346,11 @@ void drawKhufu(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeTy
     trace(only, withAlpha(colours[i], 115), 1.0f);
   }
   trace(levels, kText, 1.6f * std::max(1.0f, scale));
+  for (int i = 0; i < 3; i++) {   // a dot where each register's wave starts: up and down is its level
+    const float dotX = f.x0 + PL + (6 + 14 * i) * scale;
+    dl->AddCircleFilled(ImVec2(dotX, mid - static_cast<float>(levels[i] / total) * tall), 3.5f * scale, colours[i]);
+    addMapHandle(handles, node, ImVec2(dotX, mid - static_cast<float>(levels[i] / total) * tall), ImVec2(0, mid), ImVec2(1, -tall / static_cast<float>(total)), "", axis(names[i], 0, 1, 'l', 0.01));
+  }
 }
 
 // ---- membrane: the head with the pattern of one mode, and every mode as a stem ----
@@ -453,7 +466,7 @@ double grainWindow(double p, double shape) {
   return 0.5 - 0.5 * std::cos(kPi * std::min(1.0, std::max(0.0, edge)));
 }
 
-void drawGranular(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale, const PictureTiming& timing) {
+void drawGranular(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale, const PictureTiming& timing, ResponseHandles& handles) {
   const float PL = 8 * scale, PR = 8 * scale, pw = f.w - PL - PR;
   const auto v = [&](const char* name) { return valueOf(node, type, name); };
   char text[96];
@@ -478,6 +491,11 @@ void drawGranular(ImDrawList* dl, ImFont* font, const GraphNode& node, const Nod
   }
   const float px = f.x0 + PL + static_cast<float>(pos) * pw;
   dl->AddLine(ImVec2(px + 0.5f, sy), ImVec2(px + 0.5f, sy + sh), kBlue, 1.5f);
+  dl->AddCircleFilled(ImVec2(px + 0.5f, sy), 3.5f * scale, kBlue);
+  addMapHandle(handles, node, ImVec2(px + 0.5f, sy), ImVec2(f.x0 + PL, 0), ImVec2(pw, 1), axis("position", 0, 1, 'l', 0.001));   // the marker: the position
+  const float sprayX = std::min(f.x0 + PL + pw, px + static_cast<float>(spray) * pw);
+  dl->AddCircleFilled(ImVec2(sprayX, mid), 3 * scale, withAlpha(kBlue, 200));
+  addMapHandle(handles, node, ImVec2(sprayX, mid), ImVec2(px, 0), ImVec2(pw, 1), axis("spray", 0, 1, 'l', 0.001));   // the band's edge: the spray
   if (std::fabs(scan) > 0.005) {
     const float to = f.x0 + PL + static_cast<float>(std::clamp(pos + scan, 0.0, 1.0)) * pw, dir = to >= px ? 1.0f : -1.0f, ay = sy + sh + 7 * scale;
     dl->AddLine(ImVec2(px, ay), ImVec2(to, ay), kOrange, 1.2f);
@@ -504,6 +522,11 @@ void drawGranular(ImDrawList* dl, ImFont* font, const GraphNode& node, const Nod
     for (int k = 0; k <= 32; k++) pts.push_back(ImVec2(std::clamp(x0 + k / 32.0f * w, f.x0 + PL, f.x0 + PL + pw), base - static_cast<float>(grainWindow(k / 32.0, shape) * rowH)));
     dl->AddPolyline(pts.data(), static_cast<int>(pts.size()), withAlpha(index % 2 ? kBlue : kOrange, 160), 0, 1.0f);
   }
+  // the second grain's start: along the axis is the time between grains (the density)
+  if (every * msPx < pw) {
+    handles.list.push_back({node.id, "@gden", 0, ImVec2(f.x0 + PL + static_cast<float>(every * msPx), base), f.x0 + PL, 0, static_cast<float>(msPx), 1});
+    dl->AddCircleFilled(ImVec2(f.x0 + PL + static_cast<float>(every * msPx), base), 3 * scale, withAlpha(kOrange, 220));
+  }
   // the cloud: pitch (tune and the random cents), the chance of playing backwards, how wide the grains are spread
   const double tune = v("tune"), rand = v("pitchRand") / 100, rev = v("reverse"), spread = v("spread");
   const auto track = [&](const char* name, float y, const std::string& label, double from, double to) {
@@ -512,6 +535,10 @@ void drawGranular(ImDrawList* dl, ImFont* font, const GraphNode& node, const Nod
     dl->AddLine(ImVec2(x0, y + 6 * scale), ImVec2(x0 + w, y + 6 * scale), textAlpha(64));
     if (to - from > 0.01) dl->AddLine(ImVec2(x0 + static_cast<float>(from) * w, y + 6 * scale), ImVec2(x0 + static_cast<float>(to) * w, y + 6 * scale), kBlue, 2.0f);
     dl->AddCircleFilled(ImVec2(x0 + static_cast<float>((from + to) / 2) * w, y + 6 * scale), 3 * scale, kBlue);
+    const std::string which = name;
+    if (which == "pitch") addMapHandle(handles, node, ImVec2(x0 + static_cast<float>((from + to) / 2) * w, y + 6 * scale), ImVec2(x0, 0), ImVec2(w, 1), axis("tune", -24, 24, 'l', 0.1));
+    else if (which == "reverse") addMapHandle(handles, node, ImVec2(x0 + static_cast<float>(to) * w, y + 6 * scale), ImVec2(x0, 0), ImVec2(w, 1), axis("reverse", 0, 1, 'l', 0.01));
+    else addMapHandle(handles, node, ImVec2(x0 + static_cast<float>(to) * w, y + 6 * scale), ImVec2(x0 + w / 2, 0), ImVec2(w / 2, 1), axis("spread", 0, 1, 'l', 0.01));
     dl->AddText(font, f.size, ImVec2(x0 + w + 10 * scale, y), textAlpha(190), label.c_str());
   };
   const auto semi = [](double s) { return (std::clamp(s, -24.0, 24.0) + 24) / 48; };
@@ -765,7 +792,7 @@ double pulsaretShape(int wave, double q, const std::function<double()>& rand) {
   }
 }
 
-void drawPulsarTrain(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale) {
+void drawPulsarTrain(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale, ResponseHandles& handles) {
   constexpr int kPeriods = 5;
   constexpr double kShownHz = 220;   // A3
   const double formant = std::max(1.0, valueOf(node, type, "formant")), mask = valueOf(node, type, "mask");
@@ -790,6 +817,10 @@ void drawPulsarTrain(ImDrawList* dl, ImFont* font, const GraphNode& node, const 
       last = at;
     }
   }
+  // the first pulsaret's end: along the period is how much of it the pulsaret fills (the formant)
+  const float endX = left + static_cast<float>(std::min(1.0, duty)) * per;
+  dl->AddCircleFilled(ImVec2(endX, mid), 3.5f * scale, IM_COL32(235, 160, 45, 255));
+  handles.list.push_back({node.id, "@pulsar", 0, ImVec2(endX, mid), left, 0, per, 1});
   char text[96];
   std::snprintf(text, sizeof text, "%d periods at 220 Hz · formant %d Hz · duty %d%%", kPeriods, static_cast<int>(std::lround(formant)), static_cast<int>(std::lround(duty * 100)));
   dl->AddText(font, f.size * 0.9f, ImVec2(f.x0 + 8 * scale, f.y0 + f.h - 14 * scale), textAlpha(130), text);
@@ -922,19 +953,19 @@ PictureSize pictureSize(const std::string& nodeType) {
 float drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, ImVec2 tileMin, ImVec2 tileMax, ImVec2 areaMin, ImVec2 areaMax, float scale, const PictureTiming& timing, ResponseHandles& handles) {
   gBelow = 0;
   const PictureSize size = pictureSize(node.type);
-  if (node.type == "prismacanyon") drawCanyon(dl, font, node, type, frameFor(dl, font, node.id + " echoes", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, timing);
+  if (node.type == "prismacanyon") drawCanyon(dl, font, node, type, frameFor(dl, font, node.id + " echoes", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, timing, handles);
   else if (node.type == "twin") drawTwin(dl, font, node, type, frameFor(dl, font, node.id + " response", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
-  else if (node.type == "ensemble") drawEnsemble(dl, font, node, type, frameFor(dl, font, node.id + " delays", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale);
+  else if (node.type == "ensemble") drawEnsemble(dl, font, node, type, frameFor(dl, font, node.id + " delays", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "haas") drawHaas(dl, font, node, type, frameFor(dl, font, node.id + " sides", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "reflect") drawReflect(dl, font, node, type, frameFor(dl, font, node.id + " room", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
-  else if (node.type == "granular") drawGranular(dl, font, node, type, frameFor(dl, font, node.id + " grains", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, timing);
+  else if (node.type == "granular") drawGranular(dl, font, node, type, frameFor(dl, font, node.id + " grains", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, timing, handles);
   else if (node.type == "membrane") drawMembrane(dl, font, node, type, frameFor(dl, font, node.id + " membrane", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
-  else if (node.type == "khufu") drawKhufu(dl, font, node, type, frameFor(dl, font, node.id + " registers", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale);
+  else if (node.type == "khufu") drawKhufu(dl, font, node, type, frameFor(dl, font, node.id + " registers", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "rotary") drawRotary(dl, font, node, type, frameFor(dl, font, node.id + " cabinet", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "kaleidoscope") drawKaleidoscope(dl, font, node, type, frameFor(dl, font, node.id + " band", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles, timing);
   else if (node.type == "drumsynth") drawDrum(dl, font, node, type, frameFor(dl, font, node.id + " hit", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "drumsynth2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
-  else if (node.type == "pulsar" || node.type == "pulsetrain") drawPulsarTrain(dl, font, node, type, frameFor(dl, font, node.id + " pulse train", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale);
+  else if (node.type == "pulsar" || node.type == "pulsetrain") drawPulsarTrain(dl, font, node, type, frameFor(dl, font, node.id + " pulse train", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "pogue") { const Frame f = frameFor(dl, font, "", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale); drawPogue(dl, font, node, type, ImVec2(f.x0, f.y0), scale, timing, handles); }
   else if (spacePictureSize(node.type).w > 0) { const Frame f = frameFor(dl, font, "", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale); drawSpacePicture(dl, font, node, type, ImVec2(f.x0, f.y0), scale, timing, handles); }
   else if (node.type == "hat2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
@@ -962,6 +993,13 @@ std::vector<std::pair<std::string, double>> dragPictureHandle(const ResponseHand
     const std::string name = handle.param.substr(7, eq - 7);
     return {{name, clampTo(name, valueOf(node, type, name) + std::stod(handle.param.substr(eq + 1)))}};
   }
+  if (handle.param == "@pulsar") return {{"formant", clampTo("formant", std::round(220 / std::max(0.02, fx) ))}};
+  if (handle.param == "@gden") return {{"density", clampTo("density", std::round(1000 / std::max(1.0f, (at.x - handle.gx) / handle.gw)))}};
+  if (handle.param == "@ens") {   // gx, gy, gw, gh: the plot; 4 s across, 3.5 to 8.5 ms up
+    const double t = std::max(0.02, fx * 4), ms = 3.5 + (1 - fy) * 5;
+    return {{"slow", clampTo("slow", std::round(1 / (4 * t) * 100) / 100)}, {"depth", clampTo("depth", std::round(std::fabs(ms - 6) / 1.6 * 100) / 100)}};
+  }
+  if (handle.param.rfind("@map:", 0) == 0) return dragMapHandle(handle, type, at);
   if (handle.param == "@haas") return {{"time", clampTo("time", std::round(fx * 45 * 10) / 10)}, {"gain", clampTo("gain", std::round(std::clamp(static_cast<double>((handle.gy - at.y) / handle.gh), 0.0, 1.2) * 100) / 100)}};
   if (handle.param == "@src") return {{"srcx", fx}, {"srcy", fy}};
   if (handle.param == "@lis") return {{"lisx", fx}, {"lisy", fy}};

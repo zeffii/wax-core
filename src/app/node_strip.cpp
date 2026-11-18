@@ -225,7 +225,7 @@ NodeStripResult drawNodeStrip(NodeStripState& state, ParamPanelState& panel, Doc
     const GraphNode* node = findNode(*instrument, handle.node);
     const NodeType* type = node ? types.find(node->type) : nullptr;
     if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && node && type) {
-      for (const auto& [name, value] : dragResponse(state.response, handle, *node, *type, io.MousePos)) {
+      for (const auto& [name, value] : dragResponse(state.response, handle, *node, *type, handleDragPoint(state.response, io.MousePos, io.KeyShift))) {
         if (value == node->param(name, value + 1)) continue;
         doc.apply(std::make_unique<SetParam>(instrumentId, handle.node, name, value), !state.responseFresh);
         state.responseFresh = false;
@@ -238,6 +238,16 @@ NodeStripResult drawNodeStrip(NodeStripState& state, ParamPanelState& panel, Doc
       const ImVec2 d(state.response.list[i].pos.x - io.MousePos.x, state.response.list[i].pos.y - io.MousePos.y);
       const float distance = std::sqrt(d.x * d.x + d.y * d.y);
       if (distance < best) { best = distance; state.responseDrag = static_cast<int>(i); state.responseFresh = true; }
+    }
+    if (state.responseDrag >= 0) beginHandleDrag(state.response, io.MousePos);
+    if (state.responseDrag >= 0 && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {   // a double-click puts what the handle edits back to its default
+      const ResponseHandles::Handle& handle = state.response.list[static_cast<std::size_t>(state.responseDrag)];
+      const GraphNode* node = findNode(*instrument, handle.node);
+      const NodeType* type = node ? types.find(node->type) : nullptr;
+      if (node && type) {
+        for (const auto& [name, value] : resetHandle(state.response, handle, *node, *type)) { doc.apply(std::make_unique<SetParam>(instrumentId, handle.node, name, value)); result.paramsChanged = true; }
+        state.responseDrag = -1;
+      }
     }
     if (state.responseDrag >= 0 && state.response.list[static_cast<std::size_t>(state.responseDrag)].param == "@draw") {   // a drawing's title: its window
       panel.drawNode = state.response.list[static_cast<std::size_t>(state.responseDrag)].node;

@@ -19,7 +19,17 @@ struct ResponseHandles {
   std::vector<Handle> list;
   std::string node;                    // the node the picture belongs to
   float px = 0, py = 0, pw = 1, ph = 1;   // the plot's rectangle
+  // the drag in progress: Shift slows it to a tenth, measured from where Shift was pressed
+  ImVec2 grabAt{0, 0}, fineMouse{0, 0}, fineAt{0, 0};
+  bool fine = false;
 };
+
+// Starts a drag at `mouse`.
+void beginHandleDrag(ResponseHandles& handles, ImVec2 mouse);
+// The point the drag is at now: the mouse, or with Shift held a tenth of the mouse's movement since Shift went down.
+ImVec2 handleDragPoint(ResponseHandles& handles, ImVec2 mouse, bool shift);
+// What a double-click on `handle` does: the parameters it edits, put back to their defaults (empty for a button).
+std::vector<std::pair<std::string, double>> resetHandle(const ResponseHandles& handles, const ResponseHandles::Handle& handle, const GraphNode& node, const NodeType& type);
 
 bool hasResponse(const std::string& nodeType);
 

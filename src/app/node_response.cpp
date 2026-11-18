@@ -164,3 +164,25 @@ std::vector<std::pair<std::string, double>> dragResponse(const ResponseHandles& 
 }
 
 }  // namespace wax::app
+
+namespace wax::app {
+
+void beginHandleDrag(ResponseHandles& handles, ImVec2 mouse) { handles.grabAt = mouse; handles.fine = false; }
+
+ImVec2 handleDragPoint(ResponseHandles& handles, ImVec2 mouse, bool shift) {
+  if (!shift) { handles.fine = false; handles.grabAt = mouse; return mouse; }
+  if (!handles.fine) { handles.fine = true; handles.fineMouse = mouse; handles.fineAt = handles.grabAt; }
+  handles.grabAt = ImVec2(handles.fineAt.x + (mouse.x - handles.fineMouse.x) * 0.1f, handles.fineAt.y + (mouse.y - handles.fineMouse.y) * 0.1f);
+  return handles.grabAt;
+}
+
+std::vector<std::pair<std::string, double>> resetHandle(const ResponseHandles& handles, const ResponseHandles::Handle& handle, const GraphNode& node, const NodeType& type) {
+  std::vector<std::pair<std::string, double>> defaults;
+  const bool button = handle.once || handle.param == "@draw" || handle.param.rfind("@set:", 0) == 0 || handle.param.rfind("@flip:", 0) == 0 || handle.param.rfind("@nudge:", 0) == 0;
+  if (button) return defaults;
+  for (const auto& [name, value] : dragResponse(handles, handle, node, type, handle.pos))
+    for (const ParamSpec& spec : type.params) if (spec.name == name) defaults.push_back({name, spec.def});
+  return defaults;
+}
+
+}  // namespace wax::app
