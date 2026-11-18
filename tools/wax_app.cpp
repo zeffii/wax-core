@@ -483,14 +483,18 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     else { player.ring().push({LiveCommand::Play, std::max(0, session->pausedAt), 1}); session->pausedAt = -1; }
   }
   gIconCentre = (ImGui::GetItemRectMin().y + ImGui::GetItemRectMax().y) / 2;
+  const float transportTop = ImGui::GetItemRectMin().y;
   ImGui::SameLine();
+  ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x, transportTop));   // (the whole row of icons at Play's height)
   if (app::iconButton("pause", "Pause (Pause key): stop here; Play (or Pause again) carries on from the same place", session->pausedAt >= 0, 20 * app::kTickScale, true)) {
     if (playing) { session->pausedAt = player.tick(); player.ring().push({LiveCommand::Stop, 0, 1}); }
     else if (session->pausedAt >= 0) { player.ring().push({LiveCommand::Play, session->pausedAt, 1}); session->pausedAt = -1; }
   }
   ImGui::SameLine();
+  ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x, transportTop));   // (the whole row of icons at Play's height)
   if (app::iconButton("follow", "Follow the song (F9): the grids scroll with the playing row", follow, 20 * app::kTickScale, true)) follow = !follow;
   ImGui::SameLine();
+  ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x, transportTop));   // (the whole row of icons at Play's height)
   {
     const LoopRange loop = loopOf(song);
     const bool hasLoop = song.raw.is_object() && song.raw.contains("loop") && song.raw["loop"].is_object();
