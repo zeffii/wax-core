@@ -119,6 +119,38 @@ bool textButton(const char* label, bool on) {
   return ImGui::IsItemClicked();
 }
 
+bool menuRow(const char* label, const char* shortcut, float width, bool arrow) {
+  const float scale = ImGui::GetStyle().FontScaleDpi;
+  const ImVec2 at = ImGui::GetCursorScreenPos();
+  const float height = ImGui::GetTextLineHeight() + 2 * scale;
+  ImGui::PushID(label);
+  ImGui::InvisibleButton("##row", ImVec2(width, height));
+  ImGui::PopID();
+  const bool hovered = ImGui::IsItemHovered();
+  if (hovered) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  dl->AddText(ImVec2(at.x, at.y + scale), hovered ? kAccent : kText, label);
+  if (shortcut && *shortcut) dl->AddText(ImVec2(at.x + width - ImGui::CalcTextSize(shortcut).x, at.y + scale), kDimText, shortcut);
+  if (arrow) dl->AddText(ImVec2(at.x + width - ImGui::CalcTextSize(">").x, at.y + scale), hovered ? kAccent : kText, ">");
+  return ImGui::IsItemClicked();
+}
+
+float menuWidth(std::initializer_list<std::pair<const char*, const char*>> rows) {
+  float widest = 0;
+  for (const auto& [label, shortcut] : rows) widest = std::max(widest, ImGui::CalcTextSize(label).x + (shortcut && *shortcut ? 24 * ImGui::GetStyle().FontScaleDpi + ImGui::CalcTextSize(shortcut).x : 0.0f));
+  return widest + 6 * ImGui::GetStyle().FontScaleDpi;
+}
+
+bool checkbox(const char* label, bool* value) {
+  const ImGuiStyle& style = ImGui::GetStyle();
+  const float full = ImGui::GetFrameHeight(), side = full * kTickScale, lift = (full - side) / 2;
+  ImGui::SetCursorPosY(ImGui::GetCursorPosY() + lift);
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(style.FramePadding.x, std::max(0.0f, (side - ImGui::GetFontSize()) / 2)));
+  const bool changed = ImGui::Checkbox(label, value);
+  ImGui::PopStyleVar();
+  return changed;   // (the row is a little shorter than a full-size tick box's; moving the cursor on instead would need an item to grow the window)
+}
+
 int spinBox(const char* id, const char* text, float width) {
   const float scale = ImGui::GetStyle().FontScaleDpi;
   const float h = ImGui::GetFrameHeight(), arrowW = 14 * scale;

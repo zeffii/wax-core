@@ -2,7 +2,9 @@
 // panel written later comes out like the others. Colours come from theme.h.
 #pragma once
 
+#include <initializer_list>
 #include <string>
+#include <utility>
 
 #include "imgui.h"
 
@@ -33,6 +35,16 @@ void groupDivider(float height);
 
 // A word that acts as a button: dim, lit when hovered or `on`, no box. True when clicked.
 bool textButton(const char* label, bool on = false);
+
+// A row of a menu: the words in the normal text colour (a dim row would look unavailable), lit when hovered, with the shortcut dim at the
+// right edge of a menu `width` wide. `arrow` marks a row that opens a submenu. True when clicked.
+bool menuRow(const char* label, const char* shortcut, float width, bool arrow = false);
+// The width a menu needs for rows of these labels and shortcuts.
+float menuWidth(std::initializer_list<std::pair<const char*, const char*>> rows);
+
+// A tick box, drawn at kTickScale of the standard size (the transport icons are scaled down by the same amount).
+inline constexpr float kTickScale = 0.75f;
+bool checkbox(const char* label, bool* value);
 
 // A spin box: the value in an inset box with a pair of small arrows stacked at its right edge, as in a classic number field. The caller
 // formats the value. Returns +1 or -1 when an arrow is clicked (the mouse wheel over the box counts too), else 0.

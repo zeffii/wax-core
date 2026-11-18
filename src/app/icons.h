@@ -16,7 +16,7 @@ void iconsShutdown();
 
 // An icon as a button: `name` is the file name without .svg ("arrange", "play"); `size` in points (scaled with the window).
 // `tip` shows when hovered. True when clicked. A name with no file shows its text instead.
-bool iconButton(const char* name, const char* tip, bool on = false, float size = 22);
+bool iconButton(const char* name, const char* tip, bool on = false, float size = 22, bool strongIdle = false);   // strongIdle: the normal text colour when not lit (the transport, as in the web app)
 
 // A picture made of pixels (`rgba`, w x h, 4 bytes each), kept as a texture under `key` and replaced each time this is called with that key.
 // With `rgba` null it only gives the texture already kept. Returns 0 when there is none. Used for the spectrogram.

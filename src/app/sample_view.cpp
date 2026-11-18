@@ -565,8 +565,8 @@ bool drawSampleScreen(SampleView& v, Document& document, Preview& preview, float
     bool tuned = ImGui::SliderInt("Sensitivity (%)", &settings().sliceSensitivity, 0, 100);
     ImGui::SetNextItemWidth(220 * scale);
     tuned |= ImGui::SliderInt("Shortest gap (ms)", &settings().sliceMinGap, 5, 500);
-    tuned |= ImGui::Checkbox("Replace the markers in range", &settings().sliceReplace);
-    tuned |= ImGui::Checkbox("Operate on the whole sample", &settings().sliceWhole);
+    tuned |= app::checkbox("Replace the markers in range", &settings().sliceReplace);
+    tuned |= app::checkbox("Operate on the whole sample", &settings().sliceWhole);
     if (tuned) saveSettings();
     const bool whole = settings().sliceWhole || v.selTo <= v.selFrom;
     if (v.sliceHits.empty()) ImGui::TextColored(dim, "No hits found%s: raise the sensitivity or shorten the gap.", whole ? "" : " in the selection");

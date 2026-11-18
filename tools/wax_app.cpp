@@ -86,7 +86,7 @@ struct DialogAnswer {
   bool ready = false;
 };
 DialogAnswer gAnswer;
-enum class DialogRequest { None, Open, SaveAs, Export, New };
+enum class DialogRequest { None, Open, SaveAs, Export, New, ClearArrangement, ClearPatterns };
 std::string gOpenRecent;   // a song the File menu's recent list asked to open
 std::string gOpenBackup;   // a snapshot the File menu asked to open (the main loop does it: it replaces the session)
 DialogRequest gRequest = DialogRequest::None;   // set by the keys, carried out by the main loop (it has the window)
@@ -402,12 +402,21 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (app::textButton("File")) ImGui::OpenPopup("filemenu");
     ImGui::SameLine(0, 0); ImGui::SetCursorPosY(lineY);
     if (ImGui::BeginPopup("filemenu")) {
-      if (app::textButton("Open...  Ctrl+O")) { gRequest = DialogRequest::Open; ImGui::CloseCurrentPopup(); }
-      if (app::textButton("New")) { gRequest = DialogRequest::New; ImGui::CloseCurrentPopup(); }
-      if (app::textButton("Save  Ctrl+S")) { requestSave = true; ImGui::CloseCurrentPopup(); }
-      if (app::textButton("Save as...  Ctrl+Shift+S")) { gRequest = DialogRequest::SaveAs; ImGui::CloseCurrentPopup(); }
-      if (app::textButton("Export WAV...")) { gRequest = DialogRequest::Export; ImGui::CloseCurrentPopup(); }
-      if (app::textButton("Backups...")) { ImGui::CloseCurrentPopup(); session->backupsOpen = true; }
+      // Rows in the normal text colour (a grey row would look unavailable), the shortcuts dim and right-aligned.
+      const float menuWidth = app::menuWidth({{"Open...", "Ctrl+O"}, {"New", ""}, {"New From Existing", ""}, {"Save", "Ctrl+S"}, {"Save as...", "Ctrl+Shift+S"}, {"Export WAV...", ""}, {"Backups...", ""}, {"Recent", ""}});
+      if (app::menuRow("Open...", "Ctrl+O", menuWidth)) { gRequest = DialogRequest::Open; ImGui::CloseCurrentPopup(); }
+      if (app::menuRow("New", "", menuWidth)) { gRequest = DialogRequest::New; ImGui::CloseCurrentPopup(); }
+      if (ImGui::BeginMenu("New From Existing")) {   // keep the instruments and samples, clear part of the song (as the web app's)
+        if (ImGui::MenuItem("Clear Arrangement")) { gRequest = DialogRequest::ClearArrangement; ImGui::CloseCurrentPopup(); }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Remove every pattern placement; the patterns stay");
+        if (ImGui::MenuItem("Clear Patterns and Arrangement")) { gRequest = DialogRequest::ClearPatterns; ImGui::CloseCurrentPopup(); }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Remove every pattern and the arrangement; instruments and samples stay");
+        ImGui::EndMenu();
+      }
+      if (app::menuRow("Save", "Ctrl+S", menuWidth)) { requestSave = true; ImGui::CloseCurrentPopup(); }
+      if (app::menuRow("Save as...", "Ctrl+Shift+S", menuWidth)) { gRequest = DialogRequest::SaveAs; ImGui::CloseCurrentPopup(); }
+      if (app::menuRow("Export WAV...", "", menuWidth)) { gRequest = DialogRequest::Export; ImGui::CloseCurrentPopup(); }
+      if (app::menuRow("Backups...", "", menuWidth)) { ImGui::CloseCurrentPopup(); session->backupsOpen = true; }
       if (!app::settings().recentFiles.empty() && ImGui::BeginMenu("Recent")) {   // the recent songs, a submenu; one that has moved shows dim (opening it only warns)
         for (const std::string& file : app::settings().recentFiles) {
           std::error_code ignored;
@@ -464,22 +473,22 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   }
   // The transport.
   const bool playing = player.playing();
-  if (app::iconButton("play", playing ? "Stop (F8)" : session->pausedAt >= 0 ? "Carry on from the pause (F5)" : "Play (F5)", playing, 20)) {
+  if (app::iconButton("play", playing ? "Stop (F8)" : session->pausedAt >= 0 ? "Carry on from the pause (F5)" : "Play (F5)", playing, 20 * app::kTickScale, true)) {
     if (playing) { player.ring().push({LiveCommand::Stop, 0, 1}); session->pausedAt = -1; }
     else { player.ring().push({LiveCommand::Play, std::max(0, session->pausedAt), 1}); session->pausedAt = -1; }
   }
   ImGui::SameLine();
-  if (app::iconButton("pause", "Pause (Pause key): stop here; Play (or Pause again) carries on from the same place", session->pausedAt >= 0, 20)) {
+  if (app::iconButton("pause", "Pause (Pause key): stop here; Play (or Pause again) carries on from the same place", session->pausedAt >= 0, 20 * app::kTickScale, true)) {
     if (playing) { session->pausedAt = player.tick(); player.ring().push({LiveCommand::Stop, 0, 1}); }
     else if (session->pausedAt >= 0) { player.ring().push({LiveCommand::Play, session->pausedAt, 1}); session->pausedAt = -1; }
   }
   ImGui::SameLine();
-  if (app::iconButton("follow", "Follow the song (F9): the grids scroll with the playing row", follow, 20)) follow = !follow;
+  if (app::iconButton("follow", "Follow the song (F9): the grids scroll with the playing row", follow, 20 * app::kTickScale, true)) follow = !follow;
   ImGui::SameLine();
   {
     const LoopRange loop = loopOf(song);
     const bool hasLoop = song.raw.is_object() && song.raw.contains("loop") && song.raw["loop"].is_object();
-    if (app::iconButton("loopbtn", hasLoop ? (loop.on ? "Loop on (Ctrl+L): Ctrl+B sets its start, Ctrl+E its end" : "Loop off (Ctrl+L)") : "No loop: Ctrl+B sets its start, Ctrl+E its end", hasLoop && loop.on, 20) && hasLoop) {
+    if (app::iconButton("loopbtn", hasLoop ? (loop.on ? "Loop on (Ctrl+L): Ctrl+B sets its start, Ctrl+E its end" : "Loop off (Ctrl+L)") : "No loop: Ctrl+B sets its start, Ctrl+E its end", hasLoop && loop.on, 20 * app::kTickScale, true) && hasLoop) {
       doc.apply(std::make_unique<SetLoop>(loopToggled(song), loop.on ? "Loop off" : "Loop on"));
       syncLoop(doc, player.engine());
     }
@@ -902,17 +911,17 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       const auto fits = [&](const char* label) { return ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x - ImGui::GetItemRectMax().x > ImGui::CalcTextSize(label).x + 24 * scale; };   // room to the right of the last item
       if (session->screen == Screen::Pattern) {   // how the grid is shown
         ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Pattern view");
-        if (ImGui::Checkbox("All lanes side by side", &app::settings().patternAll)) app::saveSettings();
-        if (ImGui::Checkbox("Tint patterns by colour", &app::settings().tintPatterns)) app::saveSettings();
-        if (ImGui::Checkbox("Note preview", &app::settings().notePreview)) app::saveSettings();
+        if (app::checkbox("All lanes side by side", &app::settings().patternAll)) app::saveSettings();
+        if (app::checkbox("Tint patterns by colour", &app::settings().tintPatterns)) app::saveSettings();
+        if (app::checkbox("Note preview", &app::settings().notePreview)) app::saveSettings();
         ImGui::SetNextItemWidth(120 * ImGui::GetStyle().FontScaleDpi);
         if (ImGui::SliderFloat("Text size", &app::settings().patternText, 0.6f, 2.0f, "%.2fx")) app::saveSettings();
-        if (ImGui::Checkbox("Hide empty columns", &app::settings().hideEmpty)) app::saveSettings();
-        if (ImGui::Checkbox("Solo-edit shows the song", &app::settings().soloHatch)) app::saveSettings();   // (the rest hatched and locked; off: the pattern alone)
-        if (ImGui::Checkbox("Follow the playing row", &follow)) { app::settings().follow = follow; app::saveSettings(); }
+        if (app::checkbox("Hide empty columns", &app::settings().hideEmpty)) app::saveSettings();
+        if (app::checkbox("Solo-edit shows the song", &app::settings().soloHatch)) app::saveSettings();   // (the rest hatched and locked; off: the pattern alone)
+        if (app::checkbox("Follow the playing row", &follow)) { app::settings().follow = follow; app::saveSettings(); }
       }
       if (session->screen == Screen::Song) {
-    if (ImGui::Checkbox("Show pattern names (H)", &app::settings().seqNames)) app::saveSettings();
+    if (app::checkbox("Show pattern names (H)", &app::settings().seqNames)) app::saveSettings();
     {   // the lane under the cursor: rename, move, duplicate, remove (the web's lane tools)
       const Lane* current = nullptr;
       for (const Lane& l : doc.project().lanes) if (l.id == selectedLane) current = &l;
@@ -968,9 +977,9 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
             session->editStatus = problems.empty() ? std::string() : problems.front();
           }
           if (fits("patterns")) ImGui::SameLine(0, 8 * scale);
-          ImGui::Checkbox("patterns", &session->clonePatterns);
+          app::checkbox("patterns", &session->clonePatterns);
           if (fits("automation")) ImGui::SameLine(0, 8 * scale);
-          ImGui::Checkbox("automation", &session->cloneCurves);
+          app::checkbox("automation", &session->cloneCurves);
         }
         if (laneEdited) { const std::vector<std::string> problems = syncLanes(doc, player.engine()); session->editStatus = problems.empty() ? std::string() : problems.front(); }
         if (!laneEdited) { /* a move changes order only */ }
@@ -996,7 +1005,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         if (fits(label)) ImGui::SameLine(0, 6 * scale);
         if (app::textButton(label)) { session->silenceTicks = preset; insert(preset); }
       }
-      if (ImGui::Checkbox("cut patterns across the cursor", &app::settings().insertCut)) app::saveSettings();
+      if (app::checkbox("cut patterns across the cursor", &app::settings().insertCut)) app::saveSettings();
       {   // an empty lane for a machine the song already has
         std::vector<std::string> machines;
         for (const Instrument& i : doc.project().instruments) if (i.id != kMaster && !i.isMeta) machines.push_back(i.id);
@@ -1053,7 +1062,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
             }
           }
           bool sleeps = !never;
-          if (ImGui::Checkbox("sleep when quiet", &sleeps)) { never = !sleeps; setup = true; }
+          if (app::checkbox("sleep when quiet", &sleeps)) { never = !sleeps; setup = true; }
           if (setup) {
             doc.apply(std::make_unique<SetInstrumentSetup>(name, voices, never));
             const std::vector<std::string> problems = syncGraphs(doc, player.engine());
@@ -1458,30 +1467,30 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     ImGui::TextColored(dim, "it may not be in your best interest to use all cores");
   }
     group("Playing", "How the screens behave while the song runs.");
-    if (ImGui::Checkbox("Follow mode (the grids scroll with the playing row)", &follow)) { cfg.follow = follow; changed = true; }
+    if (app::checkbox("Follow mode (the grids scroll with the playing row)", &follow)) { cfg.follow = follow; changed = true; }
     group("Graph", "Wire colours by kind of signal, and dashed control wires.");
     colour("Wire colour: audio", cfg.wireAudio);
     colour("Wire colour: control", cfg.wireControl);
     colour("Wire colour: stereo", cfg.wireStereo);
     colour("Wire colour: parameter", cfg.wireParam);
-    if (ImGui::Checkbox("Control wires are dashed", &cfg.wireDashed)) changed = true;
+    if (app::checkbox("Control wires are dashed", &cfg.wireDashed)) changed = true;
     group("Song screen", "The sequence editor.");
-    if (ImGui::Checkbox("Song overview (a strip at the right showing the whole song scaled to fit: click or drag to scroll)", &cfg.seqOverview)) changed = true;
-    if (ImGui::Checkbox("Pattern minimaps (each cell shows a small picture of its pattern)", &cfg.minimapOn)) changed = true;
+    if (app::checkbox("Song overview (a strip at the right showing the whole song scaled to fit: click or drag to scroll)", &cfg.seqOverview)) changed = true;
+    if (app::checkbox("Pattern minimaps (each cell shows a small picture of its pattern)", &cfg.minimapOn)) changed = true;
     ImGui::BeginDisabled(!cfg.minimapOn);
     ImGui::Indent(16 * scale);
-    if (ImGui::Checkbox("Note lengths (a thin line from each note to the next)", &cfg.minimapLengths)) changed = true;
-    if (ImGui::Checkbox("Note off and kill (cyan for ===, magenta for ^^^)", &cfg.minimapCaps)) changed = true;
-    if (ImGui::Checkbox("Parameters (a narrow column each at the right edge)", &cfg.minimapParams)) changed = true;
+    if (app::checkbox("Note lengths (a thin line from each note to the next)", &cfg.minimapLengths)) changed = true;
+    if (app::checkbox("Note off and kill (cyan for ===, magenta for ^^^)", &cfg.minimapCaps)) changed = true;
+    if (app::checkbox("Parameters (a narrow column each at the right edge)", &cfg.minimapParams)) changed = true;
     ImGui::Unindent(16 * scale);
     ImGui::EndDisabled();
     group("Editing", "How the cursor moves.");
-    if (ImGui::Checkbox("Sequence editor: show pattern names (off: just the two-digit number; H toggles)", &cfg.seqNames)) changed = true;
-    if (ImGui::Checkbox("Up and Down wrap round the first and last row", &cfg.rowWrap)) changed = true;
-    if (ImGui::Checkbox("Graph: dragging a node far out of its chain takes it out", &cfg.graphPullOut)) changed = true;
-    if (ImGui::Checkbox("Left and Right wrap round the first and last lane (All lanes view)", &cfg.laneWrap)) changed = true;
+    if (app::checkbox("Sequence editor: show pattern names (off: just the two-digit number; H toggles)", &cfg.seqNames)) changed = true;
+    if (app::checkbox("Up and Down wrap round the first and last row", &cfg.rowWrap)) changed = true;
+    if (app::checkbox("Graph: dragging a node far out of its chain takes it out", &cfg.graphPullOut)) changed = true;
+    if (app::checkbox("Left and Right wrap round the first and last lane (All lanes view)", &cfg.laneWrap)) changed = true;
     group("Backup", "Snapshots of the song in the preferences folder; File > Backups opens one.");
-    if (ImGui::Checkbox("Automatic backups", &cfg.backupOn)) changed = true;
+    if (app::checkbox("Automatic backups", &cfg.backupOn)) changed = true;
     ImGui::SetNextItemWidth(220 * scale);
     if (ImGui::SliderInt("Back up every (minutes)", &cfg.backupMinutes, 1, 60)) changed = true;
     ImGui::SetNextItemWidth(220 * scale);
@@ -1491,11 +1500,11 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (ImGui::SliderInt("Auto-slice: sensitivity (%)", &cfg.sliceSensitivity, 0, 100)) changed = true;
     ImGui::SetNextItemWidth(220 * scale);
     if (ImGui::SliderInt("Auto-slice: shortest gap (ms)", &cfg.sliceMinGap, 5, 500)) changed = true;
-    if (ImGui::Checkbox("Auto-slice: replace the markers in range", &cfg.sliceReplace)) changed = true;
-    if (ImGui::Checkbox("Auto-slice: operate on the whole sample", &cfg.sliceWhole)) changed = true;
-    if (ImGui::Checkbox("Waveform: hide the loop region", &cfg.waveHideLoop)) changed = true;
-    if (ImGui::Checkbox("Waveform: hide the selection", &cfg.waveHideSel)) changed = true;
-    if (ImGui::Checkbox("Waveform: hide the sustain loop region", &cfg.waveHideSus)) changed = true;
+    if (app::checkbox("Auto-slice: replace the markers in range", &cfg.sliceReplace)) changed = true;
+    if (app::checkbox("Auto-slice: operate on the whole sample", &cfg.sliceWhole)) changed = true;
+    if (app::checkbox("Waveform: hide the loop region", &cfg.waveHideLoop)) changed = true;
+    if (app::checkbox("Waveform: hide the selection", &cfg.waveHideSel)) changed = true;
+    if (app::checkbox("Waveform: hide the sustain loop region", &cfg.waveHideSus)) changed = true;
     {
       static const struct { const char* id; const char* label; } modes[] = {{"both", "both (relative and absolute)"}, {"relative", "relative: 0000 to FFFF through the sample"}, {"absolute", "absolute: the frame number"}};
       const char* shown = modes[0].label;
@@ -1874,6 +1883,21 @@ int main(int argc, char** argv) {
         if (session) session->editStatus = warning; else status = warning;
       }
       else open(file);
+    }
+    if (gRequest == DialogRequest::ClearArrangement || gRequest == DialogRequest::ClearPatterns) {   // New From Existing: the instruments and samples stay
+      const bool patterns = gRequest == DialogRequest::ClearPatterns;
+      gRequest = DialogRequest::None;
+      if (session) {
+        try {
+          Project kept = parseProject(serializeProject(session->doc->project()));   // (a copy, as the web app does: it is not an undo step)
+          if (!backupFolder().empty()) writeBackup(backupFolder(), kept.song.name, serializeProject(kept), app::settings().backupKeep, std::time(nullptr));   // (the web app snapshots 'before clear')
+          for (Lane& lane : kept.lanes) { lane.placements.clear(); if (patterns) lane.patterns.clear(); }
+          const std::string keptPath = session->path;
+          session.reset();
+          session = std::make_unique<Session>(std::move(kept), keptPath, options);
+          session->editStatus = patterns ? "Cleared every pattern and the arrangement." : "Cleared the arrangement.";
+        } catch (const std::exception& e) { status = std::string("Could not clear: ") + e.what(); }
+      }
     }
     if (gRequest == DialogRequest::New) {   // start over with an empty song (the old one is replaced: unsaved changes are lost)
       gRequest = DialogRequest::None;
