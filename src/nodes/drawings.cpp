@@ -12,6 +12,7 @@ const std::vector<DrawingInfo>& drawingsOf(const std::string& nodeType) {
       {"compass", {{"amp", "volume", "atime", true}, {"filter", "filter", "", false}}},
       {"khufu", {{"amp", "volume", "atime", true}}},
       {"pulsar", {{"sweep", "sweep", "sweepms", false}}},
+      {"twin", {{"a", "envelope 1", "time1", true}, {"b", "envelope 2", "time2", true}}},
   };
   static const std::vector<DrawingInfo> none;
   const auto found = table.find(nodeType);

@@ -5,9 +5,11 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <optional>
 
 #include "core/js_math.h"
 #include "nodes/all_nodes.h"
+#include "nodes/bezier.h"
 #include "nodes/shared_dsp.h"
 
 namespace wax {
@@ -16,7 +18,64 @@ namespace {
 enum Param {
   kDrive = 0, kTilt, kTiltFreq, kTrigger, kCut1, kRes1, kLow1, kBand1, kHigh1, kCut2, kRes2, kLow2, kBand2, kHigh2,
   kBlend, kLock, kRatio, kDetune, kTrack, kTranspose, kLfoRate, kLfoShape, kLfo1, kLfo2,
-  kFAttack, kFRelease, kFSens, kFol1, kFol2, kNoise, kFeedback, kFbSource, kMix, kLevel
+  kFAttack, kFRelease, kFSens, kFol1, kFol2, kNoise, kFeedback, kFbSource, kMix, kLevel,
+  kTime1, kTime2, kDepth1, kDepth2, kPick1, kPick2
+};
+
+enum Phase { kIdle, kRun, kHold, kRelease, kFade };
+constexpr double kFadeMin = 0.01, kFadeMax = 0.06;   // seconds
+
+// One drawn envelope played in blocks: the same behaviour as env2's, started and let go by the twin's trigger instead of by notes.
+class DrawnEnvelope {
+public:
+  DrawnEnvelope(double sampleRate, const Json* data, const char* slot) : sampleRate_(sampleRate) { set(bezier::drawingOf(data, slot)); }
+
+  void set(const bezier::Spline& points) {
+    table_ = bezier::envelopeTable(points);
+    knot_ = bezier::sustainKnot(points);
+  }
+  void start() { fresh_ = true; pendingOff_ = false; }
+  void release() { pendingOff_ = true; }
+
+  // The value over the next m samples (the drawing is len samples long), then moves on by m.
+  double step(int m, double len) {
+    if (fresh_) {
+      fresh_ = false;
+      offset_ = std::fabs(last_) > 1e-3 ? last_ - bezier::readEnvelope(table_, 0) : 0;
+      phase_ = kRun; pos_ = 0;
+    }
+    if (phase_ == kIdle) return 0;
+    if (pendingOff_) {
+      pendingOff_ = false;
+      if (knot_ && phase_ == kRun) {   // ended before the knot: a straight fade from here to the last anchor's level
+        fadeLen_ = fadeLeft_ = jsRound(std::min(kFadeMax, std::max(kFadeMin, (1 - knot_->x) * len / sampleRate_)) * sampleRate_);
+        fadeFrom_ = shape_;
+        phase_ = kFade;
+      } else if (knot_ && phase_ == kHold) { pos_ = knot_->x * len; phase_ = kRelease; }
+    }
+    double x = pos_ / len;
+    if (phase_ == kRun && knot_ && x >= knot_->x) { phase_ = kHold; pos_ = knot_->x * len; x = knot_->x; }
+    if (phase_ == kFade) {
+      const double end = table_[bezier::kEnvPoints];
+      shape_ = end + (fadeFrom_ - end) * (fadeLeft_ / fadeLen_);
+      fadeLeft_ = std::max(0.0, fadeLeft_ - m);
+    } else {
+      shape_ = bezier::readEnvelope(table_, x);
+    }
+    last_ = shape_;
+    offset_ *= js::exp(-m / (0.002 * sampleRate_));
+    if (std::fabs(offset_) < 1e-9) offset_ = 0;
+    if (phase_ == kRun || phase_ == kRelease) pos_ += m;
+    return last_ + offset_;
+  }
+
+private:
+  double sampleRate_;
+  bezier::Table table_;
+  std::optional<bezier::Knot> knot_;
+  int phase_ = kIdle;
+  double pos_ = 0, shape_ = 0, last_ = 0, offset_ = 0, fadeFrom_ = 0, fadeLeft_ = 0, fadeLen_ = 1;
+  bool fresh_ = false, pendingOff_ = false;
 };
 
 // smooth tanh-like, exact at +-3
@@ -27,11 +86,17 @@ public:
   explicit TwinFilter(const NodeContext& context)
       : sr_(context.sampleRate),
         cs_(1 - js::exp(-4 / (context.sampleRate * 0.004))),
+        envA_(context.sampleRate, context.data, "a"), envB_(context.sampleRate, context.data, "b"),
         mod1On_(context.connected.size() > 1 && context.connected[1]),
         mod2On_(context.connected.size() > 2 && context.connected[2]),
         pLowCoef_(1 - js::exp(-2 * kPi * 1500 / context.sampleRate)),
         minPeriod_(context.sampleRate / 2000),
         maxPeriod_(context.sampleRate / 40) {}
+
+  void data(const Json& data) override {
+    envA_.set(bezier::drawingOf(&data, "a"));
+    envB_.set(bezier::drawingOf(&data, "b"));
+  }
 
   void process(const float* const* inputs, float* const* outputs, int n, const float* params, const int* slots) override {
     const float* input = inputs[0];
@@ -66,6 +131,9 @@ public:
     const double k1 = 2 - 2.04 * res1, kb1 = std::max(k1, 0.02), k2 = 2 - 2.04 * res2, kb2 = std::max(k2, 0.02);
     const double kick1 = res1 > 0.97 ? 1e-5 : 0, kick2 = res2 > 0.97 ? 1e-5 : 0;
     const double wetLevel = 1 / (1 + blend);
+    const double lenA = std::max(1.0, P(kTime1) * 0.001 * sr), lenB = std::max(1.0, P(kTime2) * 0.001 * sr);
+    const double depthA = P(kDepth1), depthB = P(kDepth2);
+    const bool pickA = jsRoundInt(P(kPick1)) == 1, pickB = jsRoundInt(P(kPick2)) == 1;
     for (int i = 0; i < n; i += 4) {
       const int m = std::min(4, n - i);
       double lfo;
@@ -77,12 +145,15 @@ public:
       lfoPhase_ += lfoStep;
       if (lfoPhase_ >= 1) lfoPhase_ -= std::floor(lfoPhase_);
       const double db = 20 * js::log10(env_ + 1e-9);
+      if (armed_) { if (db >= trigger) { armed_ = false; envA_.start(); envB_.start(); } }
+      else if (db < trigger - 6) { armed_ = true; envA_.release(); envB_.release(); }
+      const double shapeA = envA_.step(m, lenA), shapeB = envB_.step(m, lenB);
       const double level01 = std::min(std::max((db - trigger) / 30 * (0.5 + sens), 0.0), 1.5);
       double tracked = 0;
       if (track && pitchSeen_) tracked = std::min(std::max(pitch_ * transpose, 20.0), 18000.0);
       const double base1 = tracked > 0 && lock ? tracked / ratio : cut1;
-      const double o1 = std::max(-8.0, std::min(8.0, (mod1On_ ? static_cast<double>(mod1[i]) : 0.0) + lfo * lfo1 + level01 * fol1));
-      const double o2 = std::max(-8.0, std::min(8.0, (mod2On_ ? static_cast<double>(mod2[i]) : 0.0) + lfo * lfo2 + level01 * fol2));
+      const double o1 = std::max(-8.0, std::min(8.0, (mod1On_ ? static_cast<double>(mod1[i]) : 0.0) + lfo * lfo1 + level01 * fol1 + (pickA ? shapeB : shapeA) * depthA));
+      const double o2 = std::max(-8.0, std::min(8.0, (mod2On_ ? static_cast<double>(mod2[i]) : 0.0) + lfo * lfo2 + level01 * fol2 + (pickB ? shapeB : shapeA) * depthB));
       const double t1 = base1 * js::pow(2, o1);
       const double t2 = lock ? t1 * ratio * detune * js::pow(2, o2) : (tracked > 0 ? tracked : cut2) * detune * js::pow(2, o2);
       if (fc1_ < 0) { fc1_ = t1; fc2_ = t2; }
@@ -155,6 +226,8 @@ private:
   }
 
   double sr_, cs_;
+  DrawnEnvelope envA_, envB_;
+  bool armed_ = true;
   bool mod1On_, mod2On_;
   double pLowCoef_, minPeriod_, maxPeriod_;
   double attackRate_ = 0, releaseRate_ = 0;
@@ -212,6 +285,12 @@ void registerTwinFilter(NodeRegistry& registry) {
     {"fbsource", 0, 1, 0, true},
     {"mix", 0, 1, 1},
     {"level", 0, 2, 1},
+    {"time1", 1, 20000, 400},
+    {"time2", 1, 20000, 400},
+    {"depth1", -4, 4, 0},
+    {"depth2", -4, 4, 0},
+    {"pick1", 0, 1, 0, true},
+    {"pick2", 0, 1, 1, true},
   };
   type.create = [](const NodeContext& context) { return std::make_unique<TwinFilter>(context); };
   registry.add(std::move(type));
