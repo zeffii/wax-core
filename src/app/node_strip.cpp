@@ -20,7 +20,7 @@ namespace {
 
 constexpr float kGripHeight = 6;                         // points
 constexpr float kHideBelow = 20, kMinShown = 60;         // web pixels: under the first the strip hides; the strip is never shorter than the second
-constexpr float kDefaultHeight = 170;                    // web pixels
+constexpr float kDefaultHeight = 170, kTallHeight = 380;  // web pixels: the strip's usual height, and what a double-click on the grip opens it to from there
 constexpr float kBarsWidth = 168, kBarNameWidth = 64;    // the parameter bars (web pixels)
 constexpr float kDrawingWidth = 200;                     // one drawing's canvas
 constexpr float kHitCellWidth = 330;                     // a cell of the drawn-hit grid (a drawing or a hit)
@@ -61,7 +61,12 @@ void drawGrip(NodeStripState& state, ImVec2 at, float width, float scale) {
     }
   }
   if (ImGui::IsItemDeactivated()) saveSettings();
-  if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) { cfg.stripShown = true; cfg.stripHeight = kDefaultHeight; saveSettings(); }
+  if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {   // a double-click: the usual height, and from there the tall one (the big pictures and the drawn-hit grids need the room), then back
+    const bool usual = cfg.stripShown && std::fabs(cfg.stripHeight - kDefaultHeight) < 1;
+    cfg.stripShown = true;
+    cfg.stripHeight = usual ? kTallHeight : kDefaultHeight;
+    saveSettings();
+  }
   ImDrawList* draw = ImGui::GetWindowDrawList();
   const float y = std::floor(at.y) + 0.5f;
   draw->AddLine(ImVec2(at.x, y), ImVec2(at.x + width, y), kAccent, 1.0f);
