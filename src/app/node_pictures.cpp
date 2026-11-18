@@ -195,8 +195,8 @@ void drawHaas(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeTyp
   const float laneTop = f.y0 + 54 * scale, laneBottom = f.y0 + 94 * scale;   // left lane on top
   for (const float y : {laneTop, laneBottom}) dl->AddLine(ImVec2(f.x0 + PL, y), ImVec2(f.x0 + f.w - PR, y), textAlpha(64));
   for (int t = 0; t <= kMaxMs; t += 5) { std::snprintf(text, sizeof text, "%d", t); dl->AddText(font, f.size, ImVec2(X(t) - 4 * scale, f.y0 + top - 6 * scale), textAlpha(120), text); }
-  dl->AddText(font, f.size, ImVec2(f.x0 + 12 * scale, laneTop - 14 * scale), kBlue, "L");
-  dl->AddText(font, f.size, ImVec2(f.x0 + 12 * scale, laneBottom - 14 * scale), kPink, "R");
+  dl->AddText(font, f.size, ImVec2(f.x0 + 12 * scale, laneTop - 21 * scale), kBlue, "L");
+  dl->AddText(font, f.size, ImVec2(f.x0 + 12 * scale, laneBottom - 21 * scale), kPink, "R");
   const auto pulse = [&](float x, float y, double level, ImU32 colour) {
     const float tip = y - 26 * scale * static_cast<float>(std::clamp(level, 0.0, 1.2));
     dl->AddLine(ImVec2(x, y), ImVec2(x, tip), colour, 3 * scale);
