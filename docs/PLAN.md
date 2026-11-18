@@ -115,7 +115,7 @@ Single letters are not used on the canvas (they are piano keys): types and the k
 canvas has been clicked. Still to do: drawings of the other nodes (see drawings.cpp), a larger/undocked layout, the web's per-node views.
 Test helpers: `wax-app song.wax --null --envelope inst.node --clicks "x,y;x,y" --press "..." --screenshot out.bmp`.
 
-- DX loader window (`app/dx_window`): flat tabs voice / operator / scaling / lfo and pitch, opened from "edit voice" on a dvii node (`--dx inst.node` headless). Edits repack the voice into data.bank (SetBank, live). Still to do: bank tab (load/save .syx, names, search, swap, compare), voice names.
+- DX loader window (`app/dx_window`): one screen (algorithm and thumbnails, operator envelope, operator + scaling sliders, LFO, pitch envelope), opened from "edit voice" on a dvii node (`--dx inst.node` headless). Edits repack the voice into data.bank (SetBank, live). Still to do: bank tab (load/save .syx, names, search, swap, compare), voice names.
 
 - Graph view (`app/graph_view`): tiles + wires of the lane's instrument above the param panel; click picks the node, drag moves it (MoveNode, saved as x/y). Wiring: pull from a tile's right dot to another tile to connect (first free ports), click the dot on a wire to cut it, right-click a tile to delete it; all undoable and sent live (Connect/Disconnect/DeleteNode, `Engine::sendGraph`: the instrument is recompiled on the window thread and swapped in at a block start; notes sounding in it are cut). Add node: right-click empty space in the graph for a filtered list of types (AddNode, live: its parameter slots are allocated when the instrument is recompiled). Still to do: choosing ports on multi-port nodes, tile shapes by role from the web, zoom/pan.
 

@@ -140,11 +140,139 @@ bool envelopeGraph(const char* id, int rate[4], int level[4], int& held, ImVec2 
 }  // namespace
 
 void showDx(DxWindow& window, const std::string& instrument, const std::string& node) {
-  if (window.instrument != instrument || window.node != node) { window.tab = 0; window.op = 0; }
+  if (window.instrument != instrument || window.node != node) window.op = 0;
   window.instrument = instrument;
   window.node = node;
   window.open = true;
 }
+
+namespace {
+
+// What the sections of the window share: the voice being edited (changed in place), whether a slider is being dragged, and the scale.
+struct Edit {
+  DxWindow& window;
+  Document& doc;
+  dx7::Voice& voice;
+  float scale;
+  bool active = false;     // a slider or an envelope point is being dragged
+  bool changed = false;    // a parameter outside the bank changed
+
+  // an integer slider on the voice; `width` in web pixels
+  void slide(const char* id, const char* label, int& value, int lo, int hi, float width = 118) {
+    double v = value;
+    SliderSpec spec; spec.min = lo; spec.max = hi; spec.def = lo; spec.isInt = true; spec.width = width;
+    const SliderResult r = slider(id, label, v, spec);
+    value = static_cast<int>(std::lround(v));
+    active = active || r.active;
+  }
+  void next() const { ImGui::SameLine(0, 16 * scale); }
+};
+
+// voice number, feedback, algorithm and transpose in a row
+void voiceRow(Edit& e, int current) {
+  double voiceNo = current;
+  SliderSpec spec; spec.min = 0; spec.max = dx7::kVoices - 1; spec.def = 0; spec.isInt = true; spec.width = 120;
+  if (slider("dx_voice", "voice", voiceNo, spec).changed) {
+    e.doc.apply(std::make_unique<SetParam>(e.window.instrument, e.window.node, "voice", voiceNo), e.window.dragging);
+    e.changed = true;
+  }
+  e.next(); e.slide("dx_fb", "feedback", e.voice.fb, 0, 7);
+  e.next(); e.slide("dx_alg", "algorithm", e.voice.alg, 0, 31, 120);
+  e.next(); e.slide("dx_trnsp", "transpose", e.voice.trnsp, 0, 48);
+}
+
+// the six operators as numbers, flat: click mutes, right-click solos; and a click on one in the picture picks it to edit
+void muteSoloRow(Edit& e, int mute, int solo) {
+  ImGui::TextUnformatted("operators"); ImGui::SameLine(0, 14 * e.scale);
+  for (int i = 0; i < 6; i++) {
+    const bool muted = (mute >> i) & 1, soloed = (solo >> i) & 1;
+    ImGui::PushStyleColor(ImGuiCol_Text, soloed ? colour(kWarm) : muted ? colour(kDimText) : colour(kAccent));
+    ImGui::Text("%d", i + 1);
+    ImGui::PopStyleColor();
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) { e.doc.apply(std::make_unique<SetParam>(e.window.instrument, e.window.node, "mute", static_cast<double>(mute ^ (1 << i)))); e.changed = true; }
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) { e.doc.apply(std::make_unique<SetParam>(e.window.instrument, e.window.node, "solo", static_cast<double>(solo ^ (1 << i)))); e.changed = true; }
+    ImGui::SameLine(0, 14 * e.scale);
+  }
+  ImGui::NewLine();
+}
+
+// the big picture of the algorithm, the picked operator lit, with the 32 thumbnails (current one lit) beside it
+void algorithmSection(Edit& e) {
+  const float scale = e.scale, pw = 200 * scale, ph = 150 * scale;
+  const ImVec2 origin = ImGui::GetCursorScreenPos();
+  ImDrawList* dl = ImGui::GetWindowDrawList();
+  drawAlgorithm(dl, e.voice.alg, origin, ImVec2(origin.x + pw, origin.y + ph), scale, e.window.op, kSoft);
+  ImGui::InvisibleButton("dx_picture", ImVec2(pw, ph));
+  if (ImGui::IsItemClicked()) {
+    int rows = 1;
+    const auto at = layoutAlgorithm(dx7::algorithms()[static_cast<std::size_t>(e.voice.alg)], rows);
+    const float r = 8 * scale, w = pw - 4 * r, h = ph - 4 * r;
+    float best = 16 * scale;
+    for (int i = 0; i < 6; i++) {
+      const float x = origin.x + 2 * r + at[static_cast<std::size_t>(i)].x * w, y = origin.y + 2 * r + at[static_cast<std::size_t>(i)].y * h;
+      const float d = std::hypot(ImGui::GetIO().MousePos.x - x, ImGui::GetIO().MousePos.y - y);
+      if (d < best) { best = d; e.window.op = i; }
+    }
+  }
+  ImGui::SameLine(0, 16 * scale);
+  ImGui::BeginGroup();
+  const float tw = 34 * scale, th = 26 * scale, gap = 4 * scale;
+  const ImVec2 top = ImGui::GetCursorScreenPos();
+  for (int a = 0; a < 32; a++) {
+    const ImVec2 min(top.x + static_cast<float>(a % 8) * (tw + gap), top.y + static_cast<float>(a / 8) * (th + gap));
+    ImGui::SetCursorScreenPos(min);
+    ImGui::PushID(a);
+    if (ImGui::InvisibleButton("alg", ImVec2(tw, th))) e.voice.alg = a;
+    ImGui::PopID();
+    drawAlgorithm(dl, a, min, ImVec2(min.x + tw, min.y + th), scale * 0.38f, -1, a == e.voice.alg ? kAccent : kDimText);
+  }
+  ImGui::SetCursorScreenPos(ImVec2(top.x, top.y + 4 * (th + gap)));
+  ImGui::Dummy(ImVec2(1, 1));
+  ImGui::EndGroup();
+}
+
+// the picked operator: its pitch and level settings and its level scaling, two sliders to a row
+void operatorSection(Edit& e) {
+  dx7::Op& op = e.voice.ops[e.window.op];
+  ImGui::TextUnformatted("operator"); ImGui::SameLine(0, 14 * e.scale);
+  for (int i = 0; i < 6; i++) {
+    if (textButton(std::to_string(i + 1).c_str(), e.window.op == i)) e.window.op = i;
+    ImGui::SameLine(0, 14 * e.scale);
+  }
+  ImGui::NewLine();
+  // three sliders to a row; the curve sliders carry the name of the curve in their label
+  const char* curves[] = {"-lin", "-exp", "+exp", "+lin"};
+  const std::string leftCurve = std::string("left ") + curves[std::clamp(op.lc, 0, 3)], rightCurve = std::string("right ") + curves[std::clamp(op.rc, 0, 3)], breakPoint = "break " + noteName(op.bp);
+  e.slide("dx_mode", "fixed freq", op.mode, 0, 1);   e.next(); e.slide("dx_fc", "coarse", op.fc, 0, 31);              e.next(); e.slide("dx_ff", "fine", op.ff, 0, 99);
+  e.slide("dx_det", "detune", op.det, 0, 14);        e.next(); e.slide("dx_ol", "output level", op.ol, 0, 99);       e.next(); e.slide("dx_kvs", "velocity sens", op.kvs, 0, 7);
+  e.slide("dx_rs", "rate scaling", op.rs, 0, 7);     e.next(); e.slide("dx_ams", "amp mod sens", op.ams, 0, 3);      e.next(); e.slide("dx_bp", breakPoint.c_str(), op.bp, 0, 99);
+  e.slide("dx_ld", "left depth", op.ld, 0, 99);      e.next(); e.slide("dx_lc", leftCurve.c_str(), op.lc, 0, 3);     e.next(); e.slide("dx_rd", "right depth", op.rd, 0, 99);
+  e.slide("dx_rc", rightCurve.c_str(), op.rc, 0, 3);
+}
+
+// the picked operator's envelope, drawn and dragged
+void operatorEnvelope(Edit& e, float width) {
+  dx7::Op& op = e.voice.ops[e.window.op];
+  int held = e.window.dragPoint;
+  if (envelopeGraph("dx_env", op.r, op.l, held, ImVec2(width, 110 * e.scale), false)) e.active = true;
+  e.window.dragPoint = held;
+  if (held >= 0) e.active = true;
+}
+
+// the voice's LFO and its pitch envelope
+void lfoAndPitchSection(Edit& e, float width) {
+  ImGui::TextUnformatted("lfo");
+  e.slide("dx_lfw", "wave", e.voice.lfw, 0, 5);          e.next(); e.slide("dx_lfs", "speed", e.voice.lfs, 0, 99);           e.next(); e.slide("dx_lfd", "delay", e.voice.lfd, 0, 99);
+  e.slide("dx_lpmd", "pitch depth", e.voice.lpmd, 0, 99); e.next(); e.slide("dx_pms", "pitch sens", e.voice.pms, 0, 7);       e.next(); e.slide("dx_lamd", "amp depth", e.voice.lamd, 0, 99);
+  e.slide("dx_lks", "key sync", e.voice.lks, 0, 1);       e.next(); e.slide("dx_oks", "osc key sync", e.voice.oks, 0, 1);
+  ImGui::TextUnformatted("pitch envelope (50 = no change)");
+  int held = e.window.dragPitchPoint;
+  if (envelopeGraph("dx_penv", e.voice.pr, e.voice.pl, held, ImVec2(width, 90 * e.scale), true)) e.active = true;
+  e.window.dragPitchPoint = held;
+  if (held >= 0) e.active = true;
+}
+
+}  // namespace
 
 bool drawDxWindow(DxWindow& window, Document& doc, const Engine& engine) {
   if (!window.open) return false;
@@ -152,8 +280,8 @@ bool drawDxWindow(DxWindow& window, Document& doc, const Engine& engine) {
   if (!node || node->type != "dvii") { window.open = false; return false; }
 
   const float scale = ImGui::GetStyle().FontScaleDpi;
-  ImGui::SetNextWindowSize(ImVec2(760 * scale, 430 * scale), ImGuiCond_FirstUseEver);
-  ImGui::SetNextWindowPos(ImVec2(200 * scale, 90 * scale), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(1000 * scale, 640 * scale), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowPos(ImVec2(120 * scale, 40 * scale), ImGuiCond_FirstUseEver);
   const std::string title = "DX loader  " + window.instrument + "." + window.node + "###dx";
   bool changed = false;
   if (ImGui::Begin(title.c_str(), &window.open)) {
@@ -164,140 +292,27 @@ bool drawDxWindow(DxWindow& window, Document& doc, const Engine& engine) {
     const int current = std::clamp(static_cast<int>(std::lround(paramNow("voice", 0))), 0, dx7::kVoices - 1);
     std::vector<int> bank = bankOf(*node);
     dx7::Voice voice = dx7::unpackVoice(bank, static_cast<std::size_t>(current) * 128);
-    dx7::Voice before = voice;
+    const dx7::Voice before = voice;
+    Edit e{window, doc, voice, scale};
 
-    // the tabs
-    const char* tabs[] = {"voice", "operator", "scaling", "lfo and pitch"};
-    for (int i = 0; i < 4; i++) {
-      if (textButton(tabs[i], window.tab == i)) window.tab = i;
-      ImGui::SameLine(0, 18 * scale);
-    }
-    ImGui::NewLine();
-    ImGui::Separator();
-
-    bool active = false;
-    auto sl = [&](const char* id, const char* label, int& value, int lo, int hi, float width = 150) {
-      double v = value;
-      SliderSpec spec; spec.min = lo; spec.max = hi; spec.def = lo; spec.isInt = true; spec.width = width;
-      const SliderResult r = slider(id, label, v, spec);
-      value = static_cast<int>(std::lround(v));
-      active = active || r.active;
-    };
-
-    dx7::Op& op = voice.ops[window.op];
-    if (window.tab == 0) {
-      // voice number and the global sliders
-      double voiceNo = current;
-      SliderSpec vs; vs.min = 0; vs.max = dx7::kVoices - 1; vs.def = 0; vs.isInt = true; vs.width = 150;
-      if (slider("dx_voice", "voice", voiceNo, vs).changed) {
-        doc.apply(std::make_unique<SetParam>(window.instrument, window.node, "voice", voiceNo), window.dragging);
-        changed = true;
-      }
-      ImGui::SameLine(0, 24 * scale);
-      sl("dx_fb", "feedback", voice.fb, 0, 7);
-      ImGui::SameLine(0, 24 * scale);
-      sl("dx_alg", "algorithm", voice.alg, 0, 31);
-
-      // the picture of the algorithm, big, with the operators lit as picked; click one to edit it
-      const float pic = 190 * scale;
-      const ImVec2 origin = ImGui::GetCursorScreenPos();
-      ImDrawList* dl = ImGui::GetWindowDrawList();
-      drawAlgorithm(dl, voice.alg, origin, ImVec2(origin.x + pic * 1.3f, origin.y + pic), scale, window.op, kSoft);
-      ImGui::InvisibleButton("dx_picture", ImVec2(pic * 1.3f, pic));
-      if (ImGui::IsItemClicked()) {
-        int rows = 1;
-        const auto at = layoutAlgorithm(dx7::algorithms()[static_cast<std::size_t>(voice.alg)], rows);
-        const float r = 8 * scale, w = pic * 1.3f - 4 * r, h = pic - 4 * r;
-        float best = 16 * scale;
-        for (int i = 0; i < 6; i++) {
-          const float x = origin.x + 2 * r + at[static_cast<std::size_t>(i)].x * w, y = origin.y + 2 * r + at[static_cast<std::size_t>(i)].y * h;
-          const float d = std::hypot(ImGui::GetIO().MousePos.x - x, ImGui::GetIO().MousePos.y - y);
-          if (d < best) { best = d; window.op = i; }
-        }
-      }
-      // the 32 algorithm thumbnails, 8 across, the current one lit
-      ImGui::SameLine(0, 20 * scale);
-      ImGui::BeginGroup();
-      ImGui::Dummy(ImVec2(0, 0));
-      const float tw = 48 * scale, th = 38 * scale;
-      const ImVec2 top = ImGui::GetCursorScreenPos();
-      for (int a = 0; a < 32; a++) {
-        const ImVec2 min(top.x + static_cast<float>(a % 8) * (tw + 6 * scale), top.y + static_cast<float>(a / 8) * (th + 6 * scale));
-        ImGui::SetCursorScreenPos(min);
-        ImGui::PushID(a);
-        if (ImGui::InvisibleButton("alg", ImVec2(tw, th))) voice.alg = a;
-        ImGui::PopID();
-        const bool on = a == voice.alg;
-        drawAlgorithm(dl, a, min, ImVec2(min.x + tw, min.y + th), scale * 0.5f, -1, on ? kAccent : kDimText);
-      }
-      ImGui::SetCursorScreenPos(ImVec2(top.x, top.y + 4 * (th + 6 * scale)));
-      ImGui::Dummy(ImVec2(1, 1));
-      ImGui::EndGroup();
-
-      // mute and solo: the six operators as numbers, flat; click mutes, right-click solos
-      const int mute = static_cast<int>(std::lround(paramNow("mute", 0))), solo = static_cast<int>(std::lround(paramNow("solo", 0)));
-      ImGui::TextUnformatted("operators"); ImGui::SameLine(0, 14 * scale);
-      for (int i = 0; i < 6; i++) {
-        const bool muted = (mute >> i) & 1, soloed = (solo >> i) & 1;
-        ImGui::PushStyleColor(ImGuiCol_Text, soloed ? colour(kWarm) : muted ? colour(kDimText) : colour(kAccent));
-        ImGui::Text("%d", i + 1);
-        ImGui::PopStyleColor();
-        if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) { doc.apply(std::make_unique<SetParam>(window.instrument, window.node, "mute", static_cast<double>(mute ^ (1 << i)))); changed = true; }
-        if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) { doc.apply(std::make_unique<SetParam>(window.instrument, window.node, "solo", static_cast<double>(solo ^ (1 << i)))); changed = true; }
-        ImGui::SameLine(0, 14 * scale);
-      }
-      ImGui::NewLine();
-      ImGui::PushStyleColor(ImGuiCol_Text, colour(kDimText));
-      ImGui::TextUnformatted("click an operator in the picture to edit it - click a number to mute it, right-click to solo it");
-      ImGui::PopStyleColor();
-    } else if (window.tab == 3) {
-      sl("dx_lfw", "wave", voice.lfw, 0, 5);
-      ImGui::SameLine(0, 18 * scale); sl("dx_lfs", "speed", voice.lfs, 0, 99);
-      ImGui::SameLine(0, 18 * scale); sl("dx_lfd", "delay", voice.lfd, 0, 99);
-      ImGui::SameLine(0, 18 * scale); sl("dx_lpmd", "pitch depth", voice.lpmd, 0, 99);
-      sl("dx_pms", "pitch sens", voice.pms, 0, 7);
-      ImGui::SameLine(0, 18 * scale); sl("dx_lamd", "amp depth", voice.lamd, 0, 99);
-      ImGui::SameLine(0, 18 * scale); sl("dx_lks", "key sync", voice.lks, 0, 1);
-      ImGui::SameLine(0, 18 * scale); sl("dx_oks", "osc key sync", voice.oks, 0, 1);
-      sl("dx_trnsp", "transpose", voice.trnsp, 0, 48);
-      ImGui::TextUnformatted("pitch envelope (50 = no change)");
-      int held = window.dragPitchPoint;
-      if (envelopeGraph("dx_penv", voice.pr, voice.pl, held, ImVec2(ImGui::GetContentRegionAvail().x, 120 * scale), true)) active = true;
-      window.dragPitchPoint = held;
-      if (held >= 0) active = true;
-    } else {
-      // operator picker, flat numbers
-      ImGui::TextUnformatted("operator"); ImGui::SameLine(0, 14 * scale);
-      for (int i = 0; i < 6; i++) {
-        if (textButton(std::to_string(i + 1).c_str(), window.op == i)) window.op = i;
-        ImGui::SameLine(0, 14 * scale);
-      }
-      ImGui::NewLine();
-      if (window.tab == 1) {
-        sl("dx_mode", "fixed freq", op.mode, 0, 1);
-        ImGui::SameLine(0, 18 * scale); sl("dx_fc", "coarse", op.fc, 0, 31);
-        ImGui::SameLine(0, 18 * scale); sl("dx_ff", "fine", op.ff, 0, 99);
-        ImGui::SameLine(0, 18 * scale); sl("dx_det", "detune", op.det, 0, 14);
-        sl("dx_ol", "output level", op.ol, 0, 99);
-        ImGui::SameLine(0, 18 * scale); sl("dx_kvs", "velocity sens", op.kvs, 0, 7);
-        ImGui::SameLine(0, 18 * scale); sl("dx_rs", "rate scaling", op.rs, 0, 7);
-        ImGui::SameLine(0, 18 * scale); sl("dx_ams", "amp mod sens", op.ams, 0, 3);
-        int held = window.dragPoint;
-        if (envelopeGraph("dx_env", op.r, op.l, held, ImVec2(ImGui::GetContentRegionAvail().x, 130 * scale), false)) active = true;
-        window.dragPoint = held;
-        if (held >= 0) active = true;
-      } else {
-        const char* curves[] = {"-lin", "-exp", "+exp", "+lin"};
-        sl("dx_bp", "break point", op.bp, 0, 99);
-        ImGui::SameLine(0, 10 * scale); ImGui::TextColored(colour(kWarm), "%s", noteName(op.bp).c_str());
-        sl("dx_ld", "left depth", op.ld, 0, 99);
-        ImGui::SameLine(0, 18 * scale); sl("dx_lc", "left curve", op.lc, 0, 3, 110);
-        ImGui::SameLine(0, 6 * scale); ImGui::TextColored(colour(kDimText), "%s", curves[std::clamp(op.lc, 0, 3)]);
-        sl("dx_rd", "right depth", op.rd, 0, 99);
-        ImGui::SameLine(0, 18 * scale); sl("dx_rc", "right curve", op.rc, 0, 3, 110);
-        ImGui::SameLine(0, 6 * scale); ImGui::TextColored(colour(kDimText), "%s", curves[std::clamp(op.rc, 0, 3)]);
-      }
-    }
+    // everything on one screen: the voice and its algorithm on the left with the operator's envelope under it,
+    // the operator's settings and the LFO on the right
+    voiceRow(e, current);
+    muteSoloRow(e, static_cast<int>(std::lround(paramNow("mute", 0))), static_cast<int>(std::lround(paramNow("solo", 0))));
+    const float leftWidth = 520 * scale;
+    ImGui::BeginGroup();
+    algorithmSection(e);
+    ImGui::TextUnformatted("operator envelope");
+    operatorEnvelope(e, leftWidth);
+    ImGui::EndGroup();
+    ImGui::SameLine(0, 24 * scale);
+    ImGui::BeginGroup();
+    operatorSection(e);
+    ImGui::Dummy(ImVec2(0, 6 * scale));
+    lfoAndPitchSection(e, 380 * scale);
+    ImGui::EndGroup();
+    changed = e.changed;
+    bool active = e.active;
 
     // the edited voice goes back into the bank
     const bool voiceChanged = std::memcmp(&before, &voice, sizeof(dx7::Voice)) != 0;
