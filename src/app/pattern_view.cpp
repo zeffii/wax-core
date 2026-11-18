@@ -115,6 +115,8 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
   const int beat = std::max(1, ticksPerBeat), bar = beat * std::max(1, beatsPerBar);
   ImGuiListClipper clipper;
   float playY = -1;   // screen y of the playing row's top, when it was drawn
+  float loopTopY = -1, loopBottomY = -1;   // screen y of the loop's first row's top and last row's bottom, when drawn
+  const ImU32 loopYellow = IM_COL32(240, 200, 60, 255);
   int firstTick = -1, lastTick = -1; float firstY = 0, lastY = 0;   // the first and last rows drawn, to measure the pitch
   clipper.Begin(std::max(0, endRow - firstRow));
   if (cursor.show && cursor.scrollTo && cursor.tick >= firstRow && cursor.tick < endRow) clipper.IncludeItemByIndex(cursor.tick - firstRow);
@@ -131,7 +133,9 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
       if (cursor.loop && tick >= cursor.loopStart && tick < cursor.loopEnd) {   // the loop: a bar down the row-number column, ends marked
         const ImVec2 at = ImGui::GetCursorScreenPos();
         const float rowH = ImGui::GetTextLineHeightWithSpacing();
-        const ImU32 mark = cursor.loopOn ? kAccent : lineAlpha(140);
+        const ImU32 mark = cursor.loopOn ? loopYellow : withAlpha(loopYellow, 110);   // (switched off: the same yellow, faint)
+        if (tick == cursor.loopStart) loopTopY = at.y - 1;
+        if (tick == cursor.loopEnd - 1) loopBottomY = at.y + rowH - 1;
         ImDrawList* dl = ImGui::GetWindowDrawList();
         dl->AddRectFilled(ImVec2(at.x - 3, at.y - 1), ImVec2(at.x - 1, at.y + rowH - 1), mark);
         if (tick == cursor.loopStart) dl->AddRectFilled(ImVec2(at.x - 3, at.y - 1), ImVec2(at.x + 8, at.y + 1), mark);
@@ -215,8 +219,29 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
     draw->AddLine(ImVec2(from.x, y), ImVec2(from.x + ImGui::GetWindowWidth(), y), IM_COL32(230, 60, 60, 255), 1.0f);
     draw->PopClipRect();
   }
+  // (the table clips what is drawn inside it to part of its width, and the window to the other part: the lines are drawn in both places)
+  if (loopTopY >= 0 || loopBottomY >= 0) {   // the loop's limits: a yellow line across the table at its start and at its end
+    const ImVec2 from = ImGui::GetWindowPos();
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const float headerBottom = from.y + rowHeight * 1.5f;
+    const ImU32 yellow = cursor.loopOn ? loopYellow : withAlpha(loopYellow, 110);
+    draw->PushClipRect(ImVec2(from.x, headerBottom), ImVec2(from.x + ImGui::GetWindowWidth(), from.y + ImGui::GetWindowHeight()), false);
+    for (const float y : {loopTopY, loopBottomY})
+      if (y >= 0) draw->AddLine(ImVec2(from.x, y), ImVec2(from.x + ImGui::GetWindowWidth(), y), yellow, std::max(1.0f, ImGui::GetStyle().FontScaleDpi));
+    draw->PopClipRect();
+  }
   ImGui::PopStyleColor(3);
   ImGui::EndTable();
+  if (loopTopY >= 0 || loopBottomY >= 0) {   // the loop's limits: a yellow line across the table at its start and at its end
+    const ImVec2 from = ImGui::GetWindowPos();
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    const float headerBottom = from.y + rowHeight * 1.5f;
+    const ImU32 yellow = cursor.loopOn ? loopYellow : withAlpha(loopYellow, 110);
+    draw->PushClipRect(ImVec2(from.x, headerBottom), ImVec2(from.x + ImGui::GetWindowWidth(), from.y + ImGui::GetWindowHeight()), false);
+    for (const float y : {loopTopY, loopBottomY})
+      if (y >= 0) draw->AddLine(ImVec2(from.x, y), ImVec2(from.x + ImGui::GetWindowWidth(), y), yellow, std::max(1.0f, ImGui::GetStyle().FontScaleDpi));
+    draw->PopClipRect();
+  }
   if (!cursor.info.empty()) {   // the line under the grid: a small face, so a long description fits
     ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 0.85f);
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(kDimText), "%s", cursor.info.c_str());
