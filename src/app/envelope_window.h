@@ -7,6 +7,7 @@
 
 #include "app/envelope_editor.h"
 #include "edit/document.h"
+#include "nodes/drawings.h"
 #include "engine/engine.h"
 
 namespace wax::app {
@@ -22,6 +23,10 @@ struct EnvelopeWindow {
     return false;
   }
 };
+
+// What the canvas needs to know about one drawing of a node: its title, whether it has a sustain knot and how long it takes (the node's time
+// parameter as it sounds now).
+EnvelopeSpec envelopeSpecFor(const GraphNode& node, const DrawingInfo& info, const Engine& engine, const std::string& instrumentId);
 
 // Shows the drawings of a node in the window.
 void showEnvelopes(EnvelopeWindow& window, const std::string& instrument, const std::string& node);

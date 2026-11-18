@@ -1,5 +1,6 @@
 #include "app/graph_view.h"
 #include "app/node_envelope.h"
+#include "app/node_strip.h"
 #include "app/node_pictures.h"
 #include "app/node_response.h"
 
@@ -872,6 +873,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
   for (const GraphNode& n : graph.nodes) {
     const auto found = tiles.find(n.id);
     if (found == tiles.end() || !(n.keepView || n.id == picked)) continue;
+    if (settings().stripShown && hasStripUi(n.type)) continue;   // the node strip along the bottom shows its pictures
     if (hasResponse(n.type)) drawNodeResponse(dl, font, n, *found->second.type, found->second.min, found->second.max, dl->GetClipRectMin(), dl->GetClipRectMax(), scale, state.response);
     float below = 0;   // a node with a picture and envelopes: the envelopes go under the picture
     if (hasPicture(n.type)) below = drawNodePicture(dl, font, n, *found->second.type, found->second.min, found->second.max, dl->GetClipRectMin(), dl->GetClipRectMax(), scale, timing, state.response);

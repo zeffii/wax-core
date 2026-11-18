@@ -44,6 +44,7 @@
 #include "app/vector_window.h"
 #include "app/shape_window.h"
 #include "app/graph_view.h"
+#include "app/node_strip.h"
 #include "app/machine_tree.h"
 #include "app/machines.h"
 #include "app/pattern_colour.h"
@@ -169,6 +170,7 @@ struct Session {
   app::NodeHelpWindow nodeHelp;           // Shift+F1 on the Instrument screen: the help of the picked node
   app::DxWindow dx;
   app::GraphViewState graphView;
+  app::NodeStripState strip;   // the node UIs along the bottom of the graph
   app::GateWindow gate;
   app::VectorWindow vector;
   app::GenExprWindow genexpr;
@@ -1408,8 +1410,10 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     ImGui::EndChild();
     const bool panelChanged = app::drawParamPanel(session->panel, doc, player.engine(), laneInstrument, graphMin, graphMax);   // the parameters float over the graph
     const bool dockChanged = app::drawExposedDock(session->panel, doc, player.engine(), laneInstrument, graphMin, graphMax);   // the exposed ones at its left
+    const app::NodeStripResult stripResult = app::drawNodeStrip(session->strip, session->panel, doc, player.engine(), laneInstrument, graphMin, graphMax, session->graphView.probeOf);   // the node UIs along its bottom
+    if (stripResult.dataChanged) syncData(doc, player.engine());
     const bool pictureChanged = std::exchange(session->graphView.paramEdited, false);   // a dot dragged in a response picture
-    if (panelChanged || dockChanged || pictureChanged) {
+    if (panelChanged || dockChanged || pictureChanged || stripResult.paramsChanged) {
       syncParams(doc, player.engine());
       const std::vector<std::string> graphProblems = syncGraphs(doc, player.engine()), laneProblems = syncLanes(doc, player.engine());
       session->editStatus = !graphProblems.empty() ? graphProblems.front() : !laneProblems.empty() ? laneProblems.front() : std::string();

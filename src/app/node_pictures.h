@@ -11,6 +11,7 @@
 #include "imgui.h"
 
 #include "app/node_response.h"
+#include "app/picture_slot.h"
 #include "core/node.h"
 #include "project/project.h"
 
@@ -28,6 +29,9 @@ struct PictureTiming {
 };
 
 bool hasPicture(const std::string& nodeType);
+
+// How big the picture of a node type is, in web pixels (zero when it has none).
+PictureSize pictureSize(const std::string& nodeType);
 
 // Draws the picture for `node` and says how far under the tile it reaches (so another picture can go below it, 0 when it went above); what the mouse can take hold of in it is added to `handles` (their param names start with '@').
 float drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, ImVec2 tileMin, ImVec2 tileMax, ImVec2 areaMin, ImVec2 areaMax, float scale, const PictureTiming& timing, ResponseHandles& handles);

@@ -21,6 +21,19 @@ const GraphNode* findNode(const Project& project, const std::string& instrumentI
 
 }  // namespace
 
+EnvelopeSpec envelopeSpecFor(const GraphNode& node, const DrawingInfo& info, const Engine& engine, const std::string& instrumentId) {
+  EnvelopeSpec spec;
+  spec.title = info.title.c_str();
+  spec.knot = info.knot;
+  if (info.timeParam.empty()) return spec;
+  const NodeType* type = builtinNodes().find(node.type);
+  double fallback = 0;
+  if (type) for (const ParamSpec& p : type->params) if (p.name == info.timeParam) fallback = p.def;
+  const std::string address = instrumentId + "." + node.id + "." + info.timeParam;
+  spec.totalMs = engine.registry().slotOf(address) >= 0 ? engine.registry().get(address) : node.param(info.timeParam, fallback);
+  return spec;
+}
+
 void showEnvelopes(EnvelopeWindow& window, const std::string& instrument, const std::string& node) {
   if (window.instrument != instrument || window.node != node) { window.drawing.clear(); window.views.clear(); }
   window.instrument = instrument;
@@ -53,16 +66,7 @@ bool drawEnvelopeWindow(EnvelopeWindow& window, Document& doc, const Engine& eng
     }
 
     bezier::Spline spline = bezier::drawingOf(&node->data, info->name.c_str(), defaultDrawing(node->type, info->name));
-    EnvelopeSpec spec;
-    spec.title = info->title.c_str();
-    spec.knot = info->knot;
-    if (!info->timeParam.empty()) {
-      const NodeType* type = builtinNodes().find(node->type);
-      double fallback = 0;
-      if (type) for (const ParamSpec& p : type->params) if (p.name == info->timeParam) fallback = p.def;
-      const std::string address = window.instrument + "." + window.node + "." + info->timeParam;
-      spec.totalMs = engine.registry().slotOf(address) >= 0 ? engine.registry().get(address) : node->param(info->timeParam, fallback);
-    }
+    const EnvelopeSpec spec = envelopeSpecFor(*node, *info, engine, window.instrument);
     EnvelopeView& view = window.views[info->name];
     EnvelopeResult result = drawEnvelopeCanvas(view, info->name.c_str(), spline, spec, ImVec2(ImGui::GetContentRegionAvail().x, 190 * scale));
     EnvelopeResult tools = drawEnvelopeTools(view, spline, spec);

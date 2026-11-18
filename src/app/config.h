@@ -19,6 +19,8 @@ struct Settings {
   bool follow = true;   // the grids scroll with the playing row
   int windowWidth = 1280, windowHeight = 800;   // the window's size when it was last closed or resized (not while it is maximised)
   bool windowMaximised = false;
+  float stripHeight = 170.0f;   // the node strip at the bottom of the graph (web pixels; its grip changes it, pulled under 20 it hides)
+  bool stripShown = true;
   float mixerHeight = 178.0f;   // the mixer's height in web pixels (the grip on its top edge changes it; pulled under 20 it hides)
   bool insertCut = false;   // Insert silence cuts a pattern that runs across the cursor row (off: it stays whole)
   bool patternAll = false;     // the Pattern screen shows every lane side by side (off: one lane, picked by its tab)

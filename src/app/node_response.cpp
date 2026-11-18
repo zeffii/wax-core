@@ -5,13 +5,14 @@
 #include <cmath>
 #include <cstdio>
 
+#include "app/picture_slot.h"
 #include "app/theme.h"
 
 namespace wax::app {
 namespace {
 
 constexpr double kPi = 3.14159265358979323846, kSampleRate = 48000, kFLo = 20, kFHi = 20000, kRangeDb = 18;
-constexpr float kWidth = 320, kHeight = 190;
+constexpr float kWidth = kResponseSize.w, kHeight = kResponseSize.h;
 
 enum class Kind { LowShelf, Peak, HighShelf, Highpass, Lowpass };
 struct Coef { double b0, b1, b2, a1, a2; };
@@ -85,9 +86,10 @@ bool hasResponse(const std::string& nodeType) { return nodeType == "eq"; }
 
 void drawNodeResponse(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, ImVec2 tileMin, ImVec2 tileMax, ImVec2 areaMin, ImVec2 areaMax, float scale, ResponseHandles& handles) {
   const float w = kWidth * scale, h = kHeight * scale;
-  const float x0 = std::min(std::max(areaMin.x + 4 * scale, (tileMin.x + tileMax.x) / 2 - w / 2), std::max(areaMin.x + 4 * scale, areaMax.x - w - 4 * scale));
+  const PictureSlot& slot = pictureSlot();
+  const float x0 = slot.active ? slot.min.x : std::min(std::max(areaMin.x + 4 * scale, (tileMin.x + tileMax.x) / 2 - w / 2), std::max(areaMin.x + 4 * scale, areaMax.x - w - 4 * scale));
   const float below = tileMax.y + 16 * scale;
-  const float y0 = below + h <= areaMax.y - 4 * scale ? below : std::max(areaMin.y + 4 * scale, tileMin.y - h - 22 * scale);
+  const float y0 = slot.active ? slot.min.y : below + h <= areaMax.y - 4 * scale ? below : std::max(areaMin.y + 4 * scale, tileMin.y - h - 22 * scale);
   const float px = x0 + 30 * scale, pw = w - 42 * scale, py = y0 + 20 * scale, ph = h - 44 * scale;
   const auto xf = [&](double f) { return px + static_cast<float>(std::log(f / kFLo) / std::log(kFHi / kFLo)) * pw; };
   const auto yd = [&](double db) { return py + ph / 2 - static_cast<float>(std::max(-kRangeDb, std::min(kRangeDb, db)) / kRangeDb) * (ph / 2); };

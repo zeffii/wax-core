@@ -45,6 +45,14 @@ struct ParamPanelState {
   bool open = true;         // the window is shown (the close button hides it; the Instrument screen's tab brings it back)
 };
 
+// Whether a node type has a window of its own to edit something (drawings, steps, code, a wave...): the buttons of that window are what
+// drawEditorButtons draws (one text button for each, setting the matching field of `state` for the caller to open it).
+bool hasEditorWindow(const std::string& nodeType);
+void drawEditorButtons(ParamPanelState& state, const GraphNode& picked);
+
+// One parameter's name and bar at the cursor (the row of the panel), `total` wide with the name `nameW` of it. Returns true when the value changed.
+bool drawParamBar(ParamPanelState& state, Document& doc, const Engine& engine, const std::string& instrumentId, const GraphNode& node, const ParamSpec& spec, float total, float nameW);
+
 // Draws the window floating over the graph area (screen rectangle `areaMin`..`areaMax`: where it first appears, at the top right).
 // Changes go through `doc` as SetParam edits (and SetExposed, SetExposedBits, SetPort); the caller then runs syncParams, syncLanes and
 // syncGraphs. Returns true when a parameter changed.

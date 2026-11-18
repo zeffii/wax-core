@@ -245,6 +245,26 @@ bool drawRow(ParamPanelState& state, Document& doc, const Engine& engine, const 
   return changed;
 }
 
+bool hasEditorWindow(const std::string& nodeType) {
+  return !drawingsOf(nodeType).empty() || nodeType == "dvii" || hasGate(nodeType) || hasVectorWindow(nodeType) || nodeType == "genexpr" || nodeType == "chord" || nodeType == "wavetable" || hasShape(nodeType);
+}
+
+void drawEditorButtons(ParamPanelState& state, const GraphNode& picked) {
+  if (!drawingsOf(picked.type).empty() && textButton("draw envelopes")) state.drawNode = picked.id;
+  if (picked.type == "dvii" && textButton("edit voice")) state.dxNode = picked.id;
+  if (hasGate(picked.type) && textButton("edit steps")) state.gateNode = picked.id;
+  if (hasVectorWindow(picked.type) && textButton(picked.type == "waveseq" ? "edit waves" : picked.type == "compass" ? "edit pad and waves" : "edit pad")) state.vectorNode = picked.id;
+  if (picked.type == "genexpr" && textButton("edit code")) state.genexprNode = picked.id;
+  if (picked.type == "chord" && textButton("edit chords")) state.chordNode = picked.id;
+  if (picked.type == "wavetable" && textButton("edit table")) state.tableNode = picked.id;
+  if (hasShape(picked.type) && textButton(picked.type == "osc" || picked.type == "westcoast" || picked.type == "fmsynth" ? "draw wave" : picked.type == "addsynth" ? "draw spectrum" : picked.type == "shiva" ? "edit taps" : "draw curve")) state.shapeNode = picked.id;
+}
+
+bool drawParamBar(ParamPanelState& state, Document& doc, const Engine& engine, const std::string& instrumentId, const GraphNode& node, const ParamSpec& spec, float total, float nameW) {
+  const Instrument* instrument = findInstrument(doc.project(), instrumentId);
+  return instrument && drawRow(state, doc, engine, instrument, instrumentId, &node, spec, spec.name, false, total, nameW);
+}
+
 bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine, const std::string& instrumentId, ImVec2 areaMin, ImVec2 areaMax) {
   const float scale = ImGui::GetStyle().FontScaleDpi;
   const Instrument* instrument = findInstrument(doc.project(), instrumentId);
@@ -287,14 +307,7 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
   }
   ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 0.85f);   // a small face: more rows fit
 
-  if (!drawingsOf(picked->type).empty() && textButton("draw envelopes")) state.drawNode = picked->id;
-  if (picked->type == "dvii" && textButton("edit voice")) state.dxNode = picked->id;
-  if (hasGate(picked->type) && textButton("edit steps")) state.gateNode = picked->id;
-  if (hasVectorWindow(picked->type) && textButton(picked->type == "waveseq" ? "edit waves" : picked->type == "compass" ? "edit pad and waves" : "edit pad")) state.vectorNode = picked->id;
-  if (picked->type == "genexpr" && textButton("edit code")) state.genexprNode = picked->id;
-  if (picked->type == "chord" && textButton("edit chords")) state.chordNode = picked->id;
-  if (picked->type == "wavetable" && textButton("edit table")) state.tableNode = picked->id;
-  if (hasShape(picked->type) && textButton(picked->type == "osc" || picked->type == "westcoast" || picked->type == "fmsynth" ? "draw wave" : picked->type == "addsynth" ? "draw spectrum" : picked->type == "shiva" ? "edit taps" : "draw curve")) state.shapeNode = picked->id;
+  drawEditorButtons(state, *picked);
 
   std::set<std::string> wired;   // parameters a wire drives
   for (const Connection& c : instrument->graph.connections) {

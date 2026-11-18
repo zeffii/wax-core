@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "app/picture_slot.h"
 #include "app/theme.h"
 
 namespace wax::app {
@@ -52,10 +53,11 @@ void drawNodeEnvelopes(ImDrawList* dl, ImFont* font, const GraphNode& node, cons
   if (widest <= 0) return;
   const double total = widest * 1.33, hold = total * 0.25;
 
-  const float w = 204 * scale, h = 86 * scale;
-  const float x0 = std::min(std::max(areaMin.x + 4 * scale, (tileMin.x + tileMax.x) / 2 - w / 2), std::max(areaMin.x + 4 * scale, areaMax.x - w - 4 * scale));
+  const float w = kEnvelopeSize.w * scale, h = kEnvelopeSize.h * scale;
+  const PictureSlot& slot = pictureSlot();
+  const float x0 = slot.active ? slot.min.x : std::min(std::max(areaMin.x + 4 * scale, (tileMin.x + tileMax.x) / 2 - w / 2), std::max(areaMin.x + 4 * scale, areaMax.x - w - 4 * scale));
   const float below = tileMax.y + 16 * scale;
-  const float y0 = below + h <= areaMax.y - 4 * scale ? below : std::max(areaMin.y + 4 * scale, tileMin.y - h - 22 * scale);
+  const float y0 = slot.active ? slot.min.y : below + h <= areaMax.y - 4 * scale ? below : std::max(areaMin.y + 4 * scale, tileMin.y - h - 22 * scale);
   const float px = x0 + 7 * scale, pw = w - 14 * scale, py = y0 + 17 * scale, ph = 50 * scale;
 
   // no box: four corner ticks close around the drawing, so whatever lies under it stays visible

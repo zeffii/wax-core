@@ -10,6 +10,7 @@
 #include <memory>
 #include <vector>
 
+#include "app/picture_slot.h"
 #include "app/theme.h"
 #include "core/node.h"
 #include "nodes/adsr.h"
@@ -46,10 +47,11 @@ float gBelow = 0;   // how far under the tile the picture drawn last reaches (0 
 
 Frame frameFor(ImDrawList* dl, ImFont* font, const std::string& title, float w, float h, ImVec2 tileMin, ImVec2 tileMax, ImVec2 areaMin, ImVec2 areaMax, float scale) {
   w *= scale; h *= scale;
-  const float x0 = std::min(std::max(areaMin.x + 4 * scale, (tileMin.x + tileMax.x) / 2 - w / 2), std::max(areaMin.x + 4 * scale, areaMax.x - w - 4 * scale));
+  const PictureSlot& slot = pictureSlot();
+  const float x0 = slot.active ? slot.min.x : std::min(std::max(areaMin.x + 4 * scale, (tileMin.x + tileMax.x) / 2 - w / 2), std::max(areaMin.x + 4 * scale, areaMax.x - w - 4 * scale));
   const float below = tileMax.y + 16 * scale;
-  const float y0 = below + h <= areaMax.y - 4 * scale ? below : std::max(areaMin.y + 4 * scale, tileMin.y - h - 22 * scale);
-  gBelow = below + h <= areaMax.y - 4 * scale ? h + 6 * scale : 0;
+  const float y0 = slot.active ? slot.min.y : below + h <= areaMax.y - 4 * scale ? below : std::max(areaMin.y + 4 * scale, tileMin.y - h - 22 * scale);
+  gBelow = !slot.active && below + h <= areaMax.y - 4 * scale ? h + 6 * scale : 0;
   dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x0 + w, y0 + h), kBg);
   dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x0 + w, y0 + h), IM_COL32(128, 128, 128, 41));
   dl->AddRect(ImVec2(x0 + 0.5f, y0 + 0.5f), ImVec2(x0 + w - 0.5f, y0 + h - 0.5f), IM_COL32(128, 128, 128, 178));
@@ -902,22 +904,32 @@ void drawTwin(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeTyp
 
 bool hasPicture(const std::string& nodeType) { return nodeType == "twin" || nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu" || nodeType == "membrane" || nodeType == "granular" || nodeType == "kaleidoscope" || nodeType == "drumsynth" || nodeType == "drumsynth2" || nodeType == "hat2" || nodeType == "pulsar" || nodeType == "pulsetrain"; }
 
+PictureSize pictureSize(const std::string& nodeType) {
+  static const std::map<std::string, PictureSize> sizes = {
+      {"prismacanyon", {360, 20 + 30 * kCanyonLines + 24}}, {"twin", {480, 260}}, {"ensemble", {320, 150}}, {"haas", {400, 280}}, {"reflect", {560, 384}},
+      {"granular", {360, 262}}, {"membrane", {360, 196}}, {"khufu", {310, 150}}, {"rotary", {300, 190}}, {"kaleidoscope", {460, 270}}, {"drumsynth", {360, 372}},
+      {"drumsynth2", {360, 22 + 3 * 56 + 84}}, {"pulsar", {360, 130}}, {"pulsetrain", {360, 130}}, {"hat2", {360, 22 + 2 * 56 + 2 * 80 + 6}}};
+  const auto found = sizes.find(nodeType);
+  return found == sizes.end() ? PictureSize{} : found->second;
+}
+
 float drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, ImVec2 tileMin, ImVec2 tileMax, ImVec2 areaMin, ImVec2 areaMax, float scale, const PictureTiming& timing, ResponseHandles& handles) {
   gBelow = 0;
-  if (node.type == "prismacanyon") drawCanyon(dl, font, node, type, frameFor(dl, font, node.id + " echoes", 360, 20 + 30 * kCanyonLines + 24, tileMin, tileMax, areaMin, areaMax, scale), scale, timing);
-  else if (node.type == "twin") drawTwin(dl, font, node, type, frameFor(dl, font, node.id + " response", 480, 260, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
-  else if (node.type == "ensemble") drawEnsemble(dl, font, node, type, frameFor(dl, font, node.id + " delays", 320, 150, tileMin, tileMax, areaMin, areaMax, scale), scale);
-  else if (node.type == "haas") drawHaas(dl, font, node, type, frameFor(dl, font, node.id + " sides", 400, 280, tileMin, tileMax, areaMin, areaMax, scale), scale);
-  else if (node.type == "reflect") drawReflect(dl, font, node, type, frameFor(dl, font, node.id + " room", 560, 384, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
-  else if (node.type == "granular") drawGranular(dl, font, node, type, frameFor(dl, font, node.id + " grains", 360, 262, tileMin, tileMax, areaMin, areaMax, scale), scale, timing);
-  else if (node.type == "membrane") drawMembrane(dl, font, node, type, frameFor(dl, font, node.id + " membrane", 360, 196, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
-  else if (node.type == "khufu") drawKhufu(dl, font, node, type, frameFor(dl, font, node.id + " registers", 310, 150, tileMin, tileMax, areaMin, areaMax, scale), scale);
-  else if (node.type == "rotary") drawRotary(dl, font, node, type, frameFor(dl, font, node.id + " cabinet", 300, 190, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
-  else if (node.type == "kaleidoscope") drawKaleidoscope(dl, font, node, type, frameFor(dl, font, node.id + " band", 460, 270, tileMin, tileMax, areaMin, areaMax, scale), scale, handles, timing);
-  else if (node.type == "drumsynth") drawDrum(dl, font, node, type, frameFor(dl, font, node.id + " hit", 360, 372, tileMin, tileMax, areaMin, areaMax, scale), scale);
-  else if (node.type == "drumsynth2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", 360, 22 + 3 * 56 + 84, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
-  else if (node.type == "pulsar" || node.type == "pulsetrain") drawPulsarTrain(dl, font, node, type, frameFor(dl, font, node.id + " pulse train", 360, 130, tileMin, tileMax, areaMin, areaMax, scale), scale);
-  else if (node.type == "hat2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", 360, 22 + 2 * 56 + 2 * 80 + 6, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
+  const PictureSize size = pictureSize(node.type);
+  if (node.type == "prismacanyon") drawCanyon(dl, font, node, type, frameFor(dl, font, node.id + " echoes", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, timing);
+  else if (node.type == "twin") drawTwin(dl, font, node, type, frameFor(dl, font, node.id + " response", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
+  else if (node.type == "ensemble") drawEnsemble(dl, font, node, type, frameFor(dl, font, node.id + " delays", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale);
+  else if (node.type == "haas") drawHaas(dl, font, node, type, frameFor(dl, font, node.id + " sides", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale);
+  else if (node.type == "reflect") drawReflect(dl, font, node, type, frameFor(dl, font, node.id + " room", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
+  else if (node.type == "granular") drawGranular(dl, font, node, type, frameFor(dl, font, node.id + " grains", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, timing);
+  else if (node.type == "membrane") drawMembrane(dl, font, node, type, frameFor(dl, font, node.id + " membrane", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
+  else if (node.type == "khufu") drawKhufu(dl, font, node, type, frameFor(dl, font, node.id + " registers", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale);
+  else if (node.type == "rotary") drawRotary(dl, font, node, type, frameFor(dl, font, node.id + " cabinet", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
+  else if (node.type == "kaleidoscope") drawKaleidoscope(dl, font, node, type, frameFor(dl, font, node.id + " band", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles, timing);
+  else if (node.type == "drumsynth") drawDrum(dl, font, node, type, frameFor(dl, font, node.id + " hit", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale);
+  else if (node.type == "drumsynth2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
+  else if (node.type == "pulsar" || node.type == "pulsetrain") drawPulsarTrain(dl, font, node, type, frameFor(dl, font, node.id + " pulse train", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale);
+  else if (node.type == "hat2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   return gBelow;
 }
 
