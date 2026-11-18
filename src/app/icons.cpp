@@ -14,6 +14,7 @@
 // nanosvg is vendored as it is; its warnings are not ours to fix
 #if defined(_MSC_VER)
 #pragma warning(push, 0)
+#pragma warning(disable : 4702)   // reported when the function is compiled, after the pop below, so it is off for the rest of the file
 #elif defined(__GNUC__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wall"
@@ -25,6 +26,7 @@
 #include "nanosvg/nanosvgrast.h"
 #if defined(_MSC_VER)
 #pragma warning(pop)
+#pragma warning(disable : 4702)
 #elif defined(__GNUC__)
 #pragma GCC diagnostic pop
 #endif
