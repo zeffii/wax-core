@@ -10,7 +10,9 @@
 #include <memory>
 #include <vector>
 
+#include "app/cardinal_picture.h"
 #include "app/map_handle.h"
+#include "app/offline_render.h"
 #include "app/picture_slot.h"
 #include "app/pogue_picture.h"
 #include "app/space_pictures.h"
@@ -639,39 +641,6 @@ void drawKaleidoscope(ImDrawList* dl, ImFont* font, const GraphNode& node, const
 
 // ---- drum synth: the node's own code run offline, so the pictures show what is heard ----
 
-// Runs a node of `type` for `ms` milliseconds: a note on at the start and, when offAt >= 0, a note off at that time. The values are the
-// node's parameters in the type's order. Returns the left output.
-std::vector<float> renderOffline(const NodeType& type, std::vector<float> values, int note, double vel, double ms, double sr, double offAt, const Json* data = nullptr) {
-  NodeContext context;
-  context.sampleRate = sr;
-  context.data = data;
-  std::unique_ptr<Node> node = type.create(context);
-  std::vector<int> slots(values.size());
-  for (std::size_t i = 0; i < slots.size(); i++) slots[i] = static_cast<int>(i);
-  const int total = std::max(1, static_cast<int>(sr * ms / 1000)), offSample = offAt >= 0 ? static_cast<int>(sr * offAt / 1000) : -1;
-  std::vector<float> out(static_cast<std::size_t>(total)), right(512);
-  NoteEvent on;
-  on.type = NoteType::On; on.note = note; on.vel = vel;
-  node->note(on);
-  for (int at = 0; at < total;) {
-    int n = std::min(512, total - at);
-    if (offSample > at && offSample < at + n) n = offSample - at;
-    if (at == offSample) { NoteEvent off; off.type = NoteType::Off; off.note = note; node->note(off); }
-    float* outs[2] = {out.data() + at, right.data()};
-    node->process(nullptr, outs, n, values.data(), slots.data());
-    at += n;
-  }
-  return out;
-}
-
-std::vector<float> adsrCurve(double a, double d, double s, double r, int hold, int total) {   // one value a millisecond
-  Adsr env(1000);
-  env.set(a, d, s, r); env.on();
-  std::vector<float> out(static_cast<std::size_t>(total));
-  for (int i = 0; i < total; i++) { if (i == hold) env.off(); out[static_cast<std::size_t>(i)] = static_cast<float>(env.next()); }
-  return out;
-}
-
 // A waveform as a line for each pixel column (its smallest and largest value), about the middle of its box.
 void drawWave(ImDrawList* dl, const std::vector<float>& data, float x, float y, float w, float h, ImU32 colour, std::size_t from, std::size_t to, float scale) {
   const float mid = y + h / 2, amp = h / 2 - 2 * scale;
@@ -938,12 +907,12 @@ void drawTwin(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeTyp
 
 }  // namespace
 
-bool hasPicture(const std::string& nodeType) { return nodeType == "twin" || nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu" || nodeType == "membrane" || nodeType == "granular" || nodeType == "kaleidoscope" || nodeType == "drumsynth" || nodeType == "drumsynth2" || nodeType == "hat2" || nodeType == "pulsar" || nodeType == "pulsetrain" || nodeType == "pogue" || spacePictureSize(nodeType).w > 0; }
+bool hasPicture(const std::string& nodeType) { return nodeType == "twin" || nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu" || nodeType == "membrane" || nodeType == "granular" || nodeType == "kaleidoscope" || nodeType == "drumsynth" || nodeType == "drumsynth2" || nodeType == "hat2" || nodeType == "pulsar" || nodeType == "pulsetrain" || nodeType == "pogue" || nodeType == "cardinal" || spacePictureSize(nodeType).w > 0; }
 
 PictureSize pictureSize(const std::string& nodeType) {
   if (const PictureSize space = spacePictureSize(nodeType); space.w > 0) return space;
   static const std::map<std::string, PictureSize> sizes = {
-      {"prismacanyon", {360, 20 + 30 * kCanyonLines + 24}}, {"twin", {480, 260}}, {"ensemble", {320, 150}}, {"haas", {400, 280}}, {"reflect", {560, 384}},
+      {"prismacanyon", {360, 20 + 30 * kCanyonLines + 24}}, {"twin", {480, 260}}, {"ensemble", {320, 150}}, {"haas", {400, 280}}, {"cardinal", {kCardinalWidth, kCardinalHeight}}, {"reflect", {560, 384}},
       {"granular", {360, 262}}, {"membrane", {360, 196}}, {"khufu", {310, 150}}, {"rotary", {300, 190}}, {"kaleidoscope", {460, 270}}, {"drumsynth", {360, 372}},
       {"drumsynth2", {360, 22 + 3 * 56 + 84}}, {"pulsar", {360, 130}}, {"pulsetrain", {360, 130}}, {"pogue", kPogueSize}, {"hat2", {360, 22 + 2 * 56 + 2 * 80 + 6}}};
   const auto found = sizes.find(nodeType);
@@ -966,6 +935,7 @@ float drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const
   else if (node.type == "drumsynth") drawDrum(dl, font, node, type, frameFor(dl, font, node.id + " hit", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "drumsynth2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "pulsar" || node.type == "pulsetrain") drawPulsarTrain(dl, font, node, type, frameFor(dl, font, node.id + " pulse train", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
+  else if (node.type == "cardinal") { const Frame f = frameFor(dl, font, "", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale); drawCardinal(dl, font, node, type, ImVec2(f.x0, f.y0), scale, handles); }
   else if (node.type == "pogue") { const Frame f = frameFor(dl, font, "", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale); drawPogue(dl, font, node, type, ImVec2(f.x0, f.y0), scale, timing, handles); }
   else if (spacePictureSize(node.type).w > 0) { const Frame f = frameFor(dl, font, "", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale); drawSpacePicture(dl, font, node, type, ImVec2(f.x0, f.y0), scale, timing, handles); }
   else if (node.type == "hat2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
@@ -978,6 +948,7 @@ std::vector<std::pair<std::string, double>> dragPictureHandle(const ResponseHand
     return v;
   };
   const double fx = std::clamp(static_cast<double>((at.x - handle.gx) / handle.gw), 0.0, 1.0), fy = std::clamp(static_cast<double>((at.y - handle.gy) / handle.gh), 0.0, 1.0);
+  if (handle.param.rfind("@card", 0) == 0) return dragCardinalHandle(handle, node, type, at);
   if (handle.param.rfind("@pog", 0) == 0) return dragPogueHandle(handle, node, type, at);
   if (handle.param.rfind("@sp.", 0) == 0) return dragSpaceHandle(handle, node, type, at);
   if (handle.param.rfind("@set:", 0) == 0) {   // a button: set a parameter

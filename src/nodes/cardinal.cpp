@@ -1,7 +1,7 @@
 // Cardinal: a monophonic virtual-analogue lead voice. Two oscillators (triangle, saw, pulse, sine or noise; sync, fm, ring, key
 // tracking), unison of up to five detuned and panned copies, a filter (ladder with saturation, or a 12 dB state-variable type),
 // an amp envelope and a mod envelope, two LFOs with a destination each, glide and slide. Port of webtracker
-// src/audio/nodes/cardinal.js (without the node's picture).
+// src/audio/nodes/cardinal.js (its picture is in app/cardinal_picture).
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -10,6 +10,7 @@
 #include "core/js_math.h"
 #include "nodes/adsr.h"
 #include "nodes/all_nodes.h"
+#include "nodes/cardinal_view.h"
 #include "nodes/shared_dsp.h"
 
 namespace wax {
@@ -56,15 +57,7 @@ double oscillator(int wave, double p, double dt, double pw, double noise) {
     default: return noise;
   }
 }
-double lfoShape(int wave, double p, double held) {
-  switch (wave) {
-    case 0: return js::sin(kTwoPi * p);
-    case 1: return p < 0.5 ? 4 * p - 1 : 3 - 4 * p;
-    case 2: return 2 * p - 1;
-    case 3: return p < 0.5 ? 1 : -1;
-    default: return held;
-  }
-}
+using cardinal::lfoShape;
 double flush(double v) { return std::abs(v) < 1e-18 ? 0 : v; }
 
 class Cardinal final : public Node {
