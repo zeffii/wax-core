@@ -408,6 +408,22 @@ void testBlockEdit() {
   ed.nuggetStep(1);
   check(ed.typeNuggetChar('F') && row(0).substr(4, 2) == "4F", "a hex cell changes one digit");
   std::printf("ok: nugget mode\n");
+
+  // Shifting a selection: the rows below move up or down inside the pattern, in the selected columns only.
+  doc.undo(); doc.undo(); doc.undo();
+  ed.endNugget();
+  ed.moveTo(2, 0);                                      // row 0 of the pattern: "C-4 40", D-4, E-4, empty
+  check(ed.shiftSelection(wax::CellEditor::Shift::PullUp) && row(0).substr(0, 3) == "D-4" && row(1).substr(0, 3) == "E-4" && row(2).substr(0, 3) == "...", "Ctrl+Delete on a cell pulls the cells below it up");
+  doc.undo();
+  check(row(0).substr(0, 6) == "C-4 40", "one undo takes the pull back");
+  ed.moveTo(2, 0);
+  check(ed.shiftSelection(wax::CellEditor::Shift::PushDown) && row(0).substr(0, 3) == "..." && row(1).substr(0, 3) == "C-4" && row(3).substr(0, 3) == "E-4", "Ctrl+Insert pushes them down");
+  doc.undo();
+  ed.moveTo(2, 0);
+  ed.extend(2, 0);
+  check(ed.shiftSelection(wax::CellEditor::Shift::RotateUp) && row(0).substr(0, 3) == "D-4" && row(2).substr(0, 3) == "C-4", "rotate takes the first row of the selection to its end");
+  doc.undo();
+  std::printf("ok: shift selection\n");
 }
 
 // A parameter's live value becomes the cell that gives it back: linear, integer and logarithmic columns.

@@ -343,6 +343,60 @@ bool CellEditor::insertRow() {
   return true;
 }
 
+bool CellEditor::shiftSelection(Shift how) {
+  const Selection sel = selection();
+  const int t0 = sel.active ? sel.tick0 : tick_, t1 = sel.active ? sel.tick1 : tick_, c0 = sel.active ? sel.cell0 : cell_, c1 = sel.active ? sel.cell1 : cell_;
+  const Lane* lane = nullptr;
+  for (const Lane& l : document_.project().lanes) if (l.id == lane_) lane = &l;
+  if (!lane) return false;
+  const std::vector<RowOwner> owners = rowOwners(*lane, document_.project().song.length);
+  const int lo = firstTick(), hi = std::min(lastTick() + 1, static_cast<int>(owners.size()));
+  const auto owned = [&](int t) { return t >= lo && t < hi && owners[static_cast<std::size_t>(t)].pattern >= 0; };
+  std::vector<std::unique_ptr<Edit>> parts;
+  for (int t = std::max(t0, lo); t <= t1 && t < hi;) {
+    if (!owned(t)) { t++; continue; }
+    // the selected rows a..b that lie in one pattern, and where that pattern ends (e, excluded)
+    const int pattern = owners[static_cast<std::size_t>(t)].pattern, a = t;
+    int b = a;
+    while (b + 1 <= t1 && owned(b + 1) && owners[static_cast<std::size_t>(b + 1)].pattern == pattern) b++;
+    int e = b + 1;
+    while (owned(e) && owners[static_cast<std::size_t>(e)].pattern == pattern) e++;
+    t = b + 1;
+    const int h = b - a + 1;
+    const bool rotate = how == Shift::RotateUp || how == Shift::RotateDown;
+    if (rotate && h < 2) continue;
+    const Pattern& source = lane->patterns[static_cast<std::size_t>(pattern)];
+    const int span = rotate ? b + 1 : e;   // the rows that change: the selection itself when rotating, else down to the pattern's end
+    std::vector<std::vector<std::string>> before;   // the cells of the rows a..e-1 as they are now
+    for (int r = a; r < e; r++) before.push_back(cellsOf(source.rows[static_cast<std::size_t>(owners[static_cast<std::size_t>(r)].row)]));
+    for (int r = a; r < span; r++) {
+      std::string row = source.rows[static_cast<std::size_t>(owners[static_cast<std::size_t>(r)].row)];
+      bool changed = false;
+      for (int c = c0; c <= c1 && c < static_cast<int>(columns_.size()); c++) {
+        if (columns_[static_cast<std::size_t>(c)].kind == ColumnKind::Spacer) continue;
+        int from = r;
+        std::string text;
+        switch (how) {
+          case Shift::PullUp: from = r + h; break;
+          case Shift::PushDown: from = r - h; break;
+          case Shift::RotateUp: from = a + (r - a + 1) % h; break;
+          case Shift::RotateDown: from = a + (r - a + h - 1) % h; break;
+        }
+        text = from >= a && from < e ? before[static_cast<std::size_t>(from - a)][static_cast<std::size_t>(c)] : tokenBlank(columns_[static_cast<std::size_t>(c)].token);
+        if (text == before[static_cast<std::size_t>(r - a)][static_cast<std::size_t>(c)]) continue;
+        row = rowWithCell(row, columns_, c, text);
+        changed = true;
+      }
+      if (changed) parts.push_back(std::make_unique<SetRow>(lane_, source.id, owners[static_cast<std::size_t>(r)].row, row));
+    }
+  }
+  if (parts.empty()) return false;
+  const char* name = how == Shift::PullUp ? "Pull up" : how == Shift::PushDown ? "Push down" : "Rotate";
+  document_.apply(std::make_unique<Batch>(lane_, name, std::move(parts)));
+  typed_ = 0;
+  return true;
+}
+
 bool CellEditor::deleteRow() {
   const Place at = place();
   if (!at.pattern) return false;

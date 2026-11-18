@@ -88,6 +88,13 @@ public:
   // The hex cell text of a value for a parameter column.
   static std::string liveCellText(const Column& column, double value);
   bool clearCell(bool advance);
+  // Moves the content of the selected cells (or the cursor's cell) along their rows, column by column, one pattern at a time: nothing is pulled
+  // in from or pushed out into the pattern next door. One undo step. False when nothing changed.
+  enum class Shift { PullUp, PushDown, RotateUp, RotateDown };
+  //   PullUp     Ctrl+Delete: the selection is removed and the rows below move up to fill the gap (empty cells come in at the pattern's end)
+  //   PushDown   Ctrl+Insert: the rows from the selection down move down, what falls off the pattern's end is lost, empty cells open at the top
+  //   Rotate*    Ctrl+Alt+Up/Down: the selected rows rotate by one, what falls off one end comes in at the other
+  bool shiftSelection(Shift how);
   bool insertRow();                 // a blank row at the cursor's row: the rows below move down, the last one falls off
   bool deleteRow();                 // the cursor's row goes: the rows below move up
 

@@ -725,8 +725,13 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         else editor.move(0, -1), editor.move(0, 1);              // (the last one)
         session->wantLane = lane;
       };
-      if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) step(-1, 0);
-      if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) step(1, 0);
+      if (io.KeyCtrl && io.KeyAlt && !io.KeyShift) {   // Ctrl+Alt+Up/Down: the selected rows rotate (as in the web; nothing is selected: nothing happens)
+        if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) edited |= editor.selection().active && editor.shiftSelection(CellEditor::Shift::RotateUp);
+        if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) edited |= editor.selection().active && editor.shiftSelection(CellEditor::Shift::RotateDown);
+      } else {
+        if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) step(-1, 0);
+        if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) step(1, 0);
+      }
       // Left and Right: Ctrl enters nugget mode (one character of the cell), where they keep stepping a character; off the cell's end the cursor
       // goes on to the next column, and the mode is over.
       const auto sideways = [&](int d) {
@@ -750,9 +755,9 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       const int bar = std::max(1, song.ticksPerBeat) * std::max(1, song.beatsPerBar);
       if (ImGui::IsKeyPressed(ImGuiKey_PageUp)) editor.move(-bar, 0);
       if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) editor.move(bar, 0);
-      if (ImGui::IsKeyPressed(ImGuiKey_Delete)) edited |= io.KeyShift ? editor.deleteRow() : editor.clearCell(true);
+      if (ImGui::IsKeyPressed(ImGuiKey_Delete)) edited |= io.KeyCtrl ? editor.shiftSelection(CellEditor::Shift::PullUp) : io.KeyShift ? editor.deleteRow() : editor.clearCell(true);   // Ctrl+Delete: the selection goes, the rows below move up
       if (ImGui::IsKeyPressed(ImGuiKey_Backspace)) edited |= editor.clearCell(false);
-      if (ImGui::IsKeyPressed(ImGuiKey_Insert)) edited |= editor.insertRow();
+      if (ImGui::IsKeyPressed(ImGuiKey_Insert)) edited |= io.KeyCtrl ? editor.shiftSelection(CellEditor::Shift::PushDown) : editor.insertRow();   // Ctrl+Insert: the rows from the selection down move down
       if (session->screen == Screen::Pattern && ImGui::IsKeyPressed(ImGuiKey_Space, false)) {   // the live value of a parameter column (Ctrl+Space: the whole row's) into the grid
         std::string instrumentId;
         for (const Lane& l : doc.project().lanes) if (l.id == editor.lane()) instrumentId = l.instrument;

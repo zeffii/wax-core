@@ -33,6 +33,8 @@ const std::vector<Shortcut>& patternShortcuts() {
       {"Left / Right", "move a cell; past the last column it goes on into the next lane (All lanes view)"},
       {"PgUp / PgDn", "a bar of rows up or down"},
       {"Shift+arrows", "select cells; Esc drops the selection"},
+      {"Ctrl+Delete, Ctrl+Insert", "the selection (or cell) goes and the rows below move up; the rows from it down move down (within one pattern)"},
+      {"Ctrl+Alt+Up, Ctrl+Alt+Down", "rotate the selected rows by one"},
       {"Ctrl+Left, Ctrl+Right", "nugget mode: step one character of the cell (a note's # or - and octave, a hex digit) and type over it; another column or Esc ends it"},
       {"Esc", "drops the selection; with none, leaves solo-edit if on; then back to the sequence (Song screen)"},
       {"Tab / Esc", "in solo-edit: Tab switches between the pattern alone and the whole song with the rest locked; Esc (with no selection) leaves it"},

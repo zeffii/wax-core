@@ -167,7 +167,9 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, accentAlpha(55));
           if (here && cursor.nugget >= 0) {   // nugget mode: the character the cursor is on is marked
             const ImVec2 at = ImGui::GetCursorScreenPos();
-            ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(at.x + charWidth * static_cast<float>(cursor.nugget), at.y), ImVec2(at.x + charWidth * static_cast<float>(cursor.nugget + 1), at.y + ImGui::GetTextLineHeight()), accentAlpha(150));
+            const ImVec2 from(at.x + charWidth * static_cast<float>(cursor.nugget), at.y - 1), to(at.x + charWidth * static_cast<float>(cursor.nugget + 1), at.y + ImGui::GetTextLineHeight() + 1);
+            ImGui::GetWindowDrawList()->AddRectFilled(from, to, accentAlpha(70));   // a light tint, and a thin outline, one character wide
+            ImGui::GetWindowDrawList()->AddRect(from, to, accentAlpha(230), 0.0f, 0, std::max(1.0f, ImGui::GetStyle().FontScaleDpi));
           }
           if (here) {
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, kCursorCell);
