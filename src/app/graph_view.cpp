@@ -580,6 +580,13 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       state.openDrawings = state.response.list[static_cast<std::size_t>(state.responseDrag)].node;
       state.responseDrag = -1;
     }
+    if (state.responseDrag >= 0 && state.response.list[static_cast<std::size_t>(state.responseDrag)].once) {   // a click that acts at once (a step of a pattern)
+      const ResponseHandles::Handle& handle = state.response.list[static_cast<std::size_t>(state.responseDrag)];
+      const auto target = tiles.find(handle.node);
+      if (target != tiles.end())
+        for (const auto& [name, value] : dragResponse(state.response, handle, *target->second.node, *target->second.type, io.MousePos)) { doc.apply(std::make_unique<SetParam>(instrumentId, handle.node, name, value)); state.paramEdited = true; }
+      state.responseDrag = -1;
+    }
   }
   const bool idle = state.wiring.empty() && state.wiringIn.empty() && !state.rewire.active && !onHandle;
   if (idle && windowHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {

@@ -243,6 +243,14 @@ NodeStripResult drawNodeStrip(NodeStripState& state, ParamPanelState& panel, Doc
       panel.drawNode = state.response.list[static_cast<std::size_t>(state.responseDrag)].node;
       state.responseDrag = -1;
     }
+    if (state.responseDrag >= 0 && state.response.list[static_cast<std::size_t>(state.responseDrag)].once) {   // a click that acts at once (a step of a pattern)
+      const ResponseHandles::Handle& handle = state.response.list[static_cast<std::size_t>(state.responseDrag)];
+      const GraphNode* node = findNode(*instrument, handle.node);
+      const NodeType* type = node ? types.find(node->type) : nullptr;
+      if (node && type)
+        for (const auto& [name, value] : dragResponse(state.response, handle, *node, *type, io.MousePos)) { doc.apply(std::make_unique<SetParam>(instrumentId, handle.node, name, value)); result.paramsChanged = true; }
+      state.responseDrag = -1;
+    }
   }
   ImGui::EndChild();
   ImGui::PopFont();

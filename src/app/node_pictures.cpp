@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "app/picture_slot.h"
+#include "app/pogue_picture.h"
 #include "app/theme.h"
 #include "core/node.h"
 #include "nodes/adsr.h"
@@ -902,13 +903,13 @@ void drawTwin(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeTyp
 
 }  // namespace
 
-bool hasPicture(const std::string& nodeType) { return nodeType == "twin" || nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu" || nodeType == "membrane" || nodeType == "granular" || nodeType == "kaleidoscope" || nodeType == "drumsynth" || nodeType == "drumsynth2" || nodeType == "hat2" || nodeType == "pulsar" || nodeType == "pulsetrain"; }
+bool hasPicture(const std::string& nodeType) { return nodeType == "twin" || nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu" || nodeType == "membrane" || nodeType == "granular" || nodeType == "kaleidoscope" || nodeType == "drumsynth" || nodeType == "drumsynth2" || nodeType == "hat2" || nodeType == "pulsar" || nodeType == "pulsetrain" || nodeType == "pogue"; }
 
 PictureSize pictureSize(const std::string& nodeType) {
   static const std::map<std::string, PictureSize> sizes = {
       {"prismacanyon", {360, 20 + 30 * kCanyonLines + 24}}, {"twin", {480, 260}}, {"ensemble", {320, 150}}, {"haas", {400, 280}}, {"reflect", {560, 384}},
       {"granular", {360, 262}}, {"membrane", {360, 196}}, {"khufu", {310, 150}}, {"rotary", {300, 190}}, {"kaleidoscope", {460, 270}}, {"drumsynth", {360, 372}},
-      {"drumsynth2", {360, 22 + 3 * 56 + 84}}, {"pulsar", {360, 130}}, {"pulsetrain", {360, 130}}, {"hat2", {360, 22 + 2 * 56 + 2 * 80 + 6}}};
+      {"drumsynth2", {360, 22 + 3 * 56 + 84}}, {"pulsar", {360, 130}}, {"pulsetrain", {360, 130}}, {"pogue", kPogueSize}, {"hat2", {360, 22 + 2 * 56 + 2 * 80 + 6}}};
   const auto found = sizes.find(nodeType);
   return found == sizes.end() ? PictureSize{} : found->second;
 }
@@ -929,6 +930,7 @@ float drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const
   else if (node.type == "drumsynth") drawDrum(dl, font, node, type, frameFor(dl, font, node.id + " hit", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "drumsynth2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "pulsar" || node.type == "pulsetrain") drawPulsarTrain(dl, font, node, type, frameFor(dl, font, node.id + " pulse train", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale);
+  else if (node.type == "pogue") { const Frame f = frameFor(dl, font, "", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale); drawPogue(dl, font, node, type, ImVec2(f.x0, f.y0), scale, timing, handles); }
   else if (node.type == "hat2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   return gBelow;
 }
@@ -939,6 +941,7 @@ std::vector<std::pair<std::string, double>> dragPictureHandle(const ResponseHand
     return v;
   };
   const double fx = std::clamp(static_cast<double>((at.x - handle.gx) / handle.gw), 0.0, 1.0), fy = std::clamp(static_cast<double>((at.y - handle.gy) / handle.gh), 0.0, 1.0);
+  if (handle.param.rfind("@pog", 0) == 0) return dragPogueHandle(handle, node, type, at);
   if (handle.param == "@src") return {{"srcx", fx}, {"srcy", fy}};
   if (handle.param == "@lis") return {{"lisx", fx}, {"lisy", fy}};
   if (handle.param == "@size") {   // the corner: pixels per metre is the plan's width over the room's width

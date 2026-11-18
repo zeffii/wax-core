@@ -26,6 +26,7 @@ constexpr int kRateCount = 12;
 constexpr int kMaxVoices = 8;
 constexpr double kMaxMs = 60, kLookMs = 10, kHoldoffMs = 30;
 constexpr int kMovePhase = 1;
+constexpr int kReportEvery = 1600;   // the picture's reports: about every 35 ms, while it keeps asking
 constexpr int kWide = 1, kSpread = 2, kNearest = 0, kLinear = 1;
 
 struct Svf { double g, k, a1, a2, a3; };
@@ -47,7 +48,7 @@ struct Voice { double phase, speed, target, want = -1, delay = -1; };
 class Pogue final : public Node {
 public:
   explicit Pogue(const NodeContext& context)
-      : sampleRate_(context.sampleRate), clock_(context.clock),
+      : sampleRate_(context.sampleRate), clock_(context.clock), probe_(context.probe),
         size_(static_cast<int>(std::ceil(sampleRate_ * kMaxMs / 1000)) + 4),
         bufL_(static_cast<std::size_t>(size_), 0.0f), bufR_(static_cast<std::size_t>(size_), 0.0f),
         look_(static_cast<int>(jsRound(kLookMs * sampleRate_ / 1000))),
@@ -87,6 +88,7 @@ public:
     if (steps > 0) stepsInBlock(n, kRates[std::max(0, std::min(kRateCount - 1, jsRoundInt(p(kPatrate))))], steps, len);
     else { fires_.clear(); patternSeen_ = false; }
     std::size_t nextFire = 0;
+    const bool reporting = probe_ && probe_->watched();
     const int hop = std::max(1, jsRoundInt(sampleRate_ / p(kResolution)));
     const double glide = p(kInertia) > 0 ? 1 - js::exp(-1000 / (sampleRate_ * p(kInertia))) : 1;
     for (int v = 0; v < count; v++) {
@@ -100,7 +102,8 @@ public:
       untilMove_--;
       const double xl = inL[i], xr = inR[i];
       if (onset > 0 && detect(0.5 * (xl + xr), onset)) fire(count, moves, change, lo, hi);
-      while (nextFire < fires_.size() && fires_[nextFire] <= i) { fire(count, moves, change, lo, hi); nextFire++; }
+      else if (onset <= 0 && reporting) detect(0.5 * (xl + xr), 0.5);   // (while the picture is watched the detector runs even at 0, to show what it would do)
+      while (nextFire < fires_.size() && fires_[nextFire] <= i) { fire(count, moves, change, lo, hi); repFired_ |= 4; nextFire++; }
 
       double sumL = 0, sumR = 0;
       for (int v = 0; v < count; v++) {
@@ -143,9 +146,24 @@ public:
       outL[i] = static_cast<float>((dryL + wetL * mix) * post);
       outR[i] = static_cast<float>((dryR + wetR * mix) * post);
     }
+    if (reporting) {
+      sinceReport_ += n;
+      if (sinceReport_ >= kReportEvery) { sinceReport_ = 0; report(count); }
+    }
   }
 
 private:
+  // What the picture is told (see app/pogue_picture.cpp): the report's number, the voices, the loudest level, the highest fast/slow ratio and
+  // which triggers fired (1 hit, 2 pitch step, 4 pattern) since the last report, then each voice's delay in ms (left side, right side).
+  void report(int count) {
+    std::vector<float> values = {static_cast<float>(++reportNumber_), static_cast<float>(count), static_cast<float>(repLevel_), static_cast<float>(repRatio_), static_cast<float>(repFired_)};
+    const double ms = 1000 / sampleRate_;
+    for (const auto& set : voices_)
+      for (int v = 0; v < count; v++) values.push_back(static_cast<float>(set[static_cast<std::size_t>(v)].delay * ms));
+    probe_->publish(values, {});
+    repLevel_ = 0; repRatio_ = 1; repFired_ = 0;
+  }
+
   double random() {
     seed_ ^= seed_ << 13;
     seed_ ^= seed_ >> 17;
@@ -222,6 +240,8 @@ private:
     if (det_.hold > 0) det_.hold--;
     int hit = 0;
     const double ratio = det_.fast > kFloor ? det_.fast / (det_.slow + 1e-9) : 1;
+    if (ratio > repRatio_) repRatio_ = ratio;
+    if (det_.fast > repLevel_) repLevel_ = det_.fast;
     if (det_.hold == 0 && ratio > 1.2 + 8 * js::pow(1 - sensitivity, 2)) hit = 1;
     if (before <= 0 && det_.lp > 0 && det_.fast > kFloor) {
       const double period = det_.since;
@@ -238,7 +258,7 @@ private:
         }
       } else det_.count = 0;
     } else if (det_.since > sampleRate_ / 20) det_.count = 0;
-    if (hit) { det_.hold = holdoff_; det_.count = 0; }
+    if (hit) { det_.hold = holdoff_; det_.count = 0; repFired_ |= hit; }
     return hit;
   }
 
@@ -264,6 +284,7 @@ private:
 
   double sampleRate_;
   const Clock* clock_;
+  std::shared_ptr<SpectrumProbe> probe_;
   int size_;
   std::vector<float> bufL_, bufR_;
   int write_ = 0;
@@ -276,6 +297,9 @@ private:
   double fastCoef_ = 0, slowCoef_ = 0;
   int holdoff_ = 0;
   Detector det_;
+  double repLevel_ = 0, repRatio_ = 1;
+  int repFired_ = 0, sinceReport_ = 0;
+  long reportNumber_ = 0;
   double cursor_ = 0;
   bool patternSeen_ = false;
   std::vector<int> fires_;
