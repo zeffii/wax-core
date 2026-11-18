@@ -11,14 +11,14 @@
 #include "core/js_math.h"
 #include "nodes/all_nodes.h"
 #include "nodes/shared_dsp.h"
+#include "nodes/specpan_core.h"
 
 namespace wax {
 namespace {
 
 enum Param { kShape = 0, kSpread, kRotate, kLowMono, kMix, kB1, kRate = 15, kSweep = 16, kWave = 17, kPunch = 18, kPunchTime = 19 };
 
-constexpr int kBands = 10, kCuts = kBands - 1;
-constexpr double kFLow = 150, kFHigh = 10000;
+using specpan::kBands, specpan::kCuts, specpan::kFLow, specpan::kFHigh;
 constexpr double kSqrt1Half = 0.7071067811865476;
 
 using Biquad = std::array<double, 5>;
@@ -29,20 +29,7 @@ Biquad lowpass(double f, double sr, bool high = false) {
   return {b0, b1, b0, -2 * c / a0, (1 - al) / a0};
 }
 
-// The pan position (-1 left to 1 right) of every band for a shape and a rotation; `custom` reads the band values.
-void bandPans(int shape, double rotate, const double* custom, double* out) {
-  for (int k = 0; k < kBands; k++) {
-    const double t = static_cast<double>(k) / (kBands - 1);
-    if (shape == 0) out[k] = js::cos(kPi * (k + kBands * rotate));
-    else if (shape == 1) { const double f = (k + 0.5) / kBands + rotate; out[k] = 2 * (f - std::floor(f)) - 1; }
-    else if (shape == 2) out[k] = js::sin(4 * kPi * (t + rotate));
-    else {
-      const double p = std::fmod(std::fmod(k + kBands * rotate, kBands) + kBands, kBands), a = std::floor(p), f = p - a;
-      const int ai = static_cast<int>(a);
-      out[k] = custom[ai] + (custom[(ai + 1) % kBands] - custom[ai]) * f;
-    }
-  }
-}
+using specpan::bandPans;
 
 double tick(const Biquad& c, double* z, int o, double x) {
   const double y = c[0] * x + z[o];

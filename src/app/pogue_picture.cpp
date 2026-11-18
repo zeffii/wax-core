@@ -6,6 +6,7 @@
 #include <deque>
 #include <map>
 
+#include "app/picture_canvas.h"
 #include "app/theme.h"
 
 namespace wax::app {
@@ -20,8 +21,6 @@ constexpr int kSeconds = 6, kKept = 180;
 constexpr double kRatioMax = 12;   // the top of the detector's (log) axis
 
 const ImU32 kAmber = IM_COL32(250, 200, 70, 255), kGreen = IM_COL32(60, 205, 168, 255), kOrangeInk = IM_COL32(245, 160, 60, 255), kRed = IM_COL32(235, 90, 75, 255), kCyan = IM_COL32(60, 190, 225, 255);
-
-ImU32 withAlphaF(ImU32 colour, float alpha) { return (colour & 0x00FFFFFFu) | (static_cast<ImU32>(std::clamp(alpha, 0.0f, 1.0f) * 255) << 24); }
 
 ImU32 voiceColour(int voice, int count) {   // orange to cyan, so no purples
   const float hue = 28 + (count > 1 ? static_cast<float>(voice) / (count - 1) : 0.0f) * 170, h = hue / 60, k = (1 - std::fabs(2 * 0.58f - 1)) * 0.78f, x = k * (1 - std::fabs(std::fmod(h, 2.0f) - 1)), m = 0.58f - k / 2;
@@ -74,54 +73,6 @@ History& updatedHistory(const GraphNode& node, const PictureTiming& timing) {
   while (history.reports.size() > static_cast<std::size_t>(kKept)) history.reports.pop_front();
   history.live = true;
   return history;
-}
-
-// ---- drawing with web pixels ----
-struct Canvas {
-  ImDrawList* dl;
-  ImFont* font;
-  ImVec2 origin;   // the part's top left, on the screen
-  float scale;
-  ImVec2 at(float x, float y) const { return ImVec2(origin.x + x * scale, origin.y + y * scale); }
-  void line(float x0, float y0, float x1, float y1, ImU32 colour, float width = 1) const { dl->AddLine(at(x0, y0), at(x1, y1), colour, std::max(1.0f, width * scale)); }
-  // a dashed horizontal or vertical (or any) line
-  void dashed(float x0, float y0, float x1, float y1, ImU32 colour, float width, float on, float off) const {
-    const float length = std::hypot(x1 - x0, y1 - y0);
-    for (float d = 0; d < length; d += on + off) {
-      const float a = d / length, b = std::min(length, d + on) / length;
-      line(x0 + (x1 - x0) * a, y0 + (y1 - y0) * a, x0 + (x1 - x0) * b, y0 + (y1 - y0) * b, colour, width);
-    }
-  }
-  void rect(float x, float y, float w, float h, ImU32 colour) const { dl->AddRect(at(x, y), at(x + w, y + h), colour, 0, 0, std::max(1.0f, scale)); }
-  void fill(float x, float y, float w, float h, ImU32 colour) const { dl->AddRectFilled(at(x, y), at(x + w, y + h), colour); }
-  void dot(float x, float y, float radius, ImU32 colour) const { dl->AddCircleFilled(at(x, y), radius * scale, colour); }
-  // small text; align 0 left, 1 right
-  void label(const std::string& text, float x, float y, ImU32 colour, float alpha = 0.6f, int align = 0) const {
-    const float size = std::max(9 * scale, 7.0f);
-    const float width = font->CalcTextSizeA(size, FLT_MAX, 0, text.c_str()).x;
-    const ImVec2 p = at(x, y);
-    dl->AddText(font, size, ImVec2(align == 1 ? p.x - width : p.x, p.y), withAlphaF(colour, alpha), text.c_str());
-  }
-};
-
-std::string hertz(double v) {
-  char text[24];
-  if (v >= 1000) std::snprintf(text, sizeof text, v >= 10000 ? "%.0f kHz" : "%.1f kHz", v / 1000);
-  else std::snprintf(text, sizeof text, "%.0f Hz", v);
-  return text;
-}
-std::string number(double v, int digits = 1) { char text[24]; std::snprintf(text, sizeof text, "%.*f", digits, v); return text; }
-
-// a handle for the mouse: where it is grabbed, and the part's rectangle (screen) that its position is measured in
-void addHandle(ResponseHandles& handles, const GraphNode& node, const std::string& param, ImVec2 at, ImVec2 rectMin, ImVec2 rectSize, bool once = false) {
-  ResponseHandles::Handle handle{node.id, param, 0, at};
-  handle.gx = rectMin.x; handle.gy = rectMin.y; handle.gw = rectSize.x; handle.gh = rectSize.y; handle.once = once;
-  handles.list.push_back(handle);
-}
-
-// a line that is grabbed anywhere along it: handles every few pixels
-void addLineHandles(ResponseHandles& handles, const GraphNode& node, const std::string& param, const Canvas& c, float y, float x0, float x1, ImVec2 rectMin, ImVec2 rectSize) {
-  for (float x = x0; x <= x1; x += 12) addHandle(handles, node, param, c.at(x, y), rectMin, rectSize);
 }
 
 void drawVoices(const Canvas& c, const GraphNode& node, const NodeType& type, const History& history, ResponseHandles& handles) {

@@ -179,7 +179,7 @@ std::unique_ptr<GraphRuntime::RunNode> GraphRuntime::makeNode(const CompiledNode
     std::lock_guard<std::mutex> lock(takeMutex_);
     takes_.push_back({instrument, nodeId, message});
   };
-  if (compiled.type == "kaleidoscope" || compiled.type == "pogue") context.probe = probe(instrument, compiled.id);
+  if (compiled.type == "kaleidoscope" || compiled.type == "pogue" || compiled.type == "ringmod" || compiled.type == "notepan" || compiled.type == "sympathy" || compiled.type == "filterpro") context.probe = probe(instrument, compiled.id);
   context.nextInstance = [this](const std::string& kind) { return ++instancesMade_[kind]; };
   if (!compiled.source.empty()) {
     const std::string source = compiled.source;

@@ -54,15 +54,22 @@ struct Shared {
   std::map<int, int> held;   // note -> the order it was played in
   int seq = 0;
   double phase = 0;
+  // What the picture is told: one entry for each copy that has been heard from lately (a copy that stops reporting ages out).
+  struct Heard { int note = -1; double angle = 0; bool held = false; int age = 0; };
+  std::map<int, Heard> heard;
+  int nextId = 0;
+  double sinceReport = 0;
+  long reports = 0;
 };
 
 class NotePan final : public Node {
 public:
-  explicit NotePan(const NodeContext& context) : sampleRate_(context.sampleRate) {
+  explicit NotePan(const NodeContext& context) : sampleRate_(context.sampleRate), probe_(context.probe) {
     if (context.shared) {
       if (!*context.shared) *context.shared = std::make_shared<Shared>();
       shared_ = std::static_pointer_cast<Shared>(*context.shared);
     } else shared_ = std::make_shared<Shared>();
+    id_ = shared_->nextId++;
   }
 
   void note(const NoteEvent& event) override {
@@ -101,6 +108,7 @@ public:
     for (int i = 0; i < n; i++) {
       phi0_ += (target - phi0_) * slew;
       const double angle = phi0_ + panRotation(shape, phase_ + off, amp);
+      angle_ = angle;
       const double pan = js::sin(angle), back = std::max(0.0, -js::cos(angle));
       const double q = (pan + 1) * kPi / 4, g = (1 - 0.5 * back * behind) * kSqrt2;
       const double c = 1 - (1 - lpLo) * back * behind;
@@ -111,11 +119,31 @@ public:
       phase_ += inc;
     }
     s.phase = phase_;
+    if (probe_ && probe_->watched()) report(s, n, angle_);
   }
 
 private:
+  // The picture is told where each sounding copy is (see app/space_pictures.cpp): [report number, count, then id, note, angle, held for each].
+  void report(Shared& s, int n, double angle) {
+    s.heard[id_] = {mine_, angle, held_, 0};
+    s.sinceReport += n;
+    if (s.sinceReport < sampleRate_ * 0.06) return;
+    s.sinceReport = 0;
+    std::vector<float> values = {static_cast<float>(++s.reports), 0};
+    for (auto it = s.heard.begin(); it != s.heard.end();) {
+      if (++it->second.age > 7) { it = s.heard.erase(it); continue; }   // about 0.4 s without a word
+      values.insert(values.end(), {static_cast<float>(it->first), static_cast<float>(it->second.note), static_cast<float>(it->second.angle), it->second.held ? 1.0f : 0.0f});
+      ++it;
+    }
+    values[1] = static_cast<float>((values.size() - 2) / 4);
+    probe_->publish(values, {});
+  }
+
   double sampleRate_;
+  std::shared_ptr<SpectrumProbe> probe_;
   std::shared_ptr<Shared> shared_;
+  int id_ = 0;
+  double angle_ = 0;
   int mine_ = -1, seq_ = 0;
   bool held_ = false, started_ = false;
   double x_ = 0, phi0_ = 0, phase_ = 0, lpL_ = 0, lpR_ = 0;

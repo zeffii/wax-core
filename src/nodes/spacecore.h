@@ -9,6 +9,9 @@ namespace wax::space {
 
 inline constexpr int kMaxStrings = 12;
 
+// The names of the chords the strings can be tuned to, in the order of the node's `chord` setting.
+const std::vector<const char*>& chordNames();
+
 double midiHz(double midi);
 
 // The pitches of the strings: the chord's notes from the root, climbing through the octaves, `count` of them (MIDI numbers).

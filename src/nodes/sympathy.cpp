@@ -30,7 +30,7 @@ constexpr double kSqrt1_2 = 0.7071067811865476;
 class Sympathy final : public Node {
 public:
   explicit Sympathy(const NodeContext& context)
-      : sampleRate_(context.sampleRate), size_(static_cast<int>(std::ceil(context.sampleRate / kLowest)) + 4),
+      : sampleRate_(context.sampleRate), probe_(context.probe), size_(static_cast<int>(std::ceil(context.sampleRate / kLowest)) + 4),
         dcR_(1 - 2 * kPi * kDcHz / context.sampleRate) {
     for (auto& b : bufs_) b.assign(static_cast<std::size_t>(size_), 0.0f);
     pitch_.fill(-1);
@@ -70,6 +70,7 @@ public:
       }
     const double mix = v(kMix) / std::sqrt(std::max(1, active_)) * 2;
     const double c = 1 - js::exp(-2 * kPi * v(kDamp) / sampleRate_), feed = 0.15;
+    const bool reporting = probe_ && probe_->watched();
     for (int i = 0; i < n; i++) {
       const double x = (static_cast<double>(inL[i]) + inR[i]) * 0.5 * feed;
       double l = 0, r = 0;
@@ -92,13 +93,28 @@ public:
         if (++pos_[s] == size_) pos_[s] = 0;
         l += y * pan_[s][0];
         r += y * pan_[s][1];
+        if (reporting) energy_[s] = std::max(energy_[s] * 0.9995, std::fabs(y));
       }
       outL[i] = static_cast<float>(inL[i] + l * mix);
       outR[i] = static_cast<float>(inR[i] + r * mix);
     }
+    if (reporting) {   // the picture: for each string its pitch, how much it rings and what it sends to each side, about every 80 ms
+      sent_ += n;
+      if (sent_ >= sampleRate_ * 0.08) { sent_ = 0; report(); }
+    }
   }
 
 private:
+  // [report number, strings, then the pitches, the energies, the left gains and the right gains of the strings that are in use]
+  void report() {
+    std::vector<float> notes, energy, left, right;
+    for (std::size_t s = 0; s < kMaxStrings; s++)
+      if (pitch_[s] >= 0) { notes.push_back(pitch_[s]); energy.push_back(static_cast<float>(energy_[s])); left.push_back(static_cast<float>(pan_[s][0])); right.push_back(static_cast<float>(pan_[s][1])); }
+    std::vector<float> values = {static_cast<float>(++reports_), static_cast<float>(notes.size())};
+    for (const auto* part : {&notes, &energy, &left, &right}) values.insert(values.end(), part->begin(), part->end());
+    probe_->publish(values, {});
+  }
+
   // string i gets its pitch (a little off true, more for the ones further out) and its loop gain from the ring time
   void tune(std::size_t i, double detuneParam, double ring) {
     const double detune = detuneParam * ((static_cast<int>(i) >> 1) + 1) / 3 * (i % 2 ? 1 : -1);
@@ -145,8 +161,12 @@ private:
   }
 
   double sampleRate_;
+  std::shared_ptr<SpectrumProbe> probe_;
   int size_;
   double dcR_;
+  std::array<double, kMaxStrings> energy_{};
+  double sent_ = 0;
+  long reports_ = 0;
   std::array<std::vector<float>, kMaxStrings> bufs_;
   std::array<int, kMaxStrings> pos_{};
   std::array<double, kMaxStrings> lp_{}, len_{}, fb_{}, hx_{}, hy_{};

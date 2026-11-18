@@ -25,7 +25,7 @@ double carrierAt(double phase, int wave) {
 class RingMod final : public Node {
 public:
   explicit RingMod(const NodeContext& context)
-      : sampleRate_(context.sampleRate), lpc_(1 - js::exp(-2 * kPi * 1200 / context.sampleRate)) {}
+      : sampleRate_(context.sampleRate), probe_(context.probe), lpc_(1 - js::exp(-2 * kPi * 1200 / context.sampleRate)) {}
 
   void process(const float* const* inputs, float* const* outputs, int n, const float* params, const int* slots) override {
     auto p = [&](int i) { return static_cast<double>(params[slots[i]]); };
@@ -34,6 +34,7 @@ public:
     const int wave = jsRoundInt(p(kWave));
     const double depth = p(kDepth), mix = p(kMix);
     constexpr double lo = 40, hi = 2000;
+    const bool reporting = probe_ && probe_->watched();
     for (int i = 0; i < n; i++) {
       const double inL = inputs[0][i], inR = inputs[1][i];
       const double x = (inL + inR) * 0.5;
@@ -55,10 +56,18 @@ public:
       outputs[0][i] = static_cast<float>(inL + (inL * g - inL) * mix);
       outputs[1][i] = static_cast<float>(inR + (inR * g - inR) * mix);
     }
+    if (reporting) {   // the picture: the pitch heard and the carrier now, about every 0.1 s
+      sent_ += n;
+      if (sent_ >= sampleRate_ * 0.1) { sent_ = 0; probe_->publish({static_cast<float>(++reports_), static_cast<float>(f0_), static_cast<float>(fc_)}, {}); }
+    }
   }
 
 private:
-  double sampleRate_, lpc_;
+  double sampleRate_;
+  std::shared_ptr<SpectrumProbe> probe_;
+  double lpc_;
+  double sent_ = 0;
+  long reports_ = 0;
   double phase_ = 0, f0_ = 0, fc_ = 220, lp_ = 0, prev_ = 0, since_ = 0, env_ = 0;
 };
 

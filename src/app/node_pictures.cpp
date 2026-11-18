@@ -12,6 +12,7 @@
 
 #include "app/picture_slot.h"
 #include "app/pogue_picture.h"
+#include "app/space_pictures.h"
 #include "app/theme.h"
 #include "core/node.h"
 #include "nodes/adsr.h"
@@ -903,9 +904,10 @@ void drawTwin(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeTyp
 
 }  // namespace
 
-bool hasPicture(const std::string& nodeType) { return nodeType == "twin" || nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu" || nodeType == "membrane" || nodeType == "granular" || nodeType == "kaleidoscope" || nodeType == "drumsynth" || nodeType == "drumsynth2" || nodeType == "hat2" || nodeType == "pulsar" || nodeType == "pulsetrain" || nodeType == "pogue"; }
+bool hasPicture(const std::string& nodeType) { return nodeType == "twin" || nodeType == "prismacanyon" || nodeType == "ensemble" || nodeType == "haas" || nodeType == "reflect" || nodeType == "rotary" || nodeType == "khufu" || nodeType == "membrane" || nodeType == "granular" || nodeType == "kaleidoscope" || nodeType == "drumsynth" || nodeType == "drumsynth2" || nodeType == "hat2" || nodeType == "pulsar" || nodeType == "pulsetrain" || nodeType == "pogue" || spacePictureSize(nodeType).w > 0; }
 
 PictureSize pictureSize(const std::string& nodeType) {
+  if (const PictureSize space = spacePictureSize(nodeType); space.w > 0) return space;
   static const std::map<std::string, PictureSize> sizes = {
       {"prismacanyon", {360, 20 + 30 * kCanyonLines + 24}}, {"twin", {480, 260}}, {"ensemble", {320, 150}}, {"haas", {400, 280}}, {"reflect", {560, 384}},
       {"granular", {360, 262}}, {"membrane", {360, 196}}, {"khufu", {310, 150}}, {"rotary", {300, 190}}, {"kaleidoscope", {460, 270}}, {"drumsynth", {360, 372}},
@@ -931,6 +933,7 @@ float drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const
   else if (node.type == "drumsynth2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "pulsar" || node.type == "pulsetrain") drawPulsarTrain(dl, font, node, type, frameFor(dl, font, node.id + " pulse train", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale);
   else if (node.type == "pogue") { const Frame f = frameFor(dl, font, "", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale); drawPogue(dl, font, node, type, ImVec2(f.x0, f.y0), scale, timing, handles); }
+  else if (spacePictureSize(node.type).w > 0) { const Frame f = frameFor(dl, font, "", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale); drawSpacePicture(dl, font, node, type, ImVec2(f.x0, f.y0), scale, timing, handles); }
   else if (node.type == "hat2") drawDrawnHit(dl, font, node, type, frameFor(dl, font, node.id + " drawings", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   return gBelow;
 }
@@ -942,6 +945,20 @@ std::vector<std::pair<std::string, double>> dragPictureHandle(const ResponseHand
   };
   const double fx = std::clamp(static_cast<double>((at.x - handle.gx) / handle.gw), 0.0, 1.0), fy = std::clamp(static_cast<double>((at.y - handle.gy) / handle.gh), 0.0, 1.0);
   if (handle.param.rfind("@pog", 0) == 0) return dragPogueHandle(handle, node, type, at);
+  if (handle.param.rfind("@sp.", 0) == 0) return dragSpaceHandle(handle, node, type, at);
+  if (handle.param.rfind("@set:", 0) == 0) {   // a button: set a parameter
+    const std::size_t eq = handle.param.find('=');
+    return {{handle.param.substr(5, eq - 5), clampTo(handle.param.substr(5, eq - 5), std::stod(handle.param.substr(eq + 1)))}};
+  }
+  if (handle.param.rfind("@flip:", 0) == 0) {   // a button: switch a 0/1 parameter
+    const std::string name = handle.param.substr(6);
+    return {{name, valueOf(node, type, name) >= 0.5 ? 0.0 : 1.0}};
+  }
+  if (handle.param.rfind("@nudge:", 0) == 0) {   // a button: add to a parameter, within its range
+    const std::size_t eq = handle.param.find('=');
+    const std::string name = handle.param.substr(7, eq - 7);
+    return {{name, clampTo(name, valueOf(node, type, name) + std::stod(handle.param.substr(eq + 1)))}};
+  }
   if (handle.param == "@src") return {{"srcx", fx}, {"srcy", fy}};
   if (handle.param == "@lis") return {{"lisx", fx}, {"lisy", fy}};
   if (handle.param == "@size") {   // the corner: pixels per metre is the plan's width over the room's width

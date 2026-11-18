@@ -16,6 +16,11 @@ const std::vector<std::vector<int>>& chords() {
 
 }  // namespace
 
+const std::vector<const char*>& chordNames() {
+  static const std::vector<const char*> names = {"open", "major", "minor", "maj7", "min7", "sus4", "dim", "whole"};
+  return names;
+}
+
 double midiHz(double midi) { return 440 * js::pow(2, (midi - 69) / 12); }
 
 std::vector<int> stringsOf(double root, double chord, double count) {

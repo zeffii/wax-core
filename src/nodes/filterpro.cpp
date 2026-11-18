@@ -5,10 +5,12 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 #include "core/js_math.h"
 #include "nodes/all_nodes.h"
+#include "nodes/filterpro_response.h"
 #include "nodes/shared_dsp.h"
 
 namespace wax {
@@ -16,19 +18,28 @@ namespace {
 
 enum Param { kCut = 0, kRes, kMode, kMorph, kVowel, kDamp, kDrive, kBias, kMix, kLevel };
 
-constexpr double kFormants[5][3] = {{800, 1150, 2900}, {350, 2000, 2800}, {270, 2140, 2950}, {450, 800, 2830}, {325, 700, 2700}};   // a e i o u
-constexpr double kFormantGain[3] = {1, 0.5, 0.3};
+using filterpro::kFormants;
+using filterpro::kFormantGain;
 
 // smooth tanh-like, exact at +-3
 double clip(double x) { return x > 3 ? 1 : x < -3 ? -1 : x * (27 + x * x) / (27 + 9 * x * x); }
 
+// The copies of the node (one per voice) share this: only the newest one reports to the picture.
+struct Reporter { const void* who = nullptr; };
+
 class FilterPro final : public Node {
 public:
   explicit FilterPro(const NodeContext& context)
-      : sr_(context.sampleRate),
+      : probe_(context.probe), sr_(context.sampleRate),
         cs_(1 - js::exp(-4 / (context.sampleRate * 0.004))),
         modOn_(context.connected.size() > 1 && context.connected[1]),
-        buf_(static_cast<std::size_t>(std::ceil(context.sampleRate / 15)) + 8, 0.0f) {}
+        buf_(static_cast<std::size_t>(std::ceil(context.sampleRate / 15)) + 8, 0.0f) {
+    if (context.shared) {
+      if (!*context.shared) *context.shared = std::make_shared<Reporter>();
+      reporter_ = std::static_pointer_cast<Reporter>(*context.shared);
+      reporter_->who = this;
+    }
+  }
 
   void process(const float* const* inputs, float* const* outputs, int n, const float* params, const int* slots) override {
     const float* input = inputs[0];
@@ -134,6 +145,22 @@ public:
     for (int q = 0; q < 16; q++) if (std::abs(st_[q]) < 1e-20) st_[q] = 0;
     for (int q = 0; q < 4; q++) if (std::abs(z_[q]) < 1e-20) z_[q] = 0;
     if (std::abs(damped_) < 1e-20) damped_ = 0;
+    if (probe_ && probe_->watched() && (!reporter_ || reporter_->who == this)) {   // the picture: the last frame of what went in and what came out
+      for (int i = 0; i < n; i++) {
+        heardIn_[static_cast<std::size_t>(heard_)] = input[i];
+        heardOut_[static_cast<std::size_t>(heard_)] = out[i];
+        heard_ = heard_ + 1 >= kFrame ? 0 : heard_ + 1;
+      }
+      sinceReport_ += n;
+      if (sinceReport_ >= kReportEvery) {
+        sinceReport_ = 0;
+        for (int i = 0; i < kFrame; i++) {   // oldest first, ready for a window and an FFT
+          frameIn_[static_cast<std::size_t>(i)] = heardIn_[static_cast<std::size_t>((heard_ + i) % kFrame)];
+          frameOut_[static_cast<std::size_t>(i)] = heardOut_[static_cast<std::size_t>((heard_ + i) % kFrame)];
+        }
+        probe_->publish(frameIn_, frameOut_);
+      }
+    }
   }
 
 private:
@@ -148,6 +175,11 @@ private:
     v1_ = v1; v2_ = v2;
   }
 
+  static constexpr int kFrame = 2048, kReportEvery = 2400;   // a frame of sound, about every 50 ms
+  std::shared_ptr<SpectrumProbe> probe_;
+  std::shared_ptr<Reporter> reporter_;
+  std::vector<float> heardIn_ = std::vector<float>(kFrame, 0.0f), heardOut_ = std::vector<float>(kFrame, 0.0f), frameIn_ = std::vector<float>(kFrame, 0.0f), frameOut_ = std::vector<float>(kFrame, 0.0f);
+  int heard_ = 0, sinceReport_ = 0;
   double sr_, cs_;
   bool modOn_;
   double st_[16] = {};   // 0 main, 2 second stage, 4..9 three formants
