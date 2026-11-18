@@ -874,7 +874,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     const float x = railLineX(railMin.x, scale);
     ImGui::GetWindowDrawList()->AddLine(ImVec2(x, ImGui::GetWindowPos().y), ImVec2(x, railMax.y), app::lineAlpha(255), 1.0f);   // (from the top of the window)
   }
-  ImGui::SameLine();
+  const float railGap = 7 * scale;   // the browser keeps a character's width off the rail's vertical line
+  ImGui::SameLine(0, ImGui::GetStyle().ItemSpacing.x + railGap);
   // The browser, down the left of every screen as in the web app: tabs for the lists (patterns, machines, samples), and under them
   // the options of the screen being shown (the Song screen's lane tools).
   const Lane* listed = nullptr;
@@ -882,13 +883,12 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   if (!listed) for (const Lane& l : doc.project().lanes) if (l.id != kMaster) { listed = &l; selectedLane = l.id; break; }   // none picked yet: the first lane
   app::PatternListResult listed2;
   if (session->showBrowser) {
-    ImGui::BeginChild("browser", ImVec2(session->browserWidth * scale, below), false, ImGuiWindowFlags_NoNav);
+    ImGui::BeginChild("browser", ImVec2(session->browserWidth * scale - railGap, below), false, ImGuiWindowFlags_NoNav);
     {   // the tabs
       const char* tabs[] = {"Patterns", "Machines", "Samples"};
       ImDrawList* tabLines = ImGui::GetWindowDrawList();
       const float left = ImGui::GetCursorScreenPos().x, right = left + ImGui::GetContentRegionAvail().x;
       float baseline = 0;
-      const float lift = 7 * scale;   // the line sits a character's width below the tabs
       for (int i = 0; i < 3; i++) {
         if (i) ImGui::SameLine(0, 8 * scale);
         if (app::textButton(tabs[i], session->browserTab == i)) session->browserTab = i;
@@ -896,8 +896,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         baseline = hi.y + 1 * scale;
         if (session->browserTab == i) tabLines->AddRectFilled(ImVec2(lo.x, baseline - 1 * scale), ImVec2(hi.x, baseline + 1 * scale), app::kAccent);   // the open tab: underlined
       }
-      tabLines->AddLine(ImVec2(left, baseline + lift + 1 * scale), ImVec2(right, baseline + lift + 1 * scale), app::textAlpha(55));   // the line the tabs sit on
-      ImGui::Dummy(ImVec2(0, 3 * scale + lift));
+      tabLines->AddLine(ImVec2(left, baseline + 1 * scale), ImVec2(right, baseline + 1 * scale), app::textAlpha(55));   // the line the tabs sit on
+      ImGui::Dummy(ImVec2(0, 3 * scale));
     }
     if (session->screen != session->browserScreen) {   // each screen shows the list that goes with it
       session->browserScreen = session->screen;
