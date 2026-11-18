@@ -87,6 +87,8 @@ struct DialogAnswer {
 };
 DialogAnswer gAnswer;
 enum class DialogRequest { None, Open, SaveAs, Export, New, ClearArrangement, ClearPatterns };
+float gIconCentre = 0;      // the screen y of the middle of the transport icons, as drawn last frame: the File word is centred on it
+constexpr float kFileGap = 18;   // the space either side of the File word, in web pixels: from the rail's line, and to the Play button
 std::string gOpenRecent;   // a song the File menu's recent list asked to open
 std::string gOpenBackup;   // a snapshot the File menu asked to open (the main loop does it: it replaces the session)
 DialogRequest gRequest = DialogRequest::None;   // set by the keys, carried out by the main loop (it has the window)
@@ -394,11 +396,13 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       const float width = 34 * hs, aspect = 820.0f / 2320.0f, frame = ImGui::GetFrameHeight();
       const ImVec2 at = ImGui::GetCursorScreenPos();
       app::drawIcon("wax-logo", ImVec2(at.x + 3 * hs, at.y + (frame - width * aspect) / 2), width, aspect, app::kText, ImGui::GetWindowDrawList());
-      ImGui::Dummy(ImVec2(40 * hs + ImGui::GetStyle().ItemSpacing.x / 2 + ImGui::CalcTextSize("M").x, frame));   // (File starts right of the rail's line, a character's width past it)
+      ImGui::Dummy(ImVec2(40 * hs + ImGui::GetStyle().ItemSpacing.x / 2 + kFileGap * hs, frame));   // (File sits midway between the rail's line and the Play button: the same gap each side)
       ImGui::SameLine(0, 0);
       ImGui::SetCursorPosY(lineY);
     }
-    ImGui::SetCursorPosY(lineY + ImGui::GetStyle().FramePadding.y);   // (a text button does not apply the baseline offset itself)
+    const float iconsY = lineY + ImGui::GetStyle().FramePadding.y;   // (a text button does not apply the baseline offset itself)
+    ImGui::SetCursorPosY(iconsY);
+    if (gIconCentre > 0) ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x, gIconCentre - ImGui::GetTextLineHeight() / 2));
     if (app::textButton("File")) ImGui::OpenPopup("filemenu");
     ImGui::SameLine(0, 0); ImGui::SetCursorPosY(lineY);
     if (ImGui::BeginPopup("filemenu")) {
@@ -433,7 +437,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       }
       ImGui::EndPopup();
     }
-    ImGui::SameLine(0, 18 * hs);
+    ImGui::SameLine(0, kFileGap * hs);
+    ImGui::SetCursorPosY(iconsY);   // (the icons keep their own height whatever File's was)
   }
   {   // automatic backups: a snapshot every few minutes while the song has changes
     const std::time_t now = std::time(nullptr);
@@ -477,6 +482,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (playing) { player.ring().push({LiveCommand::Stop, 0, 1}); session->pausedAt = -1; }
     else { player.ring().push({LiveCommand::Play, std::max(0, session->pausedAt), 1}); session->pausedAt = -1; }
   }
+  gIconCentre = (ImGui::GetItemRectMin().y + ImGui::GetItemRectMax().y) / 2;
   ImGui::SameLine();
   if (app::iconButton("pause", "Pause (Pause key): stop here; Play (or Pause again) carries on from the same place", session->pausedAt >= 0, 20 * app::kTickScale, true)) {
     if (playing) { session->pausedAt = player.tick(); player.ring().push({LiveCommand::Stop, 0, 1}); }
@@ -1775,7 +1781,8 @@ int main(int argc, char** argv) {
     std::printf("SDL: %s\n", SDL_GetError());
     return 2;
   }
-  SDL_Window* window = SDL_CreateWindow("Wax", 1280, 800, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+  app::loadSettings();   // (before the window: it opens at the size it had when it was last closed)
+  SDL_Window* window = SDL_CreateWindow("Wax", app::settings().windowWidth, app::settings().windowHeight, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | (app::settings().windowMaximised ? SDL_WINDOW_MAXIMIZED : 0));
   SDL_Renderer* renderer = window ? SDL_CreateRenderer(window, nullptr) : nullptr;
   if (renderer) app::iconsInit(renderer);
   if (!renderer) {
@@ -1792,7 +1799,6 @@ int main(int argc, char** argv) {
   app::loadFonts();
   app::applyTheme(scale);
   loadTheme();
-  app::loadSettings();
   if (!options.theme.empty()) app::setThemeByName(options.theme.c_str());
   if (options.allLanes) app::settings().patternAll = true;
   ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
@@ -1843,6 +1849,12 @@ int main(int argc, char** argv) {
     for (SDL_Event event; SDL_PollEvent(&event);) {
       ImGui_ImplSDL3_ProcessEvent(&event);
       if (event.type == SDL_EVENT_QUIT) running = false;
+      if (event.type == SDL_EVENT_WINDOW_RESIZED || event.type == SDL_EVENT_WINDOW_MAXIMIZED || event.type == SDL_EVENT_WINDOW_RESTORED) {   // remembered (saved when the app closes)
+        app::Settings& cfg = app::settings();
+        cfg.windowMaximised = (SDL_GetWindowFlags(window) & SDL_WINDOW_MAXIMIZED) != 0;
+        int w = 0, h = 0;
+        if (!cfg.windowMaximised && SDL_GetWindowSize(window, &w, &h) && w >= 640 && h >= 400) { cfg.windowWidth = w; cfg.windowHeight = h; }
+      }
       if (event.type == SDL_EVENT_DROP_FILE && event.drop.data) open(event.drop.data);
     }
     ImGui_ImplSDLRenderer3_NewFrame();
@@ -1980,6 +1992,7 @@ int main(int argc, char** argv) {
   }
 
   session.reset();
+  app::saveSettings();   // (the window size is kept in the settings)
   ImGui_ImplSDLRenderer3_Shutdown();
   ImGui_ImplSDL3_Shutdown();
   ImGui::DestroyContext();
