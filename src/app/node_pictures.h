@@ -30,6 +30,14 @@ struct PictureTiming {
 
 bool hasPicture(const std::string& nodeType);
 
+// The nodes whose sound is drawn as Bezier envelopes and heard in a hit (drumsynth2, hat2): their strip is a grid, each cell one drawing or one hit.
+bool hasDrawnHitGrid(const std::string& nodeType);
+ImU32 drawingColour(const std::string& nodeType, const std::string& drawing);   // the colour a drawing has in the picture and the editor (0: none)
+double drawingMs(const GraphNode& node, const NodeType& type, const std::string& drawing);   // how long a drawing takes, from the node's rate settings
+int drawnHitCount(const std::string& nodeType);   // how many hits the node plays (a hat: closed and open)
+// One hit as the node plays it: its waveform with the ms axis, in the rectangle min to max. `size` is the text size.
+void drawHitCell(ImDrawList* dl, ImFont* font, float size, const GraphNode& node, const NodeType& type, ImVec2 min, ImVec2 max, float scale, int hit);
+
 // How big the picture of a node type is, in web pixels (zero when it has none).
 PictureSize pictureSize(const std::string& nodeType);
 

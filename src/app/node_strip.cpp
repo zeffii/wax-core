@@ -23,6 +23,7 @@ constexpr float kHideBelow = 20, kMinShown = 60;         // web pixels: under th
 constexpr float kDefaultHeight = 170;                    // web pixels
 constexpr float kBarsWidth = 168, kBarNameWidth = 64;    // the parameter bars (web pixels)
 constexpr float kDrawingWidth = 200;                     // one drawing's canvas
+constexpr float kHitCellWidth = 330;                     // a cell of the drawn-hit grid (a drawing or a hit)
 constexpr float kButtonsWidth = 120;
 constexpr float kGap = 10;                               // between the columns of a node, and (twice) between nodes
 constexpr float kSmallestPicture = 0.3f;                 // a picture is never drawn smaller than this part of its size
@@ -171,7 +172,7 @@ NodeStripResult drawNodeStrip(NodeStripState& state, ParamPanelState& panel, Doc
              drawNodeResponse(dl, font, *node, type, lo, lo, lo, hi, shownScale, state.response);
            }) + kGap * scale;
     }
-    if (hasPicture(node->type)) {
+    if (hasPicture(node->type) && !hasDrawnHitGrid(node->type)) {
       x += drawPictureColumn(dl, pictureSize(node->type), ImVec2(origin.x + x, top), layout, [&](float shownScale, ImVec2 lo, ImVec2 hi) {
              drawNodePicture(dl, font, *node, type, lo, lo, lo, hi, shownScale, timing, state.response);
            }) + kGap * scale;
@@ -183,24 +184,42 @@ NodeStripResult drawNodeStrip(NodeStripState& state, ParamPanelState& panel, Doc
     }
 
     // the drawings: one canvas each, edited here; the tools (point types, shapes, snap) are in the window
-    for (const DrawingInfo& info : drawingsOf(node->type)) {
-      const float canvasWidth = (node->type == "env2" ? 3 * kDrawingWidth : kDrawingWidth) * scale;   // env2's envelopes are long, they get three times the room
-      ImGui::SetCursorScreenPos(ImVec2(origin.x + x, top));
+    const auto drawingCanvas = [&](const DrawingInfo& info, ImVec2 at, ImVec2 size) {
+      ImGui::SetCursorScreenPos(at);
       ImGui::PushID(info.name.c_str());
       ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-      ImGui::BeginChild("##drawing", ImVec2(canvasWidth, layout.contentHeight), false, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+      ImGui::BeginChild("##drawing", size, false, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
       ImGui::PopStyleVar();
       bezier::Spline spline = bezier::drawingOf(&node->data, info.name.c_str(), defaultDrawing(node->type, info.name));
       const EnvelopeSpec spec = envelopeSpecFor(*node, info, engine, instrumentId);
       EnvelopeView& view = state.views[node->id + "/" + info.name];
-      const EnvelopeResult edit = drawEnvelopeCanvas(view, info.name.c_str(), spline, spec, ImVec2(canvasWidth, layout.contentHeight));
+      const EnvelopeResult edit = drawEnvelopeCanvas(view, info.name.c_str(), spline, spec, size);
       if (edit.changed) {
         doc.apply(std::make_unique<SetDrawing>(instrumentId, node->id, info.name, bezier::toJson(spline)), edit.fold);
         result.dataChanged = true;
       }
       ImGui::EndChild();
       ImGui::PopID();
-      x += canvasWidth + kGap * scale;
+    };
+    const std::vector<DrawingInfo>& drawings = drawingsOf(node->type);
+    if (hasDrawnHitGrid(node->type)) {
+      // two columns of two cells, each one drawing or one hit: a drum's pitch over its volume, then its noise over the hit; a hat's two drawings, then its two hits
+      const float cellW = kHitCellWidth * scale, cellH = layout.contentHeight / 2;
+      const bool hat = node->type == "hat2";
+      for (int column = 0; column < 2; column++)
+        for (int row = 0; row < 2; row++) {
+          const ImVec2 at(origin.x + x + static_cast<float>(column) * (cellW + kGap * scale), top + static_cast<float>(row) * cellH);
+          const int index = column * 2 + row;   // pitch, volume, noise, hit (a hat: closed, open, closed hit, open hit)
+          if (index < static_cast<int>(drawings.size())) drawingCanvas(drawings[static_cast<std::size_t>(index)], at, ImVec2(cellW, cellH));
+          else drawHitCell(dl, font, ImGui::GetFontSize(), *node, type, ImVec2(at.x, at.y + 2 * scale), ImVec2(at.x + cellW, at.y + cellH), scale, hat ? index - 2 : 0);
+        }
+      x += 2 * cellW + 2 * kGap * scale;
+    } else {
+      for (const DrawingInfo& info : drawings) {
+        const float canvasWidth = (node->type == "env2" ? 3 * kDrawingWidth : kDrawingWidth) * scale;   // env2's envelopes are long, they get three times the room
+        drawingCanvas(info, ImVec2(origin.x + x, top), ImVec2(canvasWidth, layout.contentHeight));
+        x += canvasWidth + kGap * scale;
+      }
     }
 
     // the buttons of the node's editor windows

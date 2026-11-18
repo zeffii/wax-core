@@ -35,6 +35,7 @@ struct EnvelopeSpec {
   double totalMs = 0;       // how long the drawing takes; 0 when it is not in ms (the axis then reads in percent)
   bool knot = false;        // the sustain knot means something here
   bool firstHandle = false; // the first anchor always shows its handle
+  ImU32 colour = 0;         // the curve and its fill (0: the accent)
 };
 
 struct EnvelopeResult {

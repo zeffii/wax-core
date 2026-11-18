@@ -797,51 +797,79 @@ void drawPulsarTrain(ImDrawList* dl, ImFont* font, const GraphNode& node, const 
 
 // ---- the drawn drums (drum synth 2, hi-hat 2): their drawings and the hit they make, from the node's own code ----
 
-void drawDrawnHit(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale, ResponseHandles& handles) {
+}  // namespace
+
+bool hasDrawnHitGrid(const std::string& nodeType) { return nodeType == "drumsynth2" || nodeType == "hat2"; }
+
+ImU32 drawingColour(const std::string& nodeType, const std::string& drawing) {
+  if (nodeType == "drumsynth2") return drawing == "pitch" ? IM_COL32(60, 160, 230, 255) : drawing == "amp" ? IM_COL32(235, 160, 45, 255) : drawing == "noise" ? IM_COL32(60, 190, 110, 255) : 0;
+  if (nodeType == "hat2") return drawing == "closed" ? IM_COL32(60, 190, 210, 255) : drawing == "open" ? IM_COL32(235, 160, 45, 255) : 0;
+  return 0;
+}
+
+double drawingMs(const GraphNode& node, const NodeType& type, const std::string& drawing) {
+  const auto rate = [&](const char* name) { return std::max(0.01, valueOf(node, type, name)); };
+  if (node.type == "drumsynth2") return drawing == "pitch" ? 250 / rate("prate") : drawing == "amp" ? 700 / rate("arate") : 400 / rate("nrate");
+  if (node.type == "hat2") return drawing == "closed" ? 140 / rate("crate") : 700 / rate("orate");
+  return 0;
+}
+
+int drawnHitCount(const std::string& nodeType) { return nodeType == "hat2" ? 2 : 1; }
+
+void drawHitCell(ImDrawList* dl, ImFont* font, float size, const GraphNode& node, const NodeType& type, ImVec2 min, ImVec2 max, float scale, int hit) {
   const bool hat = node.type == "hat2";
-  struct Row { const char* key; const char* title; ImU32 colour; double ms; };
   const auto v = [&](const char* name) { return valueOf(node, type, name); };
-  std::vector<Row> rows;
-  if (hat) rows = {{"closed", "closed hat", IM_COL32(60, 190, 210, 255), 140 / std::max(0.01, v("crate"))}, {"open", "open hat", IM_COL32(235, 160, 45, 255), 700 / std::max(0.01, v("orate"))}};
-  else rows = {{"pitch", "pitch", IM_COL32(60, 160, 230, 255), 250 / std::max(0.01, v("prate"))}, {"amp", "volume", IM_COL32(235, 160, 45, 255), 700 / std::max(0.01, v("arate"))}, {"noise", "noise", IM_COL32(60, 190, 110, 255), 400 / std::max(0.01, v("nrate"))}};
   std::vector<float> values;
   for (const ParamSpec& spec : type.params) values.push_back(static_cast<float>(node.param(spec.name, spec.def)));
+  const char* title = hat ? (hit == 0 ? "closed hat" : "open hat") : "the hit";
+  const int note = hat ? hit : static_cast<int>(v("root"));
+  const double ms = hat ? (hit == 0 ? std::max(40.0, drawingMs(node, type, "closed") * 1.1) : std::max(80.0, drawingMs(node, type, "open") * 1.1))
+                        : std::min(1500.0, std::max(150.0, drawingMs(node, type, "amp") * 1.05));
+  const std::vector<float> wave = renderOffline(type, values, note, 1, ms, 44100, -1, &node.data);
+  float peak = 0;
+  for (const float x : wave) peak = std::max(peak, std::fabs(x));
+  char text[64];
+  std::snprintf(text, sizeof text, "peak %.2f, %d ms", peak, static_cast<int>(std::lround(ms)));
+  const float pad = 8 * scale, left = min.x + 34 * scale, pw = (max.x - min.x) - 42 * scale;
+  dl->AddText(font, size, ImVec2(min.x + pad, min.y), textAlpha(190), title);
+  dl->AddText(font, size, ImVec2(max.x - pad - ImGui::CalcTextSize(text).x * size / ImGui::GetFontSize(), min.y), textAlpha(150), text);
+  drawWave(dl, wave, left, min.y + 14 * scale, pw, (max.y - min.y) - 18 * scale, textAlpha(220), 0, wave.size(), scale);
+  drawMsAxis(dl, font, size, left, pw, ms, max.y - 4 * scale, scale);
+}
+
+namespace {
+
+void drawDrawnHit(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale, ResponseHandles& handles) {
+  const bool hat = node.type == "hat2";
+  struct Row { const char* key; const char* title; };
+  const std::vector<Row> rows = hat ? std::vector<Row>{{"closed", "closed hat"}, {"open", "open hat"}} : std::vector<Row>{{"pitch", "pitch"}, {"amp", "volume"}, {"noise", "noise"}};
   const float pad = 8 * scale, left = f.x0 + 34 * scale, pw = f.w - 42 * scale, rowH = 56 * scale;
   float y = f.y0 + 22 * scale;
   char text[64];
   for (const Row& row : rows) {   // the drawings, with how long each takes
+    const ImU32 colour = drawingColour(node.type, row.key);
     const bezier::Table table = bezier::envelopeTable(bezier::drawingOf(&node.data, row.key, defaultDrawing(node.type, row.key)));
     dl->AddText(font, f.size, ImVec2(f.x0 + pad, y), textAlpha(190), row.title);
     const float titleW = ImGui::CalcTextSize(row.title).x * f.size / ImGui::GetFontSize();
-    dl->AddText(font, f.size * 0.9f, ImVec2(f.x0 + pad + titleW + 8 * scale, y + 1 * scale), withAlpha(row.colour, 150), "click to draw");
+    dl->AddText(font, f.size * 0.9f, ImVec2(f.x0 + pad + titleW + 8 * scale, y + 1 * scale), withAlpha(colour, 150), "click to draw");
     handles.list.push_back({node.id, "@draw", 0, ImVec2(f.x0 + pad + titleW / 2, y + f.size / 2), 0, 0, 1, 1});   // opens the drawings window
-    std::snprintf(text, sizeof text, "%d ms", static_cast<int>(std::lround(row.ms)));
+    std::snprintf(text, sizeof text, "%d ms", static_cast<int>(std::lround(drawingMs(node, type, row.key))));
     dl->AddText(font, f.size, ImVec2(f.x0 + f.w - pad - ImGui::CalcTextSize(text).x * f.size / ImGui::GetFontSize(), y), textAlpha(150), text);
     const float top = y + 14 * scale, h = rowH - 20 * scale;
     dl->AddLine(ImVec2(left, top + h), ImVec2(left + pw, top + h), textAlpha(45));
     ImVec2 last{};
     for (int i = 0; i <= 160; i++) {
       const ImVec2 at(left + pw * i / 160.0f, top + h - static_cast<float>(bezier::readEnvelope(table, i / 160.0)) * h);
-      if (i) dl->AddLine(last, at, row.colour, 1.8f * scale);
+      if (i) dl->AddLine(last, at, colour, 1.8f * scale);
       last = at;
     }
     y += rowH;
   }
-  // the hit(s)
-  const auto hit = [&](const char* title, int note, double ms) {
-    const std::vector<float> wave = renderOffline(type, values, note, 1, ms, 44100, -1, &node.data);
-    float peak = 0;
-    for (const float x : wave) peak = std::max(peak, std::fabs(x));
-    std::snprintf(text, sizeof text, "peak %.2f, %d ms", peak, static_cast<int>(std::lround(ms)));
+  for (int hit = 0; hit < drawnHitCount(node.type); hit++) {   // the hit(s)
     dl->AddLine(ImVec2(f.x0, y - 2 * scale), ImVec2(f.x0 + f.w, y - 2 * scale), textAlpha(25));
-    dl->AddText(font, f.size, ImVec2(f.x0 + pad, y), textAlpha(190), title);
-    dl->AddText(font, f.size, ImVec2(f.x0 + f.w - pad - ImGui::CalcTextSize(text).x * f.size / ImGui::GetFontSize(), y), textAlpha(150), text);
-    drawWave(dl, wave, left, y + 14 * scale, pw, 62 * scale, textAlpha(220), 0, wave.size(), scale);
-    drawMsAxis(dl, font, f.size, left, pw, ms, y + 76 * scale, scale);
+    drawHitCell(dl, font, f.size, node, type, ImVec2(f.x0, y), ImVec2(f.x0 + f.w, y + 80 * scale), scale, hit);
     y += 80 * scale;
-  };
-  if (hat) { hit("closed hat", 0, std::max(40.0, rows[0].ms * 1.1)); hit("open hat", 1, std::max(80.0, rows[1].ms * 1.1)); }
-  else hit("the hit", static_cast<int>(v("root")), std::min(1500.0, std::max(150.0, rows[1].ms * 1.05)));
+  }
 }
 
 // ---- twin: the two filters' curves and the pair, with the overtones above each cutoff ----

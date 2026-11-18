@@ -238,7 +238,7 @@ EnvelopeResult drawEnvelopeCanvas(EnvelopeView& view, const char* id, Spline& sp
 
   // the curve, and the area under it
   const auto line = bezier::walk(spline);
-  const ImU32 tint = kAccent;
+  const ImU32 tint = spec.colour ? spec.colour : kAccent;
   {   // the area under it: one thin column per pixel, so no seams show
     const float column = std::max(1.0f, scale);
     std::size_t k = 1;

@@ -1,4 +1,5 @@
 #include "app/envelope_window.h"
+#include "app/node_pictures.h"
 
 #include <memory>
 
@@ -25,6 +26,8 @@ EnvelopeSpec envelopeSpecFor(const GraphNode& node, const DrawingInfo& info, con
   EnvelopeSpec spec;
   spec.title = info.title.c_str();
   spec.knot = info.knot;
+  spec.colour = drawingColour(node.type, info.name);
+  if (hasDrawnHitGrid(node.type)) { if (const NodeType* type = builtinNodes().find(node.type)) spec.totalMs = drawingMs(node, *type, info.name); }   // (these are drawn against the ms their rate gives)
   if (info.timeParam.empty()) return spec;
   const NodeType* type = builtinNodes().find(node.type);
   double fallback = 0;
