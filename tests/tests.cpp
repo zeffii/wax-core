@@ -382,6 +382,32 @@ void testBlockEdit() {
   doc.undo();
   check(row(0) == "C-4 40 .... ......", "undo puts a cut back");
   std::printf("ok: block edits\n");
+
+  // Nugget mode: one character of a cell at a time; another column ends it.
+  doc.undo(); doc.undo();
+  ed.moveTo(2, 0);
+  check(ed.nugget() < 0, "the cursor starts outside nugget mode");
+  check(ed.nuggetStep(1) && ed.nugget() == 1, "Ctrl+Right enters at the accidental");
+  check(ed.typeNuggetChar('#') && row(0).substr(0, 3) == "C#4", "'#' sharpens the note in place");
+  check(ed.nugget() == 2, "and the cursor moves on to the octave");
+  check(ed.typeNuggetChar('5') && row(0).substr(0, 3) == "C#5", "a digit sets the octave");
+  check(ed.nugget() == 2 && ed.tick() == 3, "at the last character the cursor goes down a row, still in the mode");
+  ed.moveTo(5, 0);
+  check(!ed.typeNuggetChar('5'), "an empty cell takes no character edits");
+  ed.endNugget();
+  ed.moveTo(2, 0);
+  check(ed.nuggetStep(1) && ed.nuggetStep(1) && !ed.nuggetStep(1) && ed.nugget() < 0, "stepping off the end of the cell ends the mode");
+  ed.endNugget();
+  ed.moveTo(2, 0);
+  ed.nuggetStep(-1);
+  check(ed.nugget() == 2, "Ctrl+Left enters at the last character");
+  ed.move(0, 1);
+  check(ed.nugget() < 0, "moving to another column ends the mode");
+  ed.moveTo(2, 1);
+  ed.endNugget();
+  ed.nuggetStep(1);
+  check(ed.typeNuggetChar('F') && row(0).substr(4, 2) == "4F", "a hex cell changes one digit");
+  std::printf("ok: nugget mode\n");
 }
 
 // A parameter's live value becomes the cell that gives it back: linear, integer and logarithmic columns.

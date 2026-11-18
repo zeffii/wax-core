@@ -178,6 +178,7 @@ std::shared_ptr<void> Sequencer::installLane(std::shared_ptr<void> built) {
 void Sequencer::setLane(const PreparedLane& prepared) { installLane(buildLane(prepared)); }
 
 void Sequencer::play(int from, bool once) {
+  preview_ = 0;
   if (playing_) releaseAll();   // jumping while playing: what rings is let go first
   resetTempo();
   tick_ = from >= 0 && from < length_.load(std::memory_order_relaxed) ? from : 0;
@@ -193,8 +194,20 @@ void Sequencer::play(int from, bool once) {
   playing_ = true;
 }
 
+void Sequencer::row(int tick) {
+  if (playing_ || tick < 0 || tick >= length_.load(std::memory_order_relaxed)) return;
+  releaseAll();
+  tick_ = tick;
+  songPos_ = tick;
+  resetTempo();
+  runtime_.clock().tickId++;
+  for (auto& lane : lanes_) playRow(*lane);
+  preview_ = sampleRate_ * 60 / tempo().bpm;
+}
+
 // Stopping lets every voice fade out over its release time.
 void Sequencer::stop() {
+  preview_ = 0;
   for (auto& lane : lanes_) restoreAmp(*lane);
   releaseAll();
   nodeseq_.stop();
@@ -471,6 +484,7 @@ void Sequencer::process(float* left, float* right, int n) {
         }
       }
     }
+    if (preview_ > 0 && (preview_ -= span) <= 0) releaseAll();
     done += span;
   }
 }

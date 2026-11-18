@@ -28,6 +28,17 @@ public:
   int cell() const { return cell_; }
   int digitsTyped() const { return typed_; }
 
+  // Nugget mode: the cursor sits on one character of the cell (-1: not in it), so a note's accidental or octave, or one digit of a number, can be
+  // changed without writing the whole cell. It ends as soon as the cursor goes to another column (or lane); moving up or down stays in it.
+  int nugget() const { return nugget_; }
+  // Ctrl+Left/Right: enters the mode (Right at the second character, Left at the last), then steps a character. False when the step runs off
+  // the cell (or the cell has no characters): the mode is over and the caller moves on to the neighbouring cell.
+  bool nuggetStep(int d);
+  void endNugget() { nugget_ = -1; }
+  // A character typed at the cursor's character: a note's letter, '-' or '#', or octave digit; a hex digit elsewhere. Then on to the next
+  // character, or down a row at the last one, staying in the mode. False when the cell cannot take it.
+  bool typeNuggetChar(char c);
+
   // Solo-edit: the cursor, selections and pastes stay on the rows lo to hi-1 (one pattern), and no pattern can be made or placed. clearSolo() ends it.
   void setSolo(int lo, int hi) { soloLo_ = std::max(0, lo); soloHi_ = std::max(soloLo_ + 1, hi); moveTo(tick_, cell_); }
   void clearSolo() { soloLo_ = soloHi_ = -1; }
@@ -92,7 +103,7 @@ private:
   Document& document_;
   std::string lane_;
   std::vector<Column> columns_;
-  int tick_ = 0, cell_ = 0, typed_ = 0, step_ = 1;
+  int tick_ = 0, cell_ = 0, typed_ = 0, step_ = 1, nugget_ = -1;
   bool selecting_ = false, wrapRows_ = false;
   int soloLo_ = -1, soloHi_ = -1;   // the rows of the solo-edited pattern (hi is one past its last); -1: not solo-editing
   int firstTick() const;   // the first and last row the cursor may be on

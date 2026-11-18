@@ -54,7 +54,7 @@ std::string CellEditor::rowWithCell(const std::string& row, const std::vector<Co
 }
 
 void CellEditor::setLane(const std::string& laneId, const std::vector<Column>& columns) {
-  if (laneId != lane_) { tick_ = 0; cell_ = 0; typed_ = 0; }
+  if (laneId != lane_) { tick_ = 0; cell_ = 0; typed_ = 0; nugget_ = -1; }
   lane_ = laneId;
   columns_ = columns;
   cell_ = std::min(cell_, std::max(0, static_cast<int>(columns_.size()) - 1));
@@ -66,7 +66,9 @@ int CellEditor::lastTick() const { return solo() ? std::min(soloHi_, std::max(1,
 void CellEditor::moveTo(int tick, int cell) {
   selecting_ = false;
   tick_ = std::clamp(tick, firstTick(), std::max(firstTick(), lastTick()));
+  const int before = cell_;
   cell_ = std::clamp(cell, 0, std::max(0, static_cast<int>(columns_.size()) - 1));
+  if (cell_ != before) nugget_ = -1;   // another column ends nugget mode
   typed_ = 0;
 }
 
@@ -202,6 +204,60 @@ bool CellEditor::typeNote(int midi) {
   else return false;
   if (!setCell(text, false)) return false;
   advance();
+  return true;
+}
+
+bool CellEditor::nuggetStep(int d) {
+  if (cell_ >= static_cast<int>(columns_.size()) || columns_[static_cast<std::size_t>(cell_)].kind == ColumnKind::Spacer) { nugget_ = -1; return false; }
+  const int width = cellWidth(columns_[static_cast<std::size_t>(cell_)].token);
+  if (nugget_ < 0) {
+    if (width < 2) return false;
+    nugget_ = d > 0 ? 1 : width - 1;
+    typed_ = 0;
+    return true;
+  }
+  const int to = nugget_ + d;
+  if (to >= 0 && to < width) { nugget_ = to; return true; }
+  nugget_ = -1;
+  return false;
+}
+
+namespace {
+
+// The note a text like "C#4" is, or -1 when it is not one (E# and B# do not exist; the octave is one digit).
+int noteOfText(const std::string& text) {
+  if (text.size() != 3 || text[2] < '0' || text[2] > '9') return -1;
+  for (int i = 0; i < 12; i++) if (text.compare(0, 2, kNoteNames[i]) == 0) return (text[2] - '0' + 1) * 12 + i;
+  return -1;
+}
+
+}  // namespace
+
+bool CellEditor::typeNuggetChar(char c) {
+  if (nugget_ < 0 || cell_ >= static_cast<int>(columns_.size())) return false;
+  const Column& column = columns_[static_cast<std::size_t>(cell_)];
+  const int width = cellWidth(column.token);
+  const Place at = place();
+  if (!at.pattern || nugget_ >= width) return false;
+  const std::vector<std::string> cells = cellsOf(at.pattern->rows[static_cast<std::size_t>(at.row)]);
+  std::string text = cells[static_cast<std::size_t>(cell_)];
+  if (column.token == Token::Note) {
+    if (noteOfText(text) < 0) return false;   // only a filled note can be edited by character
+    const char upper = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    if (nugget_ == 0 && upper >= 'A' && upper <= 'G') text[0] = upper;
+    else if (nugget_ == 1 && (c == '-' || c == '#')) text[1] = c;
+    else if (nugget_ == 2 && c >= '0' && c <= '9') text[2] = c;
+    else return false;
+    if (noteOfText(text) < 0 || noteOfText(text) > 127) return false;
+  } else if (column.kind == ColumnKind::Spacer || column.token == Token::Spacer || !std::isxdigit(static_cast<unsigned char>(c))) {
+    return false;
+  } else {
+    if (text == tokenBlank(column.token)) text.assign(static_cast<std::size_t>(width), '0');   // an empty cell becomes zeros with this digit in place
+    text[static_cast<std::size_t>(nugget_)] = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+  }
+  if (!setCell(text, false)) return false;
+  if (nugget_ + 1 < width) nugget_++;
+  else moveTo(tick_ + step_, cell_);   // the last character: down a row, on the same character, still in the mode
   return true;
 }
 

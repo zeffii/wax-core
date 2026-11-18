@@ -51,6 +51,8 @@ public:
   // The song loop (audio thread reads it each tick): ticks start to end, end not included; end <= start: no loop, the whole song plays round.
   void setLength(int ticks) { length_.store(ticks, std::memory_order_relaxed); }   // the song's length in ticks (live: inserting silence)
   void setLoop(int start, int end) { loopStart_.store(start, std::memory_order_relaxed); loopEnd_.store(end, std::memory_order_relaxed); }
+  // Plays one row once without starting the song: every lane's events at that tick fire together and what they started is let go a beat later. Does nothing while the song plays.
+  void row(int tick);
   void stop();
 
   // Fills left and right with n samples (n is at most maxBlock).
@@ -101,6 +103,7 @@ private:
   double tickLen_ = 0;     // samples in the tick now sounding (swing makes them differ)
   bool playing_ = false;
   bool once_ = false;
+  double preview_ = 0;     // samples left of a single played row, after which what it started is let go
   std::atomic<int> loopStart_{0}, loopEnd_{0};
   std::atomic<int> length_{16};
   bool wrapped_ = false;   // once: the last row has fired

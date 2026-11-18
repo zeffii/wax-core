@@ -16,7 +16,7 @@ namespace wax {
 
 // Things the player is told, from other threads, and does at the start of the next block.
 struct LiveCommand {
-  enum Kind : int { None, Play, Stop, NoteOn, NoteOff, AllOff } kind = None;
+  enum Kind : int { None, Play, Stop, NoteOn, NoteOff, AllOff, Row } kind = None;
   int note = 0;
   double vel = 1;
 };
@@ -91,6 +91,7 @@ private:
     while (ring_.pop(c)) {
       switch (c.kind) {
         case LiveCommand::Play: engine_.sequencer().play(c.note, once_); break;
+        case LiveCommand::Row: engine_.sequencer().row(c.note); break;   // one row once (F7)
         case LiveCommand::Stop: engine_.sequencer().stop(); engine_.runtime().note(instrument_, NoteEvent{NoteType::AllOff}); break;
         case LiveCommand::NoteOn: {
           NoteEvent e; e.type = NoteType::On; e.note = c.note; e.vel = c.vel;
