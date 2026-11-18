@@ -318,10 +318,10 @@ private:
         s->allocated[stage] = true;
         Spectra& o = s->out[stage];
         o.count = count;
-        const std::size_t size = static_cast<std::size_t>(count) * static_cast<std::size_t>(bins);
-        o.hRe[0] = std::make_shared<FloatVec>(size, 0.0f);
-        o.hIm[0] = std::make_shared<FloatVec>(size, 0.0f);
-        if (s->stereo) { o.hRe[1] = std::make_shared<FloatVec>(size, 0.0f); o.hIm[1] = std::make_shared<FloatVec>(size, 0.0f); }
+        const std::size_t spectrumLength = static_cast<std::size_t>(count) * static_cast<std::size_t>(bins);
+        o.hRe[0] = std::make_shared<FloatVec>(spectrumLength, 0.0f);
+        o.hIm[0] = std::make_shared<FloatVec>(spectrumLength, 0.0f);
+        if (s->stereo) { o.hRe[1] = std::make_shared<FloatVec>(spectrumLength, 0.0f); o.hIm[1] = std::make_shared<FloatVec>(spectrumLength, 0.0f); }
       };
       for (int c = 0; c < channels; c++) {
         for (int k = 0; k < count; k++) {
@@ -344,8 +344,8 @@ private:
         allocate();
         Spectra& o = s->out[stage];
         if (!s->stereo) { o.hRe[1] = o.hRe[0]; o.hIm[1] = o.hIm[0]; }
-        const std::size_t size = static_cast<std::size_t>(std::max(1, count)) * static_cast<std::size_t>(bins);
-        for (int c = 0; c < 2; c++) { o.fRe[c] = std::make_shared<FloatVec>(size, 0.0f); o.fIm[c] = std::make_shared<FloatVec>(size, 0.0f); }
+        const std::size_t spectrumLength = static_cast<std::size_t>(std::max(1, count)) * static_cast<std::size_t>(bins);
+        for (int c = 0; c < 2; c++) { o.fRe[c] = std::make_shared<FloatVec>(spectrumLength, 0.0f); o.fIm[c] = std::make_shared<FloatVec>(spectrumLength, 0.0f); }
       });
     }
     return st;

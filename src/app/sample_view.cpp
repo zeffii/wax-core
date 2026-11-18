@@ -511,7 +511,7 @@ bool drawSampleScreen(SampleView& v, Document& document, Preview& preview, float
   // ---- the keys (the text boxes have the keyboard when one is active) ----
   if (!io.WantTextInput && !v.sliceOpen) {
     if (io.KeyShift && !io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_E, false)) v.sliceOpen = true;
-    const auto tool = [&](ImGuiKey key, const char* name, const char* label) { if (io.KeyShift && !io.KeyCtrl && ImGui::IsKeyPressed(key, false)) changed |= runTool(v, document, name, label); };
+    const auto tool = [&](ImGuiKey toolKey, const char* name, const char* label) { if (io.KeyShift && !io.KeyCtrl && ImGui::IsKeyPressed(toolKey, false)) changed |= runTool(v, document, name, label); };
     tool(ImGuiKey_C, "crop", "Crop"); tool(ImGuiKey_T, "crop", "Crop"); tool(ImGuiKey_X, "cut", "Cut"); tool(ImGuiKey_S, "silence", "Silence");
     tool(ImGuiKey_R, "reverse", "Reverse"); tool(ImGuiKey_N, "normalise", "Normalise"); tool(ImGuiKey_I, "fadeIn", "Fade in"); tool(ImGuiKey_O, "fadeOut", "Fade out");
     tool(ImGuiKey_D, "removeDc", "Remove DC"); tool(ImGuiKey_B, "bakeCrossfade", "Bake crossfade");

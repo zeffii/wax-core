@@ -692,11 +692,11 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
           next = (next + static_cast<std::ptrdiff_t>(order.size())) % static_cast<std::ptrdiff_t>(order.size());
         }
         const std::string lane = order[static_cast<std::size_t>(next)];
-        const int tick = editor.tick();
+        const int rowTick = editor.tick();
         selectedLane = lane;
         editor.setLane(lane, player.engine().laneColumns(lane));
         const int columns = static_cast<int>(player.engine().laneColumns(lane).size());
-        editor.moveTo(tick, cells > 0 ? 0 : std::max(0, columns - 1));
+        editor.moveTo(rowTick, cells > 0 ? 0 : std::max(0, columns - 1));
         if (cells > 0) editor.move(0, 1), editor.move(0, -1);   // (the first cell that is not a spacer)
         else editor.move(0, -1), editor.move(0, 1);              // (the last one)
         session->wantLane = lane;

@@ -9,7 +9,7 @@ if(MSVC)
   add_compile_options(/W4 /utf-8 /permissive-)
   add_compile_definitions(_CRT_SECURE_NO_WARNINGS)   # the standard sscanf is fine here
 else()
-  add_compile_options(-Wall -Wextra -Wpedantic)
+  add_compile_options(-Wall -Wextra -Wpedantic -Wshadow)
 endif()
 
 # The only outside code so far: a JSON reader for .wax files (header only, fetched once at configure time).

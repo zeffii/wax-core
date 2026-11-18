@@ -203,8 +203,8 @@ bool drawRow(ParamPanelState& state, Document& doc, const Engine& engine, const 
         doc.apply(std::make_unique<SetExposed>(instrumentId, picked->id, spec.name, shownAs == nullptr)); changed = true; ImGui::CloseCurrentPopup();
       } else if (shownAs) {   // the column's width: one, two or four hex digits
         for (const auto& [widthName, bits] : {std::pair<const char*, int>{"1hex", 4}, {"2hex", 8}, {"4hex", 16}}) {
-          const std::string text = std::string(shownAs->bits == bits ? "\xe2\x97\x8f " : "\xe2\x97\x8b ") + "width " + widthName;
-          if (textButton(text.c_str())) { doc.apply(std::make_unique<SetExposedBits>(instrumentId, picked->id, spec.name, bits)); changed = true; ImGui::CloseCurrentPopup(); break; }
+          const std::string widthText = std::string(shownAs->bits == bits ? "\xe2\x97\x8f " : "\xe2\x97\x8b ") + "width " + widthName;
+          if (textButton(widthText.c_str())) { doc.apply(std::make_unique<SetExposedBits>(instrumentId, picked->id, spec.name, bits)); changed = true; ImGui::CloseCurrentPopup(); break; }
         }
       }
       if (textButton(hasPort ? "Remove the port" : "Add a port (wire a node in)")) {

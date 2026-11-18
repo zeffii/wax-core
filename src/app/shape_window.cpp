@@ -150,7 +150,7 @@ bool drawTaps(ShapeWindow& window, Document& doc, const GraphNode& node) {
         dl->AddLine(ImVec2(rx, yLevel(0)), ImVec2(rx, yLevel(taps[i].l * std::pow(0.5, k))), withAlpha(colour, 90), 1.0f);
       }
     }
-    struct Preset { const char* name; std::vector<Tap> taps; };
+    struct TapPreset { const char* name; std::vector<Tap> taps; };
     std::vector<Tap> even, pingpong, accel, random;
     for (int i = 0; i < 8; i++) even.push_back({(i + 1) / 8.0, std::pow(0.75, i), i % 2 ? 0.7 : -0.7});
     for (int i = 0; i < 6; i++) pingpong.push_back({(i + 1) / 6.0, std::pow(0.8, i), i % 2 ? 1.0 : -1.0});
@@ -159,8 +159,8 @@ bool drawTaps(ShapeWindow& window, Document& doc, const GraphNode& node) {
     for (int i = 0; i < count; i++) random.push_back({0.05 + 0.95 * std::rand() / RAND_MAX, 0.2 + 0.8 * std::rand() / RAND_MAX, 2.0 * std::rand() / RAND_MAX - 1});
     std::vector<Tap> standard;
     for (int i = 0; i < 6; i++) standard.push_back({(i + 1) / 6.0, std::round(std::pow(0.7, i) * 1000) / 1000, i % 2 ? 0.6 : -0.6});
-    const Preset presets[] = {{"even", even}, {"ping-pong", pingpong}, {"accel", accel}, {"random", random}, {"default", standard}};
-    for (const Preset& preset : presets) {
+    const TapPreset presets[] = {{"even", even}, {"ping-pong", pingpong}, {"accel", accel}, {"random", random}, {"default", standard}};
+    for (const TapPreset& preset : presets) {
       if (textButton(preset.name)) emit(preset.taps, false);
       ImGui::SameLine(0, 14 * scale);
     }
@@ -214,13 +214,13 @@ bool drawSpectrum(ShapeWindow& window, Document& doc, const GraphNode& node) {
       dl->AddRectFilled(ImVec2(x + 1, min.y), ImVec2(x + barW - 1, max.y), IM_COL32(128, 128, 128, 30));
       dl->AddRectFilled(ImVec2(x + 1, top), ImVec2(x + barW - 1, max.y), IM_COL32(235, 150, 60, 255));
     }
-    struct Preset { const char* name; double (*level)(int); };
-    const Preset presets[] = {
+    struct LevelPreset { const char* name; double (*level)(int); };
+    const LevelPreset presets[] = {
       {"saw", [](int n) { return 1.0 / n; }}, {"square", [](int n) { return n % 2 ? 1.0 / n : 0.0; }}, {"triangle", [](int n) { return n % 2 ? 1.0 / (n * n) : 0.0; }},
       {"organ", [](int n) { static const int at[] = {1, 2, 3, 4, 6, 8}; static const double v[] = {1, 0.8, 0.6, 0.5, 0.35, 0.3}; for (int k = 0; k < 6; k++) if (at[k] == n) return v[k]; return 0.0; }},
       {"hollow", [](int n) { return n % 2 ? std::exp(-(n - 1) / 6.0) : 0.0; }}, {"formant", [](int n) { return 0.12 / n + std::exp(-std::pow((n - 7) / 1.8, 2)); }},
       {"sine", [](int n) { return n == 1 ? 1.0 : 0.0; }}};
-    for (const Preset& preset : presets) {
+    for (const LevelPreset& preset : presets) {
       if (textButton(preset.name)) {
         std::vector<double> values(kHarmonics);
         for (int i = 0; i < kHarmonics; i++) values[static_cast<std::size_t>(i)] = std::clamp(preset.level(i + 1), 0.0, 1.0);
