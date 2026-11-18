@@ -697,8 +697,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       if (session->solo.on) { session->solo = {}; editor.clearSolo(); session->editStatus = "Solo-edit ended."; }
       else { session->screen = Screen::Song; session->scrollToCursor = true; }
     }
-    if (typing) {
-      const int before = editor.tick() * 4096 + editor.cell();
+    const bool editing = session->edit && !session->envelopes.wantsKeys() && session->screen != Screen::Song;   // (typing, and the Ctrl keys that edit)
       editor.setWrapRows(app::settings().rowWrap);
       const auto step = [&](int rows, int cells) {
         if (io.KeyShift) { editor.extend(rows, cells); return; }
@@ -725,17 +724,27 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         else editor.move(0, -1), editor.move(0, 1);              // (the last one)
         session->wantLane = lane;
       };
-      if (io.KeyCtrl && io.KeyAlt && !io.KeyShift) {   // Ctrl+Alt+Up/Down: the selected rows rotate (as in the web; nothing is selected: nothing happens)
-        if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) edited |= editor.selection().active && editor.shiftSelection(CellEditor::Shift::RotateUp);
-        if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) edited |= editor.selection().active && editor.shiftSelection(CellEditor::Shift::RotateDown);
-      } else {
-        if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) step(-1, 0);
-        if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) step(1, 0);
+    if (editing && ctrl && !io.KeyShift) {   // the Ctrl keys of the pattern editor (the web's): nugget mode, pulling rows up, pushing them down, rotating
+      const int before = editor.tick() * 4096 + editor.cell();
+      if (!io.KeyAlt) {
+        const auto side = [&](int d) { if (!editor.nuggetStep(d)) step(0, d); };   // Ctrl+Left/Right: one character of the cell; off its end, the next column
+        if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) side(-1);
+        if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) side(1);
+        if (ImGui::IsKeyPressed(ImGuiKey_Delete)) edited |= editor.shiftSelection(CellEditor::Shift::PullUp);   // the selection goes, the rows below move up
+        if (ImGui::IsKeyPressed(ImGuiKey_Insert)) edited |= editor.shiftSelection(CellEditor::Shift::PushDown);   // the rows from the selection down move down
+      } else if (editor.selection().active) {   // Ctrl+Alt+Up/Down: the selected rows rotate
+        if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) edited |= editor.shiftSelection(CellEditor::Shift::RotateUp);
+        if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) edited |= editor.shiftSelection(CellEditor::Shift::RotateDown);
       }
-      // Left and Right: Ctrl enters nugget mode (one character of the cell), where they keep stepping a character; off the cell's end the cursor
-      // goes on to the next column, and the mode is over.
+      if (before != editor.tick() * 4096 + editor.cell() || edited) session->scrollToCursor = true;
+    }
+    if (typing) {
+      const int before = editor.tick() * 4096 + editor.cell();
+      if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) step(-1, 0);
+      if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) step(1, 0);
+      // Left and Right inside nugget mode step a character; off the cell's end the cursor goes on to the next column, and the mode is over.
       const auto sideways = [&](int d) {
-        if (!io.KeyShift && !io.KeyAlt && (io.KeyCtrl || editor.nugget() >= 0) && editor.nuggetStep(d)) return;
+        if (!io.KeyShift && editor.nugget() >= 0 && editor.nuggetStep(d)) return;
         step(0, d);
       };
       if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) sideways(-1);
@@ -755,9 +764,9 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       const int bar = std::max(1, song.ticksPerBeat) * std::max(1, song.beatsPerBar);
       if (ImGui::IsKeyPressed(ImGuiKey_PageUp)) editor.move(-bar, 0);
       if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) editor.move(bar, 0);
-      if (ImGui::IsKeyPressed(ImGuiKey_Delete)) edited |= io.KeyCtrl ? editor.shiftSelection(CellEditor::Shift::PullUp) : io.KeyShift ? editor.deleteRow() : editor.clearCell(true);   // Ctrl+Delete: the selection goes, the rows below move up
+      if (ImGui::IsKeyPressed(ImGuiKey_Delete)) edited |= io.KeyShift ? editor.deleteRow() : editor.clearCell(true);
       if (ImGui::IsKeyPressed(ImGuiKey_Backspace)) edited |= editor.clearCell(false);
-      if (ImGui::IsKeyPressed(ImGuiKey_Insert)) edited |= io.KeyCtrl ? editor.shiftSelection(CellEditor::Shift::PushDown) : editor.insertRow();   // Ctrl+Insert: the rows from the selection down move down
+      if (ImGui::IsKeyPressed(ImGuiKey_Insert)) edited |= editor.insertRow();
       if (session->screen == Screen::Pattern && ImGui::IsKeyPressed(ImGuiKey_Space, false)) {   // the live value of a parameter column (Ctrl+Space: the whole row's) into the grid
         std::string instrumentId;
         for (const Lane& l : doc.project().lanes) if (l.id == editor.lane()) instrumentId = l.instrument;
@@ -1729,7 +1738,8 @@ ImGuiKey keyNamed(const std::string& name) {
       {"enter", ImGuiKey_Enter}, {"up", ImGuiKey_UpArrow}, {"down", ImGuiKey_DownArrow}, {"left", ImGuiKey_LeftArrow},
       {"right", ImGuiKey_RightArrow}, {"delete", ImGuiKey_Delete}, {"backspace", ImGuiKey_Backspace}, {"insert", ImGuiKey_Insert},
       {"equal", ImGuiKey_Equal}, {"pagedown", ImGuiKey_PageDown}, {"pageup", ImGuiKey_PageUp}, {"space", ImGuiKey_Space},
-      {"tab", ImGuiKey_Tab}, {"escape", ImGuiKey_Escape}, {"f1", ImGuiKey_F1}, {"f2", ImGuiKey_F2}, {"f3", ImGuiKey_F3}, {"f4", ImGuiKey_F4}};
+      {"tab", ImGuiKey_Tab}, {"escape", ImGuiKey_Escape}, {"f1", ImGuiKey_F1}, {"f2", ImGuiKey_F2}, {"f3", ImGuiKey_F3}, {"f4", ImGuiKey_F4},
+      {"f5", ImGuiKey_F5}, {"f6", ImGuiKey_F6}, {"f7", ImGuiKey_F7}, {"f8", ImGuiKey_F8}, {"f9", ImGuiKey_F9}, {"insert", ImGuiKey_Insert}};
   const auto found = named.find(name);
   if (found != named.end()) return found->second;
   if (name.size() == 1 && name[0] >= '0' && name[0] <= '9') return static_cast<ImGuiKey>(ImGuiKey_0 + (name[0] - '0'));
