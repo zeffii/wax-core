@@ -158,26 +158,26 @@ struct Edit {
   bool changed = false;    // a parameter outside the bank changed
 
   // an integer slider on the voice; `width` in web pixels
-  void slide(const char* id, const char* label, int& value, int lo, int hi, float width = 118) {
+  void slide(const char* id, const char* label, int& value, int lo, int hi, float width = 200) {
     double v = value;
-    SliderSpec spec; spec.min = lo; spec.max = hi; spec.def = lo; spec.isInt = true; spec.width = width;
+    SliderSpec spec; spec.min = lo; spec.max = hi; spec.def = lo; spec.isInt = true; spec.width = width; spec.labelWidth = 90;
     const SliderResult r = slider(id, label, v, spec);
     value = static_cast<int>(std::lround(v));
     active = active || r.active;
   }
-  void next() const { ImGui::SameLine(0, 16 * scale); }
+  void next() const { ImGui::SameLine(0, 14 * scale); }
 };
 
 // voice number, feedback, algorithm and transpose in a row
 void voiceRow(Edit& e, int current) {
   double voiceNo = current;
-  SliderSpec spec; spec.min = 0; spec.max = dx7::kVoices - 1; spec.def = 0; spec.isInt = true; spec.width = 120;
+  SliderSpec spec; spec.min = 0; spec.max = dx7::kVoices - 1; spec.def = 0; spec.isInt = true; spec.width = 200; spec.labelWidth = 90;
   if (slider("dx_voice", "voice", voiceNo, spec).changed) {
     e.doc.apply(std::make_unique<SetParam>(e.window.instrument, e.window.node, "voice", voiceNo), e.window.dragging);
     e.changed = true;
   }
   e.next(); e.slide("dx_fb", "feedback", e.voice.fb, 0, 7);
-  e.next(); e.slide("dx_alg", "algorithm", e.voice.alg, 0, 31, 120);
+  e.next(); e.slide("dx_alg", "algorithm", e.voice.alg, 0, 31);
   e.next(); e.slide("dx_trnsp", "transpose", e.voice.trnsp, 0, 48);
 }
 
@@ -198,15 +198,15 @@ void muteSoloRow(Edit& e, int mute, int solo) {
 
 // the big picture of the algorithm, the picked operator lit, with the 32 thumbnails (current one lit) beside it
 void algorithmSection(Edit& e) {
-  const float scale = e.scale, pw = 200 * scale, ph = 150 * scale;
+  const float scale = e.scale, pw = 150 * scale, ph = 108 * scale;
   const ImVec2 origin = ImGui::GetCursorScreenPos();
   ImDrawList* dl = ImGui::GetWindowDrawList();
-  drawAlgorithm(dl, e.voice.alg, origin, ImVec2(origin.x + pw, origin.y + ph), scale, e.window.op, kSoft);
+  drawAlgorithm(dl, e.voice.alg, origin, ImVec2(origin.x + pw, origin.y + ph), scale * 0.8f, e.window.op, kSoft);
   ImGui::InvisibleButton("dx_picture", ImVec2(pw, ph));
   if (ImGui::IsItemClicked()) {
     int rows = 1;
     const auto at = layoutAlgorithm(dx7::algorithms()[static_cast<std::size_t>(e.voice.alg)], rows);
-    const float r = 8 * scale, w = pw - 4 * r, h = ph - 4 * r;
+    const float r = 6.5f * scale, w = pw - 4 * r, h = ph - 4 * r;
     float best = 16 * scale;
     for (int i = 0; i < 6; i++) {
       const float x = origin.x + 2 * r + at[static_cast<std::size_t>(i)].x * w, y = origin.y + 2 * r + at[static_cast<std::size_t>(i)].y * h;
@@ -214,9 +214,9 @@ void algorithmSection(Edit& e) {
       if (d < best) { best = d; e.window.op = i; }
     }
   }
-  ImGui::SameLine(0, 16 * scale);
+  ImGui::SameLine(0, 12 * scale);
   ImGui::BeginGroup();
-  const float tw = 34 * scale, th = 26 * scale, gap = 4 * scale;
+  const float tw = 30 * scale, th = 24 * scale, gap = 3 * scale;
   const ImVec2 top = ImGui::GetCursorScreenPos();
   for (int a = 0; a < 32; a++) {
     const ImVec2 min(top.x + static_cast<float>(a % 8) * (tw + gap), top.y + static_cast<float>(a / 8) * (th + gap));
@@ -224,7 +224,7 @@ void algorithmSection(Edit& e) {
     ImGui::PushID(a);
     if (ImGui::InvisibleButton("alg", ImVec2(tw, th))) e.voice.alg = a;
     ImGui::PopID();
-    drawAlgorithm(dl, a, min, ImVec2(min.x + tw, min.y + th), scale * 0.38f, -1, a == e.voice.alg ? kAccent : kDimText);
+    drawAlgorithm(dl, a, min, ImVec2(min.x + tw, min.y + th), scale * 0.33f, -1, a == e.voice.alg ? kAccent : kDimText);
   }
   ImGui::SetCursorScreenPos(ImVec2(top.x, top.y + 4 * (th + gap)));
   ImGui::Dummy(ImVec2(1, 1));
@@ -240,13 +240,15 @@ void operatorSection(Edit& e) {
     ImGui::SameLine(0, 14 * e.scale);
   }
   ImGui::NewLine();
-  // three sliders to a row; the curve sliders carry the name of the curve in their label
+  // two sliders to a row; the curve sliders carry the name of the curve in their label
   const char* curves[] = {"-lin", "-exp", "+exp", "+lin"};
   const std::string leftCurve = std::string("left ") + curves[std::clamp(op.lc, 0, 3)], rightCurve = std::string("right ") + curves[std::clamp(op.rc, 0, 3)], breakPoint = "break " + noteName(op.bp);
-  e.slide("dx_mode", "fixed freq", op.mode, 0, 1);   e.next(); e.slide("dx_fc", "coarse", op.fc, 0, 31);              e.next(); e.slide("dx_ff", "fine", op.ff, 0, 99);
-  e.slide("dx_det", "detune", op.det, 0, 14);        e.next(); e.slide("dx_ol", "output level", op.ol, 0, 99);       e.next(); e.slide("dx_kvs", "velocity sens", op.kvs, 0, 7);
-  e.slide("dx_rs", "rate scaling", op.rs, 0, 7);     e.next(); e.slide("dx_ams", "amp mod sens", op.ams, 0, 3);      e.next(); e.slide("dx_bp", breakPoint.c_str(), op.bp, 0, 99);
-  e.slide("dx_ld", "left depth", op.ld, 0, 99);      e.next(); e.slide("dx_lc", leftCurve.c_str(), op.lc, 0, 3);     e.next(); e.slide("dx_rd", "right depth", op.rd, 0, 99);
+  e.slide("dx_mode", "fixed freq", op.mode, 0, 1);   e.next(); e.slide("dx_fc", "coarse", op.fc, 0, 31);
+  e.slide("dx_ff", "fine", op.ff, 0, 99);            e.next(); e.slide("dx_det", "detune", op.det, 0, 14);
+  e.slide("dx_ol", "output level", op.ol, 0, 99);    e.next(); e.slide("dx_kvs", "velocity sens", op.kvs, 0, 7);
+  e.slide("dx_rs", "rate scaling", op.rs, 0, 7);     e.next(); e.slide("dx_ams", "amp mod sens", op.ams, 0, 3);
+  e.slide("dx_bp", breakPoint.c_str(), op.bp, 0, 99); e.next(); e.slide("dx_ld", "left depth", op.ld, 0, 99);
+  e.slide("dx_lc", leftCurve.c_str(), op.lc, 0, 3);  e.next(); e.slide("dx_rd", "right depth", op.rd, 0, 99);
   e.slide("dx_rc", rightCurve.c_str(), op.rc, 0, 3);
 }
 
@@ -254,20 +256,25 @@ void operatorSection(Edit& e) {
 void operatorEnvelope(Edit& e, float width) {
   dx7::Op& op = e.voice.ops[e.window.op];
   int held = e.window.dragPoint;
-  if (envelopeGraph("dx_env", op.r, op.l, held, ImVec2(width, 110 * e.scale), false)) e.active = true;
+  if (envelopeGraph("dx_env", op.r, op.l, held, ImVec2(width, 84 * e.scale), false)) e.active = true;
   e.window.dragPoint = held;
   if (held >= 0) e.active = true;
 }
 
 // the voice's LFO and its pitch envelope
-void lfoAndPitchSection(Edit& e, float width) {
+void lfoSection(Edit& e) {
   ImGui::TextUnformatted("lfo");
-  e.slide("dx_lfw", "wave", e.voice.lfw, 0, 5);          e.next(); e.slide("dx_lfs", "speed", e.voice.lfs, 0, 99);           e.next(); e.slide("dx_lfd", "delay", e.voice.lfd, 0, 99);
-  e.slide("dx_lpmd", "pitch depth", e.voice.lpmd, 0, 99); e.next(); e.slide("dx_pms", "pitch sens", e.voice.pms, 0, 7);       e.next(); e.slide("dx_lamd", "amp depth", e.voice.lamd, 0, 99);
+  e.slide("dx_lfw", "wave", e.voice.lfw, 0, 5);           e.next(); e.slide("dx_lfs", "speed", e.voice.lfs, 0, 99);
+  e.slide("dx_lfd", "delay", e.voice.lfd, 0, 99);         e.next(); e.slide("dx_lpmd", "pitch depth", e.voice.lpmd, 0, 99);
+  e.slide("dx_pms", "pitch sens", e.voice.pms, 0, 7);     e.next(); e.slide("dx_lamd", "amp depth", e.voice.lamd, 0, 99);
   e.slide("dx_lks", "key sync", e.voice.lks, 0, 1);       e.next(); e.slide("dx_oks", "osc key sync", e.voice.oks, 0, 1);
+}
+
+// the pitch envelope (50 = no change)
+void pitchEnvelope(Edit& e, float width) {
   ImGui::TextUnformatted("pitch envelope (50 = no change)");
   int held = e.window.dragPitchPoint;
-  if (envelopeGraph("dx_penv", e.voice.pr, e.voice.pl, held, ImVec2(width, 90 * e.scale), true)) e.active = true;
+  if (envelopeGraph("dx_penv", e.voice.pr, e.voice.pl, held, ImVec2(width, 64 * e.scale), true)) e.active = true;
   e.window.dragPitchPoint = held;
   if (held >= 0) e.active = true;
 }
@@ -280,7 +287,7 @@ bool drawDxWindow(DxWindow& window, Document& doc, const Engine& engine) {
   if (!node || node->type != "dvii") { window.open = false; return false; }
 
   const float scale = ImGui::GetStyle().FontScaleDpi;
-  ImGui::SetNextWindowSize(ImVec2(1000 * scale, 640 * scale), ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(900 * scale, 410 * scale), ImGuiCond_FirstUseEver);
   ImGui::SetNextWindowPos(ImVec2(120 * scale, 40 * scale), ImGuiCond_FirstUseEver);
   const std::string title = "DX loader  " + window.instrument + "." + window.node + "###dx";
   bool changed = false;
@@ -299,17 +306,18 @@ bool drawDxWindow(DxWindow& window, Document& doc, const Engine& engine) {
     // the operator's settings and the LFO on the right
     voiceRow(e, current);
     muteSoloRow(e, static_cast<int>(std::lround(paramNow("mute", 0))), static_cast<int>(std::lround(paramNow("solo", 0))));
-    const float leftWidth = 520 * scale;
+    const float leftWidth = 400 * scale;
     ImGui::BeginGroup();
     algorithmSection(e);
     ImGui::TextUnformatted("operator envelope");
     operatorEnvelope(e, leftWidth);
+    pitchEnvelope(e, leftWidth);
     ImGui::EndGroup();
     ImGui::SameLine(0, 24 * scale);
     ImGui::BeginGroup();
     operatorSection(e);
-    ImGui::Dummy(ImVec2(0, 6 * scale));
-    lfoAndPitchSection(e, 380 * scale);
+    ImGui::Dummy(ImVec2(0, 4 * scale));
+    lfoSection(e);
     ImGui::EndGroup();
     changed = e.changed;
     bool active = e.active;

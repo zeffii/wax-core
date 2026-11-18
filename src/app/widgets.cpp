@@ -36,9 +36,12 @@ std::string valueText(double value, bool isInt) {
 SliderResult slider(const char* id, const char* label, double& value, const SliderSpec& spec) {
   SliderResult result;
   const float scale = ImGui::GetStyle().FontScaleDpi;
-  const float width = spec.width * scale;
+  const bool oneLine = spec.labelWidth > 0;
+  const float totalWidth = spec.width * scale;
+  const float width = oneLine ? totalWidth - spec.labelWidth * scale - 26 * scale : totalWidth;   // the track's
   const float lineHeight = ImGui::GetTextLineHeight();
-  const float trackHeight = 16 * scale;
+  const float trackHeight = oneLine ? lineHeight + 2 * scale : 16 * scale;
+  const float labelWidth = spec.labelWidth * scale;
 
   ImGui::PushID(id);
   ImGui::BeginGroup();
@@ -46,7 +49,7 @@ SliderResult slider(const char* id, const char* label, double& value, const Slid
   ImDrawList* draw = ImGui::GetWindowDrawList();
 
   // the track: one invisible button under the name line
-  const ImVec2 track(origin.x, origin.y + lineHeight + 2 * scale);
+  const ImVec2 track(origin.x + (oneLine ? labelWidth : 0), oneLine ? origin.y : origin.y + lineHeight + 2 * scale);
   ImGui::SetCursorScreenPos(track);
   ImGui::InvisibleButton("##slider", ImVec2(width, trackHeight));
   const bool hovered = ImGui::IsItemHovered();
@@ -84,17 +87,17 @@ SliderResult slider(const char* id, const char* label, double& value, const Slid
   const float mid = track.y + trackHeight * 0.5f;
   const float x = track.x + width * static_cast<float>(unit);
   const ImU32 bar = active || hovered ? kWarm : kAccent;
-  draw->AddRectFilled(ImVec2(track.x, mid - 4 * scale), ImVec2(x, mid + 4 * scale), accentAlpha(34));
+  draw->AddRectFilled(ImVec2(track.x, mid - (oneLine ? 3 : 4) * scale), ImVec2(x, mid + (oneLine ? 3 : 4) * scale), accentAlpha(34));
   draw->AddLine(ImVec2(track.x, mid), ImVec2(track.x + width, mid), kLine, 1);
-  draw->AddRectFilled(ImVec2(x - std::max(1.0f, scale), mid - 7 * scale), ImVec2(x + std::max(1.0f, scale), mid + 7 * scale), bar);
+  draw->AddRectFilled(ImVec2(x - std::max(1.0f, scale), mid - (oneLine ? 5 : 7) * scale), ImVec2(x + std::max(1.0f, scale), mid + (oneLine ? 5 : 7) * scale), bar);
 
   // the name on the left, the value on the right
   draw->AddText(origin, kDimText, label);
   const std::string text = valueText(value, spec.isInt);
-  draw->AddText(ImVec2(origin.x + width - ImGui::CalcTextSize(text.c_str()).x, origin.y), active ? kWarm : kDimText, text.c_str());
+  draw->AddText(ImVec2(origin.x + totalWidth - ImGui::CalcTextSize(text.c_str()).x, origin.y), active ? kWarm : kDimText, text.c_str());
 
   ImGui::SetCursorScreenPos(ImVec2(origin.x, track.y + trackHeight));
-  ImGui::Dummy(ImVec2(width, 1));
+  ImGui::Dummy(ImVec2(totalWidth, 1));
   ImGui::EndGroup();
   ImGui::PopID();
   return result;

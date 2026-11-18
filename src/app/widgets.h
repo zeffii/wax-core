@@ -20,6 +20,7 @@ struct SliderSpec {
   bool isInt = false;
   bool log = false;       // the slider moves through the range by ratio instead of by amount (needs min > 0)
   float width = 150;      // in points; scaled with the window
+  float labelWidth = 0;   // above 0 the slider is one line: the name in this much width, the track, then the value; `width` is the whole line
 };
 
 // A slider as in the web app: a hairline track, a faint fill up to the value, one thin accent bar at it. The name is above on
