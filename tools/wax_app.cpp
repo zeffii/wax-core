@@ -1278,13 +1278,14 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   std::string laneInstrument;
   for (const Lane& lane : doc.project().lanes) if (lane.id == selectedLane) laneInstrument = lane.instrument;
   if (session->screen == Screen::Song) {
+    if (!selectedLane.empty() && editor.lane() != selectedLane) editor.setLane(selectedLane, player.engine().laneColumns(selectedLane));   // (one cell is always active: the cursor is in the lane shown)
     const float songSheetW = session->showKeys ? 270 * scale : 0;
     ImGui::BeginChild("seqmain", ImVec2(-songSheetW, 0), false, ImGuiWindowFlags_NoNav);
     const app::CurveView::Targets curveTargetsOf = [&](const Lane& lane) { return curveTargets(player.engine().laneColumns(lane.id), lane.instrument, player.engine().registry()); };
     std::map<std::string, app::MinimapLane> minimapLanes;   // what the pictures of the patterns read (only when they are on)
     if (app::settings().minimapOn)
       for (const Lane& lane : doc.project().lanes) minimapLanes[lane.id] = {&session->player->engine().laneColumns(lane.id), &session->rows[lane.id]};
-    const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, session->edit ? editor.tick() : -1, editor.tick(), follow && playing && !session->edit, session->curveView, curveTargetsOf, session->edit ? app::selectedBlock(doc.project(), session->song, editor.lane(), editor.tick(), app::sequenceRowTicks(doc.project().song)) : app::SequenceBlock(), &minimapLanes, playing ? session->heard.frac : 0.0f);
+    const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, selectedLane.empty() ? -1 : editor.tick(), editor.tick(), follow && playing && !session->edit, session->curveView, curveTargetsOf, session->edit ? app::selectedBlock(doc.project(), session->song, editor.lane(), editor.tick(), app::sequenceRowTicks(doc.project().song)) : app::SequenceBlock(), &minimapLanes, playing ? session->heard.frac : 0.0f);
     if (hit.curve.any) {   // a curve edited: one undo step per gesture, the lane rebuilt in the engine
       doc.apply(std::make_unique<SetCurves>(hit.curve.lane, hit.curve.curves, hit.curve.label), hit.curve.fold);
       const std::vector<std::string> problems = syncLanes(doc, player.engine());
