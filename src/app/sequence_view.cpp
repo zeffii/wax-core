@@ -16,9 +16,9 @@ namespace wax::app {
 namespace {
 
 constexpr float kGutter = 44.0f;       // the tick numbers at the left
-// The tick numbers start one character in from the left edge, so they keep clear of the browser's drag handle beside it.
-float numberInset() { return ImGui::CalcTextSize("0").x; }
-float gutterWidth(float scale) { return kGutter * scale + numberInset() - 2 * scale; }
+// The whole sequence editor starts one character's width in from the browser's drag handle beside it (about 8 px).
+float leftMargin() { return ImGui::CalcTextSize("0").x; }
+float gutterWidth(float scale) { return kGutter * scale; }
 constexpr float kLaneWidth = 92.0f;
 constexpr float kMasterWidth = 46.0f;  // the master lane has no notes, so it gets half
 
@@ -80,7 +80,7 @@ std::string describeSongCursor(const Project& project, const std::string& laneId
 
 float sequenceWidth(const Project& project) {
   const float scale = ImGui::GetStyle().FontScaleDpi;
-  float width = gutterWidth(scale) + 14 * scale;   // (room for the scroll bar)
+  float width = leftMargin() + gutterWidth(scale) + 14 * scale;   // (room for the scroll bar)
   for (const Lane& lane : project.lanes) width += laneWidth(lane, scale);
   return width;
 }
@@ -100,6 +100,7 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
   const float headHeight = rowHeight + 4 * scale;
   const float gutter = gutterWidth(scale);
 
+  ImGui::SetCursorPosX(ImGui::GetCursorPosX() + leftMargin());
   ImGui::BeginChild("sequence", ImVec2(0, 0), false, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_HorizontalScrollbar);
   ImDrawList* draw = ImGui::GetWindowDrawList();
   const ImVec2 origin = ImGui::GetCursorScreenPos();
@@ -193,7 +194,7 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
     const int t = r * cell;
     char number[16];
     std::snprintf(number, sizeof number, "%04d", t);
-    draw->AddText(ImVec2(origin.x + numberInset(), y + scale), t % bar16 == 0 ? kText : kDimText, number);
+    draw->AddText(ImVec2(origin.x + 2 * scale, y + scale), t % bar16 == 0 ? kText : kDimText, number);
   }
 
   // the pictures of the patterns, when they are switched on (the lanes' rows and columns come from the caller)
