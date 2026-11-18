@@ -669,6 +669,16 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       }
     }
     if (session->edit && session->screen == Screen::Song) app::songBlockKeys(session->song, songEnv);   // Ctrl+C, X, V, D on blocks of the sequence
+    if (ctrl && !io.KeyAlt && session->screen == Screen::Pattern && ImGui::IsKeyPressed(ImGuiKey_K, false)) {   // Ctrl+K: the next colour for the pattern under the cursor; Ctrl+Shift+K the previous one (as the web)
+      const Lane* current = nullptr;
+      for (const Lane& l : doc.project().lanes) if (l.id == selectedLane) current = &l;
+      Lane copy = current ? *current : Lane{};
+      if (current && seq::colourPattern(copy, session->solo.on ? session->solo.lo : editor.tick(), io.KeyShift ? -1 : 1)) {
+        doc.apply(std::make_unique<SetLaneSequence>(copy, "change the colour"));
+        edited = true;
+        session->editStatus = "Pattern colour changed.";
+      } else session->editStatus = "No pattern here.";
+    }
     if (ctrl && session->edit && session->screen == Screen::Pattern && !io.KeyAlt) {   // block editing: copy, cut, paste, select all
       if (ImGui::IsKeyPressed(ImGuiKey_C, false)) ImGui::SetClipboardText(editor.copy().c_str());
       if (ImGui::IsKeyPressed(ImGuiKey_X, false)) { ImGui::SetClipboardText(editor.copy().c_str()); edited |= editor.cut(); }
