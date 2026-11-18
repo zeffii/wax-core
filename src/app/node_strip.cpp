@@ -184,7 +184,7 @@ NodeStripResult drawNodeStrip(NodeStripState& state, ParamPanelState& panel, Doc
 
     // the drawings: one canvas each, edited here; the tools (point types, shapes, snap) are in the window
     for (const DrawingInfo& info : drawingsOf(node->type)) {
-      const float canvasWidth = kDrawingWidth * scale;
+      const float canvasWidth = (node->type == "env2" ? 3 * kDrawingWidth : kDrawingWidth) * scale;   // env2's envelopes are long, they get three times the room
       ImGui::SetCursorScreenPos(ImVec2(origin.x + x, top));
       ImGui::PushID(info.name.c_str());
       ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));

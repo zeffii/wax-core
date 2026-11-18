@@ -172,7 +172,7 @@ void drawEnsemble(ImDrawList* dl, ImFont* font, const GraphNode& node, const Nod
 
 // ---- haas: the early and late pulses, and the comb they make in mono ----
 
-void drawHaas(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale) {
+void drawHaas(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeType& type, const Frame& f, float scale, ResponseHandles& handles) {
   constexpr double kMaxMs = 45;
   const float PL = 34 * scale, PR = 12 * scale, top = 108 * scale;
   const double ms = valueOf(node, type, "time"), gain = valueOf(node, type, "gain"), mix = valueOf(node, type, "mix");
@@ -194,6 +194,9 @@ void drawHaas(ImDrawList* dl, ImFont* font, const GraphNode& node, const NodeTyp
   };
   pulse(X(0), right ? laneTop : laneBottom, 1, right ? kBlue : kPink);
   pulse(X(ms), right ? laneBottom : laneTop, gain, right ? kPink : kBlue);
+  // the late pulse's dot: along the time axis for the delay, up and down for its gain (gx: time 0, gw: the 45 ms, gy: the pulse's foot, gh: a full-height pulse)
+  const float lateFoot = right ? laneBottom : laneTop;
+  handles.list.push_back({node.id, "@haas", 0, ImVec2(X(ms), lateFoot - 26 * scale * static_cast<float>(std::clamp(gain, 0.0, 1.2))), X(0), lateFoot, X(kMaxMs) - X(0), 26 * scale});
   // the mono comb: the late pulse added to the early one
   const float y0 = f.y0 + top + 18 * scale, ph = f.h - top - 18 * scale - 28 * scale;
   const double lo = std::log10(20.0), hi = std::log10(20000.0);
@@ -922,7 +925,7 @@ float drawNodePicture(ImDrawList* dl, ImFont* font, const GraphNode& node, const
   if (node.type == "prismacanyon") drawCanyon(dl, font, node, type, frameFor(dl, font, node.id + " echoes", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, timing);
   else if (node.type == "twin") drawTwin(dl, font, node, type, frameFor(dl, font, node.id + " response", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "ensemble") drawEnsemble(dl, font, node, type, frameFor(dl, font, node.id + " delays", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale);
-  else if (node.type == "haas") drawHaas(dl, font, node, type, frameFor(dl, font, node.id + " sides", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale);
+  else if (node.type == "haas") drawHaas(dl, font, node, type, frameFor(dl, font, node.id + " sides", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "reflect") drawReflect(dl, font, node, type, frameFor(dl, font, node.id + " room", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
   else if (node.type == "granular") drawGranular(dl, font, node, type, frameFor(dl, font, node.id + " grains", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, timing);
   else if (node.type == "membrane") drawMembrane(dl, font, node, type, frameFor(dl, font, node.id + " membrane", size.w, size.h, tileMin, tileMax, areaMin, areaMax, scale), scale, handles);
@@ -959,6 +962,7 @@ std::vector<std::pair<std::string, double>> dragPictureHandle(const ResponseHand
     const std::string name = handle.param.substr(7, eq - 7);
     return {{name, clampTo(name, valueOf(node, type, name) + std::stod(handle.param.substr(eq + 1)))}};
   }
+  if (handle.param == "@haas") return {{"time", clampTo("time", std::round(fx * 45 * 10) / 10)}, {"gain", clampTo("gain", std::round(std::clamp(static_cast<double>((handle.gy - at.y) / handle.gh), 0.0, 1.2) * 100) / 100)}};
   if (handle.param == "@src") return {{"srcx", fx}, {"srcy", fy}};
   if (handle.param == "@lis") return {{"lisx", fx}, {"lisy", fy}};
   if (handle.param == "@size") {   // the corner: pixels per metre is the plan's width over the room's width
