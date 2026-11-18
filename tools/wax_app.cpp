@@ -88,6 +88,7 @@ struct DialogAnswer {
 };
 DialogAnswer gAnswer;
 enum class DialogRequest { None, Open, SaveAs, Export, New, ClearArrangement, ClearPatterns };
+float gFileX = 0;          // the screen x of the File word, as drawn last frame: the browser's tabs start at the same x
 float gIconCentre = 0;      // the screen y of the middle of the transport icons, as drawn last frame: the File word is centred on it
 constexpr float kFileGap = 18;   // the space either side of the File word, in web pixels: from the rail's line, and to the Play button
 std::string gOpenRecent;   // a song the File menu's recent list asked to open
@@ -406,6 +407,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     ImGui::SetCursorPosY(iconsY);
     if (gIconCentre > 0) ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x, gIconCentre - ImGui::GetTextLineHeight() / 2));
     if (app::textButton("File")) ImGui::OpenPopup("filemenu");
+    gFileX = ImGui::GetItemRectMin().x;
     ImGui::SameLine(0, 0); ImGui::SetCursorPosY(lineY);
     if (ImGui::BeginPopup("filemenu")) {
       // Rows in the normal text colour (a grey row would look unavailable), the shortcuts dim and right-aligned.
@@ -874,8 +876,9 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     const float x = railLineX(railMin.x, scale);
     ImGui::GetWindowDrawList()->AddLine(ImVec2(x, ImGui::GetWindowPos().y), ImVec2(x, railMax.y), app::lineAlpha(255), 1.0f);   // (from the top of the window)
   }
-  const float railGap = 7 * scale;   // the browser keeps a character's width off the rail's vertical line
-  ImGui::SameLine(0, ImGui::GetStyle().ItemSpacing.x + railGap);
+  ImGui::SameLine();
+  const float railGap = gFileX > 0 ? std::max(0.0f, gFileX - ImGui::GetCursorScreenPos().x) : 0.0f;   // the browser's tabs start where the File word does
+  ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x + railGap, ImGui::GetCursorScreenPos().y));
   // The browser, down the left of every screen as in the web app: tabs for the lists (patterns, machines, samples), and under them
   // the options of the screen being shown (the Song screen's lane tools).
   const Lane* listed = nullptr;
@@ -1700,7 +1703,9 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       ImGui::SameLine(0, 14 * scale);
       ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kWarm), "%s", session->editStatus.c_str());
     }
-    ImGui::SameLine(std::max(ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x + 20 * scale, ImGui::GetWindowWidth() - 520 * scale));   // (to the right of what was written, or at the right edge)
+    static float rightWidth = 520 * scale;   // how wide the right-hand group was last frame, so it can end at the window's edge
+    ImGui::SameLine(std::max(ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x + 20 * scale, ImGui::GetWindowWidth() - rightWidth - 10 * scale));   // (flush right, but never over what was written)
+    const float rightStart = ImGui::GetCursorPosX();
     if (session->audio) {
       const double load = session->audio->load();
       // The numbers are right-aligned in cells as wide as their largest value, so what follows them stays where it is.
@@ -1738,6 +1743,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       }
       ImGui::EndCombo();
     }
+    rightWidth = ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x - rightStart;
     ImGui::PopFont();
   }
   ImGui::End();
