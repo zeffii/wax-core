@@ -132,7 +132,7 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
       lastTick = tick; lastY = ImGui::GetCursorScreenPos().y;
       if (cursor.loop && tick >= cursor.loopStart && tick < cursor.loopEnd) {   // the loop: a bar down the row-number column, ends marked
         const ImVec2 at = ImGui::GetCursorScreenPos();
-        const float rowH = ImGui::GetTextLineHeightWithSpacing();
+        const float rowH = rowPitch;   // (the rows' real distance, so the end lands on the next row's top and not short or past it)
         const ImU32 mark = cursor.loopOn ? loopYellow : withAlpha(loopYellow, 110);   // (switched off: the same yellow, faint)
         if (tick == cursor.loopStart) loopTopY = at.y - 1;
         if (tick == cursor.loopEnd - 1) loopBottomY = at.y + rowH - 1;
