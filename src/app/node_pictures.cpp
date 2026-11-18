@@ -940,7 +940,7 @@ bool hasPicture(const std::string& nodeType) { return nodeType == "twin" || node
 PictureSize pictureSize(const std::string& nodeType) {
   if (const PictureSize space = spacePictureSize(nodeType); space.w > 0) return space;
   static const std::map<std::string, PictureSize> sizes = {
-      {"prismacanyon", {360, 20 + 30 * kCanyonLines + 24}}, {"twin", {480, 260}}, {"ensemble", {320, 150}}, {"haas", {400, 280}}, {"cardinal", {kCardinalWidth, kCardinalHeight}}, {"reflect", {560, 384}},
+      {"prismacanyon", {360, 20 + 30 * kCanyonLines + 24}}, {"twin", {480, 260}}, {"ensemble", {320, 150}}, {"haas", {600, 280}}, {"cardinal", {kCardinalWidth, kCardinalHeight}}, {"reflect", {560, 384}},
       {"granular", {360, 262}}, {"membrane", {360, 196}}, {"khufu", {310, 150}}, {"rotary", {300, 190}}, {"kaleidoscope", {460, 270}}, {"drumsynth", {360, 372}},
       {"drumsynth2", {360, 22 + 3 * 56 + 84}}, {"pulsar", {360, 130}}, {"pulsetrain", {360, 130}}, {"pogue", kPogueSize}, {"hat2", {360, 22 + 2 * 56 + 2 * 80 + 6}}};
   const auto found = sizes.find(nodeType);
