@@ -50,11 +50,13 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
   const float infoHeight = ImGui::GetTextLineHeightWithSpacing();   // room for the line under the grid
   // The gap between two columns is one character: half of it as padding on each side.
   const float charWidth = ImGui::CalcTextSize("0").x;
+  constexpr float kTickColumnChars = 5;
   ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(charWidth / 2, ImGui::GetStyle().CellPadding.y));
   // One table per set of lanes: ImGui keeps a column's width by its index, so one table id for every layout (a lane on its own in solo-edit,
   // then all lanes again) would hand the old widths to the wrong columns.
   std::string tableId = "pattern";
   for (const PatternLane& lane : lanes) tableId += "/" + lane.id;
+  ImGui::SetCursorPosX(ImGui::GetCursorPosX() + charWidth);   // (the grid starts a character's width clear of the browser's drag handle)
   const bool began = ImGui::BeginTable(tableId.c_str(), columns + 1, tableFlags, ImVec2(0, std::max(60.0f, ImGui::GetContentRegionAvail().y - infoHeight)));
   ImGui::PopStyleVar();
   if (!began) return result;
@@ -64,7 +66,7 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
   // Every column has the width of its widest text (the heading or any cell of any row), worked out from all the rows: left to the table, a
   // column would be as wide as the rows on show, and widen or narrow as the grid scrolls.
   const auto letters = [](const std::string& text) { int n = 0; for (const unsigned char ch : text) if ((ch & 0xC0) != 0x80) n++; return n; };
-  ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 3 * charWidth);
+  ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, kTickColumnChars * charWidth);   // (room for five characters; the numbers are right-aligned)
   for (const PatternLane& lane : lanes) {
     for (std::size_t c = 0; c < lane.labels->size(); c++) {
       int widest = letters((*lane.labels)[c]);
@@ -137,9 +139,10 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
       }
       char number[16];
       std::snprintf(number, sizeof number, "%03d", shown);
-      ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(shown % beat == 0 ? kWarm : kDimText));
-      if (ImGui::Selectable(number, false, ImGuiSelectableFlags_None)) result.clickedTick = tick;
-      ImGui::PopStyleColor();
+      ImGui::PushID(tick);
+      if (ImGui::Selectable("##tick", false, ImGuiSelectableFlags_None)) result.clickedTick = tick;
+      ImGui::PopID();
+      ImGui::GetWindowDrawList()->AddText(ImVec2(ImGui::GetItemRectMax().x - ImGui::CalcTextSize(number).x - charWidth / 2, ImGui::GetItemRectMin().y), shown % beat == 0 ? kWarm : kDimText, number);   // (right-aligned)
       for (std::size_t li = 0; li < lanes.size(); li++) {
         const PatternLane& lane = lanes[li];
         const std::vector<std::string>& cells = (*lane.rows)[static_cast<std::size_t>(tick)];
