@@ -786,9 +786,20 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       }
       if (ImGui::IsKeyPressed(ImGuiKey_Equal, false)) edited |= editor.typeNoteOff();
       if (ImGui::IsKeyPressed(ImGuiKey_GraveAccent, false)) edited |= editor.typeNoteCut();
-      if (editor.onHexCell() || editor.character() >= 1)   // typing changes the character the cursor is on (a note's first character takes whole notes, below)
-        for (int i = 0; i < io.InputQueueCharacters.Size; i++)
-          if (io.InputQueueCharacters[i] < 128) edited |= editor.typeCharacter(static_cast<char>(io.InputQueueCharacters[i]));
+      if (editor.onHexCell() || editor.character() >= 1) {   // typing changes the character the cursor is on (a note's first character takes whole notes, below)
+        // The characters the window was sent; when it was sent none (no text box has the keyboard, so the platform may not send text at all), the keys themselves.
+        std::string typed;
+        for (int i = 0; i < io.InputQueueCharacters.Size; i++) if (io.InputQueueCharacters[i] < 128) typed += static_cast<char>(io.InputQueueCharacters[i]);
+        if (io.InputQueueCharacters.Size == 0) {
+          for (int d = 0; d < 10 && !io.KeyShift; d++)
+            if (ImGui::IsKeyPressed(static_cast<ImGuiKey>(ImGuiKey_0 + d), false) || ImGui::IsKeyPressed(static_cast<ImGuiKey>(ImGuiKey_Keypad0 + d), false)) typed += static_cast<char>('0' + d);
+          for (int d = 0; d < 6; d++)
+            if (ImGui::IsKeyPressed(static_cast<ImGuiKey>(ImGuiKey_A + d), false)) typed += static_cast<char>('A' + d);
+          if (ImGui::IsKeyPressed(ImGuiKey_Minus, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadSubtract, false)) typed += '-';
+          if ((io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_3, false)) || ImGui::IsKeyPressed(ImGuiKey_Backslash, false)) typed += '#';   // (the # key of a UK keyboard, or Shift+3)
+        }
+        for (const char c : typed) edited |= editor.typeCharacter(c);
+      }
       if (before != editor.tick() * 4096 + editor.cell() || edited) session->scrollToCursor = true;
     }
     const bool hexKeys = typing && (editor.onHexCell() || (editor.onNoteCell() && editor.character() >= 1));   // there the keys are characters, not piano keys
