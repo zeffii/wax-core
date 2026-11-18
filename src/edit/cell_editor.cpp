@@ -54,7 +54,7 @@ std::string CellEditor::rowWithCell(const std::string& row, const std::vector<Co
 }
 
 void CellEditor::setLane(const std::string& laneId, const std::vector<Column>& columns) {
-  if (laneId != lane_) { tick_ = 0; cell_ = 0; typed_ = 0; nugget_ = -1; }
+  if (laneId != lane_) { tick_ = 0; cell_ = 0; typed_ = 0; char_ = 0; }
   lane_ = laneId;
   columns_ = columns;
   cell_ = std::min(cell_, std::max(0, static_cast<int>(columns_.size()) - 1));
@@ -68,7 +68,7 @@ void CellEditor::moveTo(int tick, int cell) {
   tick_ = std::clamp(tick, firstTick(), std::max(firstTick(), lastTick()));
   const int before = cell_;
   cell_ = std::clamp(cell, 0, std::max(0, static_cast<int>(columns_.size()) - 1));
-  if (cell_ != before) nugget_ = -1;   // another column ends nugget mode
+  if (cell_ != before) char_ = 0;   // another column: its first character
   typed_ = 0;
 }
 
@@ -207,19 +207,23 @@ bool CellEditor::typeNote(int midi) {
   return true;
 }
 
-bool CellEditor::nuggetStep(int d) {
-  if (cell_ >= static_cast<int>(columns_.size()) || columns_[static_cast<std::size_t>(cell_)].kind == ColumnKind::Spacer) { nugget_ = -1; return false; }
-  const int width = cellWidth(columns_[static_cast<std::size_t>(cell_)].token);
-  if (nugget_ < 0) {
-    if (width < 2) return false;
-    nugget_ = d > 0 ? 1 : width - 1;
-    typed_ = 0;
-    return true;
-  }
-  const int to = nugget_ + d;
-  if (to >= 0 && to < width) { nugget_ = to; return true; }
-  nugget_ = -1;
-  return false;
+bool CellEditor::moveChar(int d) {
+  const int count = static_cast<int>(columns_.size());
+  if (cell_ >= count) return false;
+  const int to = char_ + d;
+  if (to >= 0 && to < cellWidth(columns_[static_cast<std::size_t>(cell_)].token)) { char_ = to; typed_ = 0; return true; }
+  int next = cell_ + d;
+  while (next >= 0 && next < count && columns_[static_cast<std::size_t>(next)].kind == ColumnKind::Spacer) next += d;
+  if (next < 0 || next >= count) return false;
+  selecting_ = false;
+  cell_ = next;
+  typed_ = 0;
+  char_ = d > 0 ? 0 : cellWidth(columns_[static_cast<std::size_t>(cell_)].token) - 1;
+  return true;
+}
+
+void CellEditor::lastCharacter() {
+  if (cell_ < static_cast<int>(columns_.size())) char_ = std::max(0, cellWidth(columns_[static_cast<std::size_t>(cell_)].token) - 1);
 }
 
 namespace {
@@ -233,31 +237,29 @@ int noteOfText(const std::string& text) {
 
 }  // namespace
 
-bool CellEditor::typeNuggetChar(char c) {
-  if (nugget_ < 0 || cell_ >= static_cast<int>(columns_.size())) return false;
+bool CellEditor::typeCharacter(char c) {
+  if (cell_ >= static_cast<int>(columns_.size())) return false;
   const Column& column = columns_[static_cast<std::size_t>(cell_)];
   const int width = cellWidth(column.token);
+  if (char_ >= width || column.kind == ColumnKind::Spacer || column.token == Token::Spacer) return false;
   const Place at = place();
-  if (!at.pattern || nugget_ >= width) return false;
-  const std::vector<std::string> cells = cellsOf(at.pattern->rows[static_cast<std::size_t>(at.row)]);
-  std::string text = cells[static_cast<std::size_t>(cell_)];
+  std::string text = at.pattern ? cellsOf(at.pattern->rows[static_cast<std::size_t>(at.row)])[static_cast<std::size_t>(cell_)] : tokenBlank(column.token);
   if (column.token == Token::Note) {
-    if (noteOfText(text) < 0) return false;   // only a filled note can be edited by character
-    const char upper = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-    if (nugget_ == 0 && upper >= 'A' && upper <= 'G') text[0] = upper;
-    else if (nugget_ == 1 && (c == '-' || c == '#')) text[1] = c;
-    else if (nugget_ == 2 && c >= '0' && c <= '9') text[2] = c;
+    if (char_ == 0 || !at.pattern || noteOfText(text) < 0) return false;   // the first character takes whole notes; the others edit a note that is there
+    if (char_ == 1 && (c == '-' || c == '#')) text[1] = c;
+    else if (char_ == 2 && c >= '0' && c <= '9') text[2] = c;
     else return false;
     if (noteOfText(text) < 0 || noteOfText(text) > 127) return false;
-  } else if (column.kind == ColumnKind::Spacer || column.token == Token::Spacer || !std::isxdigit(static_cast<unsigned char>(c))) {
+  } else if (!std::isxdigit(static_cast<unsigned char>(c))) {
     return false;
   } else {
     if (text == tokenBlank(column.token)) text.assign(static_cast<std::size_t>(width), '0');   // an empty cell becomes zeros with this digit in place
-    text[static_cast<std::size_t>(nugget_)] = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    text[static_cast<std::size_t>(char_)] = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
   }
-  if (!setCell(text, false)) return false;
-  if (nugget_ + 1 < width) nugget_++;
-  else moveTo(tick_ + step_, cell_);   // the last character: down a row, on the same character, still in the mode
+  if (!setCell(text, column.token != Token::Note && typed_ > 0)) return false;   // (the digits of one cell are one undo step)
+  typed_++;
+  if (char_ + 1 < width) char_++;
+  else moveTo(tick_ + step_, cell_);   // the last character: down a row, on the same character
   return true;
 }
 
@@ -278,25 +280,7 @@ bool CellEditor::typeNoteCut() {
 
 bool CellEditor::typeHexDigit(int digit) {
   if (!onHexCell() || digit < 0 || digit > 15) return false;
-  const int width = cellWidth(columns_[static_cast<std::size_t>(cell_)].token);
-  static const char* const hex = "0123456789ABCDEF";
-  // the cell holds the digits typed so far, filled out with zeros; they all land in one undo step
-  std::string text;
-  if (typed_ > 0) {
-    const Place at = place();
-    if (!at.pattern) return false;
-    std::vector<std::string> cells;
-    std::istringstream words(at.pattern->rows[static_cast<std::size_t>(at.row)]);
-    for (std::string word; words >> word;) cells.push_back(word);
-    if (cell_ < static_cast<int>(cells.size())) text = cells[static_cast<std::size_t>(cell_)].substr(0, static_cast<std::size_t>(typed_));
-  }
-  text += hex[digit];
-  const int now = static_cast<int>(text.size());
-  text.resize(static_cast<std::size_t>(width), '0');
-  if (!setCell(text, typed_ > 0)) return false;
-  typed_ = now;
-  if (typed_ >= width) advance();
-  return true;
+  return typeCharacter("0123456789ABCDEF"[digit]);
 }
 
 std::string CellEditor::liveCellText(const Column& column, double value) {
@@ -393,6 +377,52 @@ bool CellEditor::shiftSelection(Shift how) {
   if (parts.empty()) return false;
   const char* name = how == Shift::PullUp ? "Pull up" : how == Shift::PushDown ? "Push down" : "Rotate";
   document_.apply(std::make_unique<Batch>(lane_, name, std::move(parts)));
+  typed_ = 0;
+  return true;
+}
+
+bool CellEditor::transpose(bool notes, int direction, bool big) {
+  const Selection sel = selection();
+  const int t0 = sel.active ? sel.tick0 : tick_, t1 = sel.active ? sel.tick1 : tick_, c0 = sel.active ? sel.cell0 : cell_, c1 = sel.active ? sel.cell1 : cell_;
+  const Lane* lane = nullptr;
+  for (const Lane& l : document_.project().lanes) if (l.id == lane_) lane = &l;
+  if (!lane) return false;
+  const std::vector<RowOwner> owners = rowOwners(*lane, document_.project().song.length);
+  std::vector<std::unique_ptr<Edit>> parts;
+  for (int t = std::max(t0, firstTick()); t <= t1 && t <= lastTick() && t < static_cast<int>(owners.size()); t++) {
+    const RowOwner owner = owners[static_cast<std::size_t>(t)];
+    if (owner.pattern < 0) continue;
+    const Pattern& pattern = lane->patterns[static_cast<std::size_t>(owner.pattern)];
+    const std::vector<std::string> cells = cellsOf(pattern.rows[static_cast<std::size_t>(owner.row)]);
+    std::string row = pattern.rows[static_cast<std::size_t>(owner.row)];
+    bool changed = false;
+    for (int c = c0; c <= c1 && c < static_cast<int>(columns_.size()); c++) {
+      const Token token = columns_[static_cast<std::size_t>(c)].token;
+      const std::string& cell = cells[static_cast<std::size_t>(c)];
+      if (columns_[static_cast<std::size_t>(c)].kind == ColumnKind::Spacer || cell == tokenBlank(token)) continue;
+      std::string next;
+      if (notes) {
+        const int midi = token == Token::Note ? noteOfText(cell) : -1;
+        const int to = midi + direction * (big ? 12 : 1);
+        if (midi < 0 || to < 0 || to > 127) continue;
+        next = noteText(to);
+      } else if (token == Token::Hex1 || token == Token::Hex2 || token == Token::Hex4 || token == Token::Cmd) {
+        const int head = token == Token::Cmd ? 2 : 0, digits = cellWidth(token) - head;
+        const long value = std::strtol(cell.substr(static_cast<std::size_t>(head)).c_str(), nullptr, 16), top = (1L << (4 * digits)) - 1;
+        const long step = big ? (token == Token::Hex1 ? 1 : token == Token::Hex2 ? 16 : 256) : 1;
+        const long moved = std::clamp(value + direction * step, 0L, top);
+        if (moved == value) continue;
+        next = cell.substr(0, static_cast<std::size_t>(head)) + hexText(static_cast<int>(moved), digits);
+      } else {
+        continue;
+      }
+      row = rowWithCell(row, columns_, c, next);
+      changed = true;
+    }
+    if (changed) parts.push_back(std::make_unique<SetRow>(lane_, pattern.id, owner.row, row));
+  }
+  if (parts.empty()) return false;
+  document_.apply(std::make_unique<Batch>(lane_, notes ? "Transpose notes" : "Transpose values", std::move(parts)));
   typed_ = 0;
   return true;
 }

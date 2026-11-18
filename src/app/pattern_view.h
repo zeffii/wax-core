@@ -32,7 +32,7 @@ struct CursorView {
   bool hideEmpty = false;                // columns with nothing in them anywhere are left out (the cursor's column stays)
   bool show = false;
   int tick = -1, cell = -1;
-  int nugget = -1;                       // nugget mode: the character of the cursor's cell the cursor is on (-1: the whole cell)
+  int character = 0;                     // the character of the cursor's cell the cursor is on
   bool scrollTo = false;
   bool selected = false;                 // a block of cells is selected: ticks tick0..tick1, cells cell0..cell1
   int tick0 = 0, tick1 = 0, cell0 = 0, cell1 = 0;

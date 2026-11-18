@@ -28,16 +28,20 @@ public:
   int cell() const { return cell_; }
   int digitsTyped() const { return typed_; }
 
-  // Nugget mode: the cursor sits on one character of the cell (-1: not in it), so a note's accidental or octave, or one digit of a number, can be
-  // changed without writing the whole cell. It ends as soon as the cursor goes to another column (or lane); moving up or down stays in it.
-  int nugget() const { return nugget_; }
-  // Ctrl+Left/Right: enters the mode (Right at the second character, Left at the last), then steps a character. False when the step runs off
-  // the cell (or the cell has no characters): the mode is over and the caller moves on to the neighbouring cell.
-  bool nuggetStep(int d);
-  void endNugget() { nugget_ = -1; }
-  // A character typed at the cursor's character: a note's letter, '-' or '#', or octave digit; a hex digit elsewhere. Then on to the next
-  // character, or down a row at the last one, staying in the mode. False when the cell cannot take it.
-  bool typeNuggetChar(char c);
+  // The cursor is always on one character of its cell (0 is the first), as in the web app: Left and Right step a character at a time, across
+  // cells and columns; another column puts it on that cell's first character; Up and Down stay on the same character.
+  int character() const { return char_; }
+  // One character left (-1) or right (1), on into the neighbouring cell at its end (spacers are skipped). False at the first and last cell of the
+  // lane, where the caller moves on to the next lane (and calls lastCharacter() when it went left).
+  bool moveChar(int d);
+  void lastCharacter();   // the cursor's cell's last character
+  // A character typed at the cursor's character: a note's '-' or '#' (second character) or octave digit (third), or a hex digit in a hex cell. An
+  // empty hex cell becomes zeros with the digit in place. Then on to the next character, or down a row at the last one, on the same
+  // character. False when the cell cannot take it. (The first character of a note cell takes whole notes: typeNote.)
+  bool typeCharacter(char c);
+  // Ctrl+Up/Down (notes) and Ctrl+, / Ctrl+. (values) in the web: the selected cells (or the cursor's) moved by one; `big`: a note by an octave, a
+  // value by one digit. Blank cells stay blank, values stop at their ends, a command's id is left alone. One undo step. False when nothing changed.
+  bool transpose(bool notes, int direction, bool big);
 
   // Solo-edit: the cursor, selections and pastes stay on the rows lo to hi-1 (one pattern), and no pattern can be made or placed. clearSolo() ends it.
   void setSolo(int lo, int hi) { soloLo_ = std::max(0, lo); soloHi_ = std::max(soloLo_ + 1, hi); moveTo(tick_, cell_); }
@@ -110,7 +114,7 @@ private:
   Document& document_;
   std::string lane_;
   std::vector<Column> columns_;
-  int tick_ = 0, cell_ = 0, typed_ = 0, step_ = 1, nugget_ = -1;
+  int tick_ = 0, cell_ = 0, typed_ = 0, step_ = 1, char_ = 0;
   bool selecting_ = false, wrapRows_ = false;
   int soloLo_ = -1, soloHi_ = -1;   // the rows of the solo-edited pattern (hi is one past its last); -1: not solo-editing
   int firstTick() const;   // the first and last row the cursor may be on

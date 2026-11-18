@@ -720,18 +720,24 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         editor.setLane(lane, player.engine().laneColumns(lane));
         const int columns = static_cast<int>(player.engine().laneColumns(lane).size());
         editor.moveTo(rowTick, cells > 0 ? 0 : std::max(0, columns - 1));
+        if (cells < 0) editor.lastCharacter();
         if (cells > 0) editor.move(0, 1), editor.move(0, -1);   // (the first cell that is not a spacer)
         else editor.move(0, -1), editor.move(0, 1);              // (the last one)
         session->wantLane = lane;
       };
-    if (editing && ctrl && !io.KeyShift) {   // the Ctrl keys of the pattern editor (the web's): nugget mode, pulling rows up, pushing them down, rotating
+    if (editing && ctrl) {   // the Ctrl keys of the pattern editor (the web's): by column, transposing, pulling rows up, pushing them down, rotating
       const int before = editor.tick() * 4096 + editor.cell();
-      if (!io.KeyAlt) {
-        const auto side = [&](int d) { if (!editor.nuggetStep(d)) step(0, d); };   // Ctrl+Left/Right: one character of the cell; off its end, the next column
-        if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) side(-1);
-        if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) side(1);
+      if (!io.KeyAlt && !io.KeyShift) {
+        if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) step(0, -1);    // Ctrl+Left/Right: the first character of the next or previous column
+        if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) step(0, 1);
         if (ImGui::IsKeyPressed(ImGuiKey_Delete)) edited |= editor.shiftSelection(CellEditor::Shift::PullUp);   // the selection goes, the rows below move up
         if (ImGui::IsKeyPressed(ImGuiKey_Insert)) edited |= editor.shiftSelection(CellEditor::Shift::PushDown);   // the rows from the selection down move down
+      }
+      if (!io.KeyAlt) {   // (Shift: an octave for notes, a digit for values)
+        if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) edited |= editor.transpose(true, 1, io.KeyShift);
+        if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) edited |= editor.transpose(true, -1, io.KeyShift);
+        if (ImGui::IsKeyPressed(ImGuiKey_Period)) edited |= editor.transpose(false, 1, io.KeyShift);
+        if (ImGui::IsKeyPressed(ImGuiKey_Comma)) edited |= editor.transpose(false, -1, io.KeyShift);
       } else if (editor.selection().active) {   // Ctrl+Alt+Up/Down: the selected rows rotate
         if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) edited |= editor.shiftSelection(CellEditor::Shift::RotateUp);
         if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) edited |= editor.shiftSelection(CellEditor::Shift::RotateDown);
@@ -742,16 +748,15 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       const int before = editor.tick() * 4096 + editor.cell();
       if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) step(-1, 0);
       if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) step(1, 0);
-      // Left and Right inside nugget mode step a character; off the cell's end the cursor goes on to the next column, and the mode is over.
+      // Left and Right step one character, on into the next cell and column at the ends (and the next lane at the lane's ends); Shift extends a selection by cells.
       const auto sideways = [&](int d) {
-        if (!io.KeyShift && editor.nugget() >= 0 && editor.nuggetStep(d)) return;
+        if (!io.KeyShift && editor.moveChar(d)) return;
         step(0, d);
       };
       if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) sideways(-1);
       if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) sideways(1);
-      if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {   // Esc: ends nugget mode, then drops a selection; then leaves solo-edit; then goes back to the sequence, as in the web
-        if (editor.nugget() >= 0) editor.endNugget();
-        else if (editor.selection().active) editor.clearSelection();
+      if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {   // Esc: drops a selection; then leaves solo-edit; then goes back to the sequence, as in the web
+        if (editor.selection().active) editor.clearSelection();
         else if (session->solo.on) { session->solo = {}; editor.clearSolo(); session->editStatus = "Solo-edit ended."; }   // (the web: solo first, then back)
         else if (session->screen == Screen::Pattern) { session->screen = Screen::Song; session->scrollToCursor = true; }
       }
@@ -781,20 +786,12 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       }
       if (ImGui::IsKeyPressed(ImGuiKey_Equal, false)) edited |= editor.typeNoteOff();
       if (ImGui::IsKeyPressed(ImGuiKey_GraveAccent, false)) edited |= editor.typeNoteCut();
-      const bool nuggetKeys = editor.nugget() >= (editor.onNoteCell() ? 1 : 0) && editor.nugget() >= 0;   // typing changes one character of the cell
-      if (nuggetKeys && !io.KeyCtrl && !io.KeyAlt)
+      if (editor.onHexCell() || editor.character() >= 1)   // typing changes the character the cursor is on (a note's first character takes whole notes, below)
         for (int i = 0; i < io.InputQueueCharacters.Size; i++)
-          if (io.InputQueueCharacters[i] < 128) edited |= editor.typeNuggetChar(static_cast<char>(io.InputQueueCharacters[i]));
-      if (editor.onHexCell() && !nuggetKeys) {
-        for (int d = 0; d < 16; d++) {
-          const ImGuiKey key = d < 10 ? static_cast<ImGuiKey>(ImGuiKey_0 + d) : static_cast<ImGuiKey>(ImGuiKey_A + (d - 10));
-          if (ImGui::IsKeyPressed(key, false)) edited |= editor.typeHexDigit(d);
-        }
-      }
+          if (io.InputQueueCharacters[i] < 128) edited |= editor.typeCharacter(static_cast<char>(io.InputQueueCharacters[i]));
       if (before != editor.tick() * 4096 + editor.cell() || edited) session->scrollToCursor = true;
     }
-    const bool nuggetTyping = typing && editor.nugget() >= (editor.onNoteCell() ? 1 : 0) && editor.nugget() >= 0;   // (the keys are characters, not piano keys)
-    const bool hexKeys = typing && (editor.onHexCell() || nuggetTyping);   // on a hex cell the letters are digits, not piano keys
+    const bool hexKeys = typing && (editor.onHexCell() || (editor.onNoteCell() && editor.character() >= 1));   // there the keys are characters, not piano keys
     if (!hexKeys && session->screen != Screen::Sample && !(session->screen == Screen::Song && session->edit)) {   // (on the Sample screen the keys play the sample)
       for (int i = 0; i < static_cast<int>(sizeof kPianoKeys / sizeof kPianoKeys[0]); i++) {
         const ImGuiKey key = kPianoKeys[i];
@@ -1355,7 +1352,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       if (session->solo.on && !app::settings().soloHatch) { cursor.rowFirst = session->solo.lo; cursor.rowEnd = session->solo.hi; }   // the pattern on its own
       cursor.tick = editor.tick();
       cursor.cell = editor.cell();
-      cursor.nugget = editor.nugget();
+      cursor.character = editor.character();
       cursor.scrollTo = session->scrollToCursor;
       const CellEditor::Selection sel = editor.selection();
       { const LoopRange lr = loopOf(song); cursor.loop = song.raw.is_object() && song.raw.contains("loop") && song.raw["loop"].is_object(); cursor.loopOn = lr.on; cursor.loopStart = lr.start; cursor.loopEnd = lr.end; }

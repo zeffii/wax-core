@@ -383,35 +383,38 @@ void testBlockEdit() {
   check(row(0) == "C-4 40 .... ......", "undo puts a cut back");
   std::printf("ok: block edits\n");
 
-  // Nugget mode: one character of a cell at a time; another column ends it.
+  // The cursor is on one character of a cell: Left/Right step it across cells, typing changes it, another column starts at its first.
   doc.undo(); doc.undo();
   ed.moveTo(2, 0);
-  check(ed.nugget() < 0, "the cursor starts outside nugget mode");
-  check(ed.nuggetStep(1) && ed.nugget() == 1, "Ctrl+Right enters at the accidental");
-  check(ed.typeNuggetChar('#') && row(0).substr(0, 3) == "C#4", "'#' sharpens the note in place");
-  check(ed.nugget() == 2, "and the cursor moves on to the octave");
-  check(ed.typeNuggetChar('5') && row(0).substr(0, 3) == "C#5", "a digit sets the octave");
-  check(ed.nugget() == 2 && ed.tick() == 3, "at the last character the cursor goes down a row, still in the mode");
+  check(ed.character() == 0, "the cursor starts on the first character");
+  check(ed.moveChar(1) && ed.character() == 1 && ed.cell() == 0, "Right steps a character");
+  check(ed.typeCharacter('#') && row(0).substr(0, 3) == "C#4", "'#' sharpens the note in place");
+  check(ed.character() == 2, "and the cursor moves on to the octave");
+  check(ed.typeCharacter('5') && row(0).substr(0, 3) == "C#5", "a digit sets the octave");
+  check(ed.character() == 2 && ed.tick() == 3, "at the last character the cursor goes down a row, on the same character");
   ed.moveTo(5, 0);
-  check(!ed.typeNuggetChar('5'), "an empty cell takes no character edits");
-  ed.endNugget();
+  check(!ed.typeCharacter('5'), "an empty cell takes no character edits");
   ed.moveTo(2, 0);
-  check(ed.nuggetStep(1) && ed.nuggetStep(1) && !ed.nuggetStep(1) && ed.nugget() < 0, "stepping off the end of the cell ends the mode");
-  ed.endNugget();
-  ed.moveTo(2, 0);
-  ed.nuggetStep(-1);
-  check(ed.nugget() == 2, "Ctrl+Left enters at the last character");
+  check(ed.moveChar(1) && ed.cell() == 1 && ed.character() == 0, "Right at the last character goes on to the next cell's first");
+  check(ed.moveChar(-1) && ed.cell() == 0 && ed.character() == 2, "Left at the first goes back to the last of the one before");
   ed.move(0, 1);
-  check(ed.nugget() < 0, "moving to another column ends the mode");
+  check(ed.cell() == 1 && ed.character() == 0, "another column starts at its first character");
+  check(ed.moveChar(1) && ed.typeCharacter('F') && row(0).substr(4, 2) == "4F", "a hex cell changes one digit");
+  std::printf("ok: character cursor\n");
+
+  // Transposing: notes by a semitone or an octave, values by one or one digit.
+  ed.moveTo(2, 0);
+  check(ed.transpose(true, 1, false) && row(0).substr(0, 3) == "D-5", "Ctrl+Up raises a note a semitone");
+  check(ed.transpose(true, -1, true) && row(0).substr(0, 3) == "D-4", "Shift: an octave");
   ed.moveTo(2, 1);
-  ed.endNugget();
-  ed.nuggetStep(1);
-  check(ed.typeNuggetChar('F') && row(0).substr(4, 2) == "4F", "a hex cell changes one digit");
-  std::printf("ok: nugget mode\n");
+  check(ed.transpose(false, 1, false) && row(0).substr(4, 2) == "50", "Ctrl+. raises a value by one");
+  check(ed.transpose(false, -1, true) && row(0).substr(4, 2) == "40", "Shift: by a digit");
+  check(!ed.transpose(true, 1, false), "a hex cell is not transposed as a note");
+  doc.undo(); doc.undo(); doc.undo(); doc.undo();
+  std::printf("ok: transpose\n");
 
   // Shifting a selection: the rows below move up or down inside the pattern, in the selected columns only.
   doc.undo(); doc.undo(); doc.undo();
-  ed.endNugget();
   ed.moveTo(2, 0);                                      // row 0 of the pattern: "C-4 40", D-4, E-4, empty
   check(ed.shiftSelection(wax::CellEditor::Shift::PullUp) && row(0).substr(0, 3) == "D-4" && row(1).substr(0, 3) == "E-4" && row(2).substr(0, 3) == "...", "Ctrl+Delete on a cell pulls the cells below it up");
   doc.undo();
