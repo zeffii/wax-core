@@ -58,7 +58,7 @@ void setSlices(EditableSample& s, std::vector<double> slices) {
   if (slices.empty()) s.props.erase("slices"); else s.props["slices"] = slices;
 }
 
-const char* const kPropKeys[] = {"loopStart", "loopEnd", "loopOn", "loopXfade", "susStart", "susEnd", "susOn", "susXfade", "volume", "globalVolume", "pan", "slices", "roll"};
+const char* const kPropKeys[] = {"loopStart", "loopEnd", "loopOn", "loopXfade", "susStart", "susEnd", "susOn", "susXfade", "pingpong", "volume", "globalVolume", "pan", "slices", "roll"};
 
 }  // namespace
 

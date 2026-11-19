@@ -1926,6 +1926,8 @@ int main(int argc, char** argv) {
   testRenderSong("modchan");
   testRenderSong("modchan2");
   testRenderSong("modchannearest");
+  testRenderSong("xmchan");
+  testRenderSong("xmchanamiga");
   testRenderSong("compass");
   testRenderSong("compassonce");
   testRenderSong("waveseq");

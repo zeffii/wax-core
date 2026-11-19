@@ -1,0 +1,17 @@
+{
+  "song": "xmchanamiga.wax",
+  "version": "0.785.0",
+  "sampleRate": 44100,
+  "frames": 642688,
+  "seconds": 14.573,
+  "peak": 0.558279,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "f30e6c63581276e8c3e6aeb5ef483c91fc5f7dcfbbac2e869848468968eb7c79",
+  "nodeTypes": [
+    "bus-in",
+    "out",
+    "tempo",
+    "xmchan"
+  ]
+}

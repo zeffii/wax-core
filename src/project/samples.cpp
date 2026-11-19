@@ -139,6 +139,7 @@ std::map<std::string, std::shared_ptr<const SampleMessage>> decodeSamples(const 
       message->loopStart = numberOr(s, "loopStart", 0);
       message->loopEnd = numberOr(s, "loopEnd", 0);
       message->loopXfade = numberOr(s, "loopXfade", 0);
+      message->pingpong = boolOr(s, "pingpong", false);
       message->susOn = boolOr(s, "susOn", true);
       message->susStart = numberOr(s, "susStart", 0);
       message->susEnd = numberOr(s, "susEnd", 0);
