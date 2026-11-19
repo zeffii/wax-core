@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "app/sequence_view.h"
+#include "app/xm_import.h"
 #include "app/song_keys.h"
 #include "edit/sequence_ops.h"
 #include "app/envelope_window.h"
@@ -375,7 +376,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   ImGui::Begin("wax", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 
   if (!session) {
-    ImGui::TextUnformatted("Drop a .wax file on the window to open it.");
+    ImGui::TextUnformatted("Drop a .wax or .xm file on the window to open it.");
     if (!status.empty()) ImGui::TextColored(ImVec4(0.89f, 0.64f, 0.29f, 1), "%s", status.c_str());
     ImGui::End();
     return;
@@ -1881,7 +1882,8 @@ int main(int argc, char** argv) {
   const auto open = [&](const std::string& path) {
     session.reset();   // the old sound stops before the new song is built
     try {
-      session = std::make_unique<Session>(path, options);
+      const bool module = path.size() > 3 && (path.compare(path.size() - 3, 3, ".xm") == 0 || path.compare(path.size() - 3, 3, ".XM") == 0);   // a FastTracker 2 module opens as a new song
+      session = module ? std::make_unique<Session>(app::projectFromXmFile(path), std::string(), options) : std::make_unique<Session>(path, options);
       showScreenOption();
       std::string title = "Wax - " + session->project.song.name;
       SDL_SetWindowTitle(window, title.c_str());
@@ -1986,9 +1988,10 @@ int main(int argc, char** argv) {
     }
     if (gRequest != DialogRequest::None) {
       static const SDL_DialogFileFilter filters[] = {{"Wax songs", "wax"}, {"All files", "*"}};
+      static const SDL_DialogFileFilter openFilters[] = {{"Wax songs and XM modules", "wax;xm"}, {"All files", "*"}};
       static const SDL_DialogFileFilter wavFilter[] = {{"WAV audio", "wav"}};
       static DialogKind saveKind = DialogKind::Save, exportKind = DialogKind::Export;
-      if (gRequest == DialogRequest::Open) SDL_ShowOpenFileDialog(dialogDone, nullptr, window, filters, 2, nullptr, false);
+      if (gRequest == DialogRequest::Open) SDL_ShowOpenFileDialog(dialogDone, nullptr, window, openFilters, 2, nullptr, false);
       else if (session && gRequest == DialogRequest::Export) {
         std::string suggestion = session->path.empty() ? session->project.song.name + ".wav" : session->path;
         if (suggestion.size() > 4 && suggestion.substr(suggestion.size() - 4) == ".wax") suggestion = suggestion.substr(0, suggestion.size() - 4) + ".wav";

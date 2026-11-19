@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "app/xm_import.h"
 #include "core/node_registry.h"
 #include "core/params.h"
 #include "core/random.h"
@@ -157,6 +158,23 @@ void testRenderSong(const std::string& name) {
   check(render.audio.frames() == reference.value("frames", std::size_t{0}), name + ": the render is as long as the reference, to the sample");
   check(std::abs(render.peak - reference.value("peak", 0.0)) < 1e-4, name + ": the render peaks where the reference does");
   std::printf("ok: %s.wax renders (%zu frames, peak %.6f)\n", name.c_str(), render.audio.frames(), render.peak);
+}
+
+// A FastTracker 2 module opened in the native app plays the same as the web app's import of it (the .wax beside it).
+void testXmImport() {
+  const std::string songs = WAX_TEST_SONGS;
+  for (const std::string name : {"xmchan", "xmchanamiga"}) {
+    const wax::Project imported = wax::app::projectFromXmFile(songs + "/" + name + ".xm");
+    const wax::Project web = wax::loadProject(songs + "/" + name + ".wax");
+    check(imported.lanes.size() == web.lanes.size() && imported.lanes.size() == 5, name + ".xm: a lane for each of the four channels, and the master");
+    const wax::RenderResult a = wax::renderSong(imported), b = wax::renderSong(web);
+    check(a.warnings.empty(), name + ".xm: the import uses nothing that is not ported");
+    check(a.audio.left == b.audio.left && a.audio.right == b.audio.right, name + ".xm: the import renders the same samples as the web app's");
+    std::printf("ok: %s.xm opens and renders as the web app's import does\n", name.c_str());
+  }
+  bool refused = false;
+  try { wax::app::parseXm(std::vector<std::uint8_t>(100, 0)); } catch (const std::exception&) { refused = true; }
+  check(refused, "a file that is not an XM is refused");
 }
 
 // The same song on one thread and on four: not one sample may differ.
@@ -1792,6 +1810,14 @@ void testSetParam() {
 }
 
 int main(int argc, char** argv) {
+  if (argc > 1 && std::string(argv[1]) == "--xm") {   // just the XM channel and the XM import
+    testRenderSong("xmchan");
+    testRenderSong("xmchanamiga");
+    testXmImport();
+    if (failures) std::printf("%d check%s failed\n", failures, failures == 1 ? "" : "s");
+    else std::printf("xm tests passed\n");
+    return failures;
+  }
   if (argc > 1 && std::string(argv[1]) == "--samples") {   // just the sample tests (the whole run takes a long while)
     testBackups();
     testSampleLoading();
@@ -1928,6 +1954,7 @@ int main(int argc, char** argv) {
   testRenderSong("modchannearest");
   testRenderSong("xmchan");
   testRenderSong("xmchanamiga");
+  testXmImport();
   testRenderSong("compass");
   testRenderSong("compassonce");
   testRenderSong("waveseq");

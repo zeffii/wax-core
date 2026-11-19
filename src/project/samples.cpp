@@ -1,3 +1,4 @@
+#include "core/js_math.h"
 #include "project/samples.h"
 
 #include <algorithm>
@@ -56,7 +57,7 @@ std::string encodeChannel(const std::vector<float>& channel) {
   std::vector<std::uint8_t> bytes;
   bytes.reserve(channel.size() * 2);
   for (const float v : channel) {
-    const std::int16_t i = static_cast<std::int16_t>(std::lround(std::min(1.0f, std::max(-1.0f, v)) * 32767.0f));
+    const std::int16_t i = static_cast<std::int16_t>(jsRound(std::min(1.0, std::max(-1.0, static_cast<double>(v))) * 32767.0));   // (as the web's Math.round: halves go up)
     bytes.push_back(static_cast<std::uint8_t>(static_cast<std::uint16_t>(i) & 0xff));
     bytes.push_back(static_cast<std::uint8_t>((static_cast<std::uint16_t>(i) >> 8) & 0xff));
   }

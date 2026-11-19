@@ -107,6 +107,7 @@ add_library(waxcore
   src/seq/loop.cpp
   src/app/units.cpp
   src/app/machines.cpp
+  src/app/xm_import.cpp
   src/nodes/env2.cpp
   src/nodes/haas.cpp
   src/nodes/hat2.cpp
