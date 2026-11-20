@@ -672,7 +672,11 @@ private:
     const Extra* X = extra(v.slot);
     v.envVol = 64; v.envPan = 32; v.envMod = 0; v.pitchOff = 0; v.autoDelta = 0;
     if (I) {
-      if (I->vol && envOverride_[0]) { v.envVol = envValue(*I->vol, v.volEnvPos); v.volEnvPos = envNext(*I->vol, v.volEnvPos, v.keyOn); }
+      if (I->vol && envOverride_[0]) {
+        v.envVol = envValue(*I->vol, v.volEnvPos); v.volEnvPos = envNext(*I->vol, v.volEnvPos, v.keyOn);
+        // an envelope that has run out at nothing leaves nothing to hear: the voice ends, whatever its sample loop is doing
+        if (v.envVol == 0 && v.volEnvPos > I->vol->pts[I->vol->pts.size() - 2]) v.active = false;
+      }
       if (I->pan2 && envOverride_[1]) { v.envPan = envValue(*I->pan2, v.panEnvPos); v.panEnvPos = envNext(*I->pan2, v.panEnvPos, v.keyOn); }
       if (I->pit && envOverride_[2]) {
         const double e = envValue(*I->pit, v.pitEnvPos);
