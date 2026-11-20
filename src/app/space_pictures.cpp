@@ -8,6 +8,7 @@
 #include "app/map_handle.h"
 #include "app/picture_canvas.h"
 #include "app/theme.h"
+#include "app/widgets.h"
 #include "nodes/fft.h"
 #include "nodes/filterpro_response.h"
 #include "nodes/spacecore.h"
@@ -388,7 +389,7 @@ void drawFilterpro(const Canvas& c, const GraphNode& node, const NodeType& type,
     for (std::size_t i = 0; i < values.size(); i++) curve.push_back(c.at(kFilterPL + (static_cast<float>(i) + 0.5f) / values.size() * pw, y0 - values[i] * (kFilterPlot - 6)));
     area.insert(area.end(), curve.begin(), curve.end());
     area.push_back(c.at(kFilterW - kFilterPR, y0));
-    c.dl->AddConcavePolyFilled(area.data(), static_cast<int>(area.size()), withAlphaF(colour, fill));
+    addAreaFilled(c.dl, area.data(), static_cast<int>(area.size()), withAlphaF(colour, fill));
     c.polyline(curve, colour, 1.1f);
   };
   spectrum(live.input, ink, 0.16f);

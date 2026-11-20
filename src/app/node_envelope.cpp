@@ -8,6 +8,7 @@
 
 #include "app/picture_slot.h"
 #include "app/theme.h"
+#include "app/widgets.h"
 
 namespace wax::app {
 namespace {
@@ -81,7 +82,7 @@ void drawNodeEnvelopes(ImDrawList* dl, ImFont* font, const GraphNode& node, cons
     for (int k = 1; k <= 24; k++) { const double t = g.r * 0.67 * k / 24; line.push_back(ImVec2(xt(sEnd + t), yv(g.s * std::pow(0.001, g.r > 0 ? t / g.r : 1)))); }
     std::vector<ImVec2> area = line;   // a faint fill under the curve
     area.push_back(ImVec2(xt(rEnd), yv(0)));
-    dl->AddConcavePolyFilled(area.data(), static_cast<int>(area.size()), groupColour(gi, 36));
+    addAreaFilled(dl, area.data(), static_cast<int>(area.size()), groupColour(gi, 36));
     dl->AddPolyline(line.data(), static_cast<int>(line.size()), groupColour(gi, 255), 0, (groups.size() > 1 ? 1.75f : 2.5f) * std::max(1.0f, scale));
     if (gi == 0) for (const double e : {aEnd, dEnd, sEnd}) dl->AddLine(ImVec2(xt(e), py), ImVec2(xt(e), py + ph), textAlpha(76), 1.0f);   // the stage boundaries
   }

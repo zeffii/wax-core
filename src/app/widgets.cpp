@@ -188,4 +188,11 @@ int spinBox(const char* id, const char* text, float width) {
   return step;
 }
 
+void addAreaFilled(ImDrawList* dl, const ImVec2* points, int count, ImU32 colour) {
+  const ImDrawListFlags flags = dl->Flags;
+  dl->Flags &= ~ImDrawListFlags_AntiAliasedFill;
+  dl->AddConcavePolyFilled(points, count, colour);
+  dl->Flags = flags;
+}
+
 }  // namespace wax::app

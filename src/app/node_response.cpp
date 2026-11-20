@@ -7,6 +7,7 @@
 
 #include "app/picture_slot.h"
 #include "app/theme.h"
+#include "app/widgets.h"
 
 namespace wax::app {
 namespace {
@@ -127,7 +128,7 @@ void drawNodeResponse(ImDrawList* dl, ImFont* font, const GraphNode& node, const
   for (int i = 0; i <= steps; i++) sum.push_back(ImVec2(px + static_cast<float>(i) / steps * pw, yd(totalDb(bands, freq(i)))));
   std::vector<ImVec2> fill = sum;   // the combined response: filled down to the 0 dB line, then the line itself
   fill.push_back(ImVec2(px + pw, yd(0))); fill.push_back(ImVec2(px, yd(0)));
-  dl->AddConcavePolyFilled(fill.data(), static_cast<int>(fill.size()), textAlpha(46));
+  addAreaFilled(dl, fill.data(), static_cast<int>(fill.size()), textAlpha(46));
   dl->AddPolyline(sum.data(), static_cast<int>(sum.size()), kText, 0, 2.25f * std::max(1.0f, scale));
   for (std::size_t bi = 0; bi < bands.size(); bi++) {   // a dot per band, at its frequency and its gain on the combined curve
     if (bands[bi].cut) continue;

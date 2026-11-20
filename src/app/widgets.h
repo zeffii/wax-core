@@ -51,4 +51,9 @@ bool checkbox(const char* label, bool* value);
 // formats the value. Returns +1 or -1 when an arrow is clicked (the mouse wheel over the box counts too), else 0.
 int spinBox(const char* id, const char* text, float width);
 
+// A translucent area (under a curve, say) filled without the faint lines along the seams of its triangles: ImGui cuts a concave outline into
+// triangles and antialiases the edge of each, so where two share an edge a see-through colour shows a thin line. Here the fill is not
+// antialiased (its triangles then meet exactly); the curve's own line drawn over the top edge keeps that edge smooth.
+void addAreaFilled(ImDrawList* dl, const ImVec2* points, int count, ImU32 colour);
+
 }  // namespace wax::app
