@@ -23,7 +23,10 @@ namespace wax::app {
 
 namespace {
 
-constexpr float kPortRadius = 4;     // a port's reach for the mouse; the compact look draws it half as big
+constexpr float kPortRadius = 4.5f;   // a port's drawn radius (the compact look draws it three quarters as big)
+constexpr float kPortReach = 9;       // how near the mouse must be to a port at rest
+constexpr float kDragReach = 30;      // while a wire is pulled: the nearest port of the side it can land on, this close, takes it
+constexpr float kNearRange = 64;      // ports swell as the mouse comes within this distance
 constexpr float kStripStep = 11, kStripGap = 7;   // parameter ports hang in a strip of dots under the tile
 constexpr float kGrid = 24, kGridMajor = 12;      // the dot grid, and the dots between the brighter ones
 constexpr float kPlainRow = 16;      // port spacing on a node that draws its own face
@@ -338,10 +341,15 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
   // the port under the mouse (ports win over tiles): reach is the port's radius plus a little
   struct Hit { std::string node, port; bool output = false; };
   Hit hover;
+  // While a wire is pulled only the side it can land on counts (an output's wire lands on inputs and the reverse), with a generous reach:
+  // a nearer port of the wrong side no longer steals the drop, and a miss by a few pixels still connects.
+  const bool dragging = !state.wiring.empty() || !state.wiringIn.empty() || (state.rewire.active && state.rewire.started);
+  const bool wantOutput = !state.wiringIn.empty() || (state.rewire.active && !state.rewire.movingTo);
   if (windowHovered) {
-    float best = (kPortRadius + 4) * scale;
+    float best = (dragging ? kDragReach : kPortReach) * scale;
     for (const auto& [id, t] : tiles) {
       for (int side = 0; side < 2; side++) {
+        if (dragging && (side == 1) != wantOutput) continue;
         const std::vector<std::string>& names = side ? t.type->outputs : t.inputs;
         for (int i = 0; i < static_cast<int>(names.size()); i++) {
           const ImVec2 p = portPos(t, side == 1, i, scale);
@@ -361,7 +369,6 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     const std::string fromPort = portOfAddress(c.from), toPort = portOfAddress(c.to);
     wires.push_back({&c, portPos(a->second, true, indexOf(a->second.type->outputs, fromPort), scale), portPos(b->second, false, indexOf(b->second.inputs, toPort), scale), kindOf(a->second, fromPort)});
   }
-  const bool dragging = !state.wiring.empty() || !state.wiringIn.empty() || state.rewire.started;
   const auto lifted = [&](const Connection& c) { return state.rewire.started && c.from == state.rewire.from && c.to == state.rewire.to; };
   // While a tile is dragged: the wire it is over (it is put into that wire when let go), and whether it is far out of its own chain (its
   // neighbours are then joined up). Only a node with an audio input and an audio output, and a wire that carries audio, take part.
@@ -528,10 +535,15 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
         const std::string& name = names[static_cast<std::size_t>(i)];
         const ImVec2 p = portPos(t, side == 1, i, scale);
         const bool hot = hover.node == n.id && hover.port == name && hover.output == (side == 1);
-        const float pulse = hot ? 0.4f + 1.0f * (0.5f + 0.5f * std::sin(static_cast<float>(ImGui::GetTime()) * 1000 / 260)) : 0;
-        const float r = ((t.compact ? kPortRadius / 2 : kPortRadius) + pulse) * std::max(1.0f, scale);
-        dl->AddCircleFilled(p, r, kindColour(kindOf(t, name)), 12);
-        if (!t.compact) dl->AddCircle(p, r, ink, 12, 1.0f);
+        const bool target = dragging && (side == 1) == wantOutput;   // a port the wire being pulled could land on
+        // Ports swell as the mouse nears them, and while a wire is pulled the ones it can land on are larger from the start and swell more.
+        const float near = windowHovered ? std::clamp(1 - std::hypot(io.MousePos.x - p.x, io.MousePos.y - p.y) / (kNearRange * scale), 0.0f, 1.0f) : 0.0f;
+        const float swell = 1 + (target ? 0.3f + 1.0f * near : dragging ? 0.0f : 0.6f * near);
+        const float pulse = hot ? 0.3f * (0.5f + 0.5f * std::sin(static_cast<float>(ImGui::GetTime()) * 1000 / 260)) : 0;
+        const float r = (t.compact ? kPortRadius * 0.75f : kPortRadius) * (swell + pulse) * std::max(1.0f, scale);
+        dl->AddCircleFilled(p, r, kindColour(kindOf(t, name)), 16);
+        if (!t.compact || hot) dl->AddCircle(p, r, ink, 16, 1.0f);
+        if (hot && dragging) dl->AddCircle(p, r + 3 * std::max(1.0f, scale), kAccent, 20, 1.5f);   // the port that will take the wire
         const bool inStrip = side == 0 && t.compact && i >= static_cast<int>(t.faceInputs);   // a parameter dot under the tile: named by hover, not drawn
         std::string label;
         if (!inStrip) label = t.compact ? (side ? t.layout.outLabels : t.layout.inLabels)[static_cast<std::size_t>(i)] : (name[0] == '@' ? name.substr(1) : name);
@@ -561,6 +573,11 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     const auto t = tiles.find(nodeOfAddress(address));
     return t == tiles.end() ? ImVec2(0, 0) : portPos(t->second, output, indexOf(output ? t->second.type->outputs : t->second.inputs, portOfAddress(address)), scale);
   };
+  // A desire line: while a wire is pulled and the mouse is near a port that can take it, a faint dashed line runs from the wire's fixed end
+  // to that port, so what a release would do is plain before it is done. The wire itself keeps following the mouse.
+  const bool haveLanding = dragging && !hover.node.empty();
+  const ImVec2 landing = haveLanding ? portAt(hover.node + "." + hover.port, hover.output) : ImVec2(0, 0);
+  const auto desire = [&](ImVec2 from, ImVec2 to) { if (haveLanding) drawWire(dl, from, to, accentAlpha(120), 1.75f * std::max(1.0f, scale) * 0.65f, true, scale); };
   // A handle of an equaliser's response picture: pressed, it is dragged (one undo step) and the click goes no further.
   bool onHandle = false;
   if (state.responseDrag >= 0 && state.responseDrag < static_cast<int>(state.response.list.size())) {
@@ -634,6 +651,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
   };
   if (!state.wiring.empty()) {   // a new wire from an output: it lands on an input port
     const ImVec2 start = portAt(state.wiring, true);
+    desire(start, landing);
     drawWire(dl, start, io.MousePos, kAccent, 1.75f * std::max(1.0f, scale) * 0.65f, false, scale);
     if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
       if (!hover.node.empty() && !hover.output) tryApply(std::make_unique<Connect>(instrumentId, state.wiring, hover.node + "." + hover.port));
@@ -642,6 +660,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
   }
   if (!state.wiringIn.empty()) {   // a new wire from a free input: it lands on an output port
     const ImVec2 end = portAt(state.wiringIn, false);
+    desire(landing, end);
     drawWire(dl, io.MousePos, end, kAccent, 1.75f * std::max(1.0f, scale) * 0.65f, false, scale);
     if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
       if (!hover.node.empty() && hover.output) tryApply(std::make_unique<Connect>(instrumentId, hover.node + "." + hover.port, state.wiringIn));
@@ -656,6 +675,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     }
     if (r.started) {
       const ImVec2 fixed = r.movingTo ? portAt(r.from, true) : portAt(r.to, false);
+      if (r.movingTo) desire(fixed, landing); else desire(landing, fixed);
       if (r.movingTo) drawWire(dl, fixed, io.MousePos, kAccent, 1.75f * std::max(1.0f, scale) * 0.65f, false, scale);
       else drawWire(dl, io.MousePos, fixed, kAccent, 1.75f * std::max(1.0f, scale) * 0.65f, false, scale);
     }
