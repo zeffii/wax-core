@@ -67,7 +67,9 @@ struct SampleMessage {
   std::vector<double> slices;      // marker frames, sorted
   bool loopOn = true;              // (a loop only counts when it fits inside the sample)
   double loopStart = 0, loopEnd = 0, loopXfade = 0;
-  bool pingpong = false;           // the loop runs forwards, then backwards (XM samples; only the XM channel plays it so)
+  bool pingpong = false;           // the loop runs forwards, then backwards (XM and IT samples; only the XM and IT channels play it so)
+  bool susPingpong = false;        // the sustain loop runs forwards, then backwards (IT samples)
+  bool panOn = false;              // the sample sets the panning (IT samples; `pan` then counts)
   bool susOn = true;
   double susStart = 0, susEnd = 0, susXfade = 0;
 };

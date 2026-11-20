@@ -10,6 +10,7 @@
 #include <stdexcept>
 
 #include "app/machines.h"
+#include "app/module_util.h"
 #include "core/js_math.h"
 #include "project/samples.h"
 
@@ -18,41 +19,6 @@ namespace {
 
 constexpr int kKeyOff = 97;
 constexpr int kEffectG = 0x10, kEffectH = 0x11;   // the global volume and its slide
-
-std::string hex(int n, int width) {
-  char buffer[16];
-  std::snprintf(buffer, sizeof buffer, "%0*X", width, n);
-  return buffer;
-}
-
-// A little-endian reader over the file; reading past the end is an error the user can read.
-class Reader {
-public:
-  explicit Reader(const std::vector<std::uint8_t>& bytes) : b_(bytes) {}
-  std::size_t length() const { return b_.size(); }
-  int u8(std::size_t at) const { need(at + 1); return b_[at]; }
-  int s8(std::size_t at) const { const int v = u8(at); return v > 127 ? v - 256 : v; }
-  int u16(std::size_t at) const { need(at + 2); return b_[at] | (b_[at + 1] << 8); }
-  std::uint32_t u32(std::size_t at) const {
-    need(at + 4);
-    return static_cast<std::uint32_t>(b_[at]) | (static_cast<std::uint32_t>(b_[at + 1]) << 8) | (static_cast<std::uint32_t>(b_[at + 2]) << 16) | (static_cast<std::uint32_t>(b_[at + 3]) << 24);
-  }
-  // The printable characters of a name field, up to its first zero, trimmed.
-  std::string text(std::size_t from, std::size_t to) const {
-    std::string out;
-    for (std::size_t i = from; i < to && i < b_.size(); i++) {
-      if (b_[i] == 0) break;
-      if (b_[i] >= 0x20 && b_[i] <= 0x7e) out += static_cast<char>(b_[i]);
-    }
-    const std::size_t first = out.find_first_not_of(" \t\r\n"), last = out.find_last_not_of(" \t\r\n");
-    return first == std::string::npos ? std::string() : out.substr(first, last - first + 1);
-  }
-  const std::uint8_t* at(std::size_t i) const { return b_.data() + i; }
-
-private:
-  void need(std::size_t end) const { if (end > b_.size()) throw std::runtime_error("The XM file stops short."); }
-  const std::vector<std::uint8_t>& b_;
-};
 
 // An envelope from its 12 points (x, y words), the count and the sustain / loop points; false when it is off.
 bool readEnvelope(const Reader& r, std::size_t at, int count, int sus, int ls, int le, int type, XmEnvelope& out) {
@@ -97,24 +63,6 @@ int sampleRateOf(const XmSample& s) {
   return static_cast<int>(std::max(1000.0, std::min(384000.0, rate)));
 }
 
-// A typed name made into an id: letters, digits, _ and - only, trimmed, at most 24 characters.
-std::string cleanName(const std::string& name) {
-  std::string id;
-  bool gap = false;
-  for (const char c : name) {
-    const bool plain = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
-    if (plain) { if (gap) id += '_'; gap = false; id += c; } else gap = true;
-  }
-  if (gap) id += '_';
-  const std::size_t first = id.find_first_not_of('_'), last = id.find_last_not_of('_');
-  id = first == std::string::npos ? std::string() : id.substr(first, last - first + 1);
-  if (id.size() > 24) id.resize(24);
-  if (!id.empty() && id.find_first_not_of("0123456789") == std::string::npos) id = "_" + id;
-  return id;
-}
-
-const char* const kNoteNames[12] = {"C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "B-"};
-
 Json envelopeJson(const XmEnvelope& e) {
   return {{"pts", e.pts}, {"sus", e.sus}, {"ls", e.ls}, {"le", e.le}};
 }
@@ -123,7 +71,7 @@ Json envelopeJson(const XmEnvelope& e) {
 std::string cellText(const XmCell& cell) {
   std::string note = "...";
   if (cell.note == kKeyOff) note = "===";
-  else if (cell.note >= 1 && cell.note <= 96) { const int semitones = cell.note - 1; note = std::string(kNoteNames[semitones % 12]) + std::to_string(semitones / 12); }
+  else if (cell.note >= 1 && cell.note <= 96) note = noteToken(cell.note - 1);
   const std::string ins = cell.ins >= 1 && cell.ins <= 128 ? hex(cell.ins - 1, 2) : "..";
   const std::string vol = cell.vol >= 0x10 ? hex(cell.vol, 2) : "..";
   const int effect = cell.effect <= 0x23 ? cell.effect : 0;
@@ -133,7 +81,7 @@ std::string cellText(const XmCell& cell) {
 }  // namespace
 
 XmModule parseXm(const std::vector<std::uint8_t>& bytes) {
-  const Reader r(bytes);
+  const Reader r(bytes, "XM file");
   if (r.length() < 80 || r.text(0, 17) != "Extended Module:") throw std::runtime_error("Not an XM file.");
   if (r.u16(58) < 0x0104) throw std::runtime_error("This XM file is from an old FastTracker (before 2.04); its layout is not supported.");
   const std::size_t headerSize = r.u32(60);

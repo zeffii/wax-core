@@ -536,7 +536,7 @@ void PullOut::revert(Project& project) { graphOf(project, instrument_).connectio
 namespace {
 // The node types that play the samples listed for them (the sample choice lives in the machine's "samples" by node id).
 bool playsSamples(const std::string& type) {
-  static const std::set<std::string> types = {"sampler", "granular", "drumsynth", "drumsynth2", "modchan", "xmchan", "convolver", "specsynth"};
+  static const std::set<std::string> types = {"sampler", "granular", "drumsynth", "drumsynth2", "modchan", "xmchan", "itchan", "convolver", "specsynth"};
   return types.count(type) > 0;
 }
 

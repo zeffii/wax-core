@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "app/sequence_view.h"
+#include "app/it_import.h"
 #include "app/xm_import.h"
 #include "app/song_keys.h"
 #include "edit/sequence_ops.h"
@@ -376,7 +377,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   ImGui::Begin("wax", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 
   if (!session) {
-    ImGui::TextUnformatted("Drop a .wax or .xm file on the window to open it.");
+    ImGui::TextUnformatted("Drop a .wax, .xm or .it file on the window to open it.");
     if (!status.empty()) ImGui::TextColored(ImVec4(0.89f, 0.64f, 0.29f, 1), "%s", status.c_str());
     ImGui::End();
     return;
@@ -1882,8 +1883,10 @@ int main(int argc, char** argv) {
   const auto open = [&](const std::string& path) {
     session.reset();   // the old sound stops before the new song is built
     try {
-      const bool module = path.size() > 3 && (path.compare(path.size() - 3, 3, ".xm") == 0 || path.compare(path.size() - 3, 3, ".XM") == 0);   // a FastTracker 2 module opens as a new song
-      session = module ? std::make_unique<Session>(app::projectFromXmFile(path), std::string(), options) : std::make_unique<Session>(path, options);
+      const auto endsWith = [&](const char* suffix, const char* upper) { const std::size_t n = std::char_traits<char>::length(suffix); return path.size() > n && (path.compare(path.size() - n, n, suffix) == 0 || path.compare(path.size() - n, n, upper) == 0); };
+      if (endsWith(".xm", ".XM")) session = std::make_unique<Session>(app::projectFromXmFile(path), std::string(), options);   // a tracker module opens as a new song
+      else if (endsWith(".it", ".IT")) session = std::make_unique<Session>(app::projectFromItFile(path), std::string(), options);
+      else session = std::make_unique<Session>(path, options);
       showScreenOption();
       std::string title = "Wax - " + session->project.song.name;
       SDL_SetWindowTitle(window, title.c_str());
@@ -1988,7 +1991,7 @@ int main(int argc, char** argv) {
     }
     if (gRequest != DialogRequest::None) {
       static const SDL_DialogFileFilter filters[] = {{"Wax songs", "wax"}, {"All files", "*"}};
-      static const SDL_DialogFileFilter openFilters[] = {{"Wax songs and XM modules", "wax;xm"}, {"All files", "*"}};
+      static const SDL_DialogFileFilter openFilters[] = {{"Wax songs and tracker modules", "wax;xm;it"}, {"All files", "*"}};
       static const SDL_DialogFileFilter wavFilter[] = {{"WAV audio", "wav"}};
       static DialogKind saveKind = DialogKind::Save, exportKind = DialogKind::Export;
       if (gRequest == DialogRequest::Open) SDL_ShowOpenFileDialog(dialogDone, nullptr, window, openFilters, 2, nullptr, false);

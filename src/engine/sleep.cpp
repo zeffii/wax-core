@@ -12,7 +12,7 @@ constexpr double kHoldSeconds = 2;      // the shortest silence before a machine
 constexpr double kMarginSeconds = 0.5;  // added to the longest delay time found
 
 // machines with one of these can start sounding by themselves, so they never sleep
-const std::set<std::string> kNever = {"genexpr", "glsl", "tempo", "nsgroups", "oscout", "modchan", "xmchan"};
+const std::set<std::string> kNever = {"genexpr", "glsl", "tempo", "nsgroups", "oscout", "modchan", "xmchan", "itchan"};
 const std::set<std::string> kFree = {"lfo", "ctrl"};
 // sound only while a note does
 const std::set<std::string> kGated = {

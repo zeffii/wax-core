@@ -107,7 +107,9 @@ add_library(waxcore
   src/seq/loop.cpp
   src/app/units.cpp
   src/app/machines.cpp
+  src/app/module_util.cpp
   src/app/xm_import.cpp
+  src/app/it_import.cpp
   src/nodes/env2.cpp
   src/nodes/haas.cpp
   src/nodes/hat2.cpp
@@ -151,6 +153,7 @@ add_library(waxcore
   src/nodes/specsynth.cpp
   src/nodes/modchan.cpp
   src/nodes/xmchan.cpp
+  src/nodes/itchan.cpp
   src/nodes/waveseq.cpp
   src/nodes/vecmix.cpp
   src/nodes/vecpath.cpp

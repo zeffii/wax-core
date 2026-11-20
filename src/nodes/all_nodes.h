@@ -64,6 +64,7 @@ void registerDvii(NodeRegistry& registry);
 void registerSpecSynth(NodeRegistry& registry);
 void registerModChan(NodeRegistry& registry);
 void registerXmChan(NodeRegistry& registry);
+void registerItChan(NodeRegistry& registry);
 void registerWaveSeq(NodeRegistry& registry);
 void registerVecMix(NodeRegistry& registry);
 void registerVecPath(NodeRegistry& registry);
