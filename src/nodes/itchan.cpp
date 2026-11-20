@@ -89,6 +89,8 @@ struct Instrument {
 struct ProxyLoop {
   bool set = false, on = true, pingpong = false;
   double start = 0, end = 0, xfade = 0;
+  int trackMode = 0;        // IT 3: how the width follows the note's pitch: 0 not at all, 1 about the centre, 2 the left end held, 3 the right end held
+  double trackAmount = 0;   // octaves of width per octave of pitch
 };
 
 struct Extra {   // a sample's own extras from the node's data
@@ -109,6 +111,8 @@ struct Bank {
   bool panSet = false, pp = false, spp = false;
   bool loop = false, sus = false;
   double ls = 0, le = 0, ss = 0, se = 0, xf = 0, sxf = 0;
+  int strackMode = 0;        // the sustain loop follows the note's pitch (see trackedSustain)
+  double strackAmount = 0;
 };
 
 // One sounding voice: the host voice of the channel, or one that plays on in the background.
@@ -223,7 +227,9 @@ public:
     const Placed loop = place(X ? &X->loop : nullptr, message->loopOn, message->loopStart, message->loopEnd, message->loopXfade, message->pingpong);
     if (loop.ok) { S->loop = true; S->ls = loop.start; S->le = loop.end; S->xf = loop.xfade; S->pp = loop.ping; }
     const Placed sus = place(X ? &X->sus : nullptr, message->susOn, message->susStart, message->susEnd, message->susXfade, message->susPingpong);
-    if (sus.ok) { S->sus = true; S->ss = sus.start; S->se = sus.end; S->sxf = sus.xfade; S->spp = sus.ping; }
+    if (sus.ok) { S->sus = true; S->ss = sus.start; S->se = sus.end; S->sxf = sus.xfade; S->spp = sus.ping;
+      if (it3_ && X && X->sus.set && X->sus.trackAmount != 0) { S->strackMode = X->sus.trackMode; S->strackAmount = X->sus.trackAmount; }
+    }
     return S;
   }
 
@@ -321,6 +327,12 @@ private:
               l.on = !(o.contains("on") && o["on"].is_boolean() && !o["on"].get<bool>());
               l.start = numberAt(o, "start", 0); l.end = numberAt(o, "end", 0); l.xfade = numberAt(o, "xfade", 0);
               l.pingpong = o.contains("pingpong") && o["pingpong"].is_boolean() && o["pingpong"].get<bool>();
+              if (o.contains("track") && o["track"].is_object()) {
+                const Json& t = o["track"];
+                const std::string mode = t.contains("mode") && t["mode"].is_string() ? t["mode"].get<std::string>() : "";
+                l.trackMode = mode == "center" ? 1 : mode == "left" ? 2 : mode == "right" ? 3 : 0;
+                l.trackAmount = numberAt(t, "amount", 0);
+              }
             }
             return l;
           };
@@ -775,14 +787,25 @@ private:
     const double goal = (isHost && !tremorOn_) ? 0
         : outVol / 64.0 * chanVol_ / 64 * S->globalVolume * (I ? I->gbv / 128 : 1.0) * v.envVol / 64 * v.fadeVol / kFadeFull * level;
     const bool useSus = v.keyOn && S->sus, mainLoop = S->loop;
-    const double ls = useSus ? S->ss : S->ls, le = useSus ? S->se : S->le;
+    const bool tracked = useSus && S->strackMode != 0;   // the sustain loop as this note's pitch makes it
+    double trackedStart = 0, trackedEnd = 0, trackedXfade = 0;
+    if (tracked) {
+      // its width is the drawn one times 2 to the power of `amount` for each octave above C-5, grown or shrunk about its centre or with
+      // an end held, and kept inside the sample (the web's itchan.js, trackedSustain)
+      const double width = S->se - S->ss, length = static_cast<double>(len);
+      const double scaled = std::min(length, std::max(2.0, jsRound(width * js::pow(2, std::max(-6.0, std::min(6.0, S->strackAmount * (v.note - kC5) / 12))))));
+      double start = S->strackMode == 2 ? S->ss : S->strackMode == 3 ? S->se - scaled : jsRound((S->ss + S->se) / 2 - scaled / 2);
+      start = std::max(0.0, std::min(length - scaled, start));
+      trackedStart = start; trackedEnd = start + scaled; trackedXfade = std::max(0.0, std::min({S->sxf, start, scaled}));
+    }
+    const double ls = tracked ? trackedStart : useSus ? S->ss : S->ls, le = tracked ? trackedEnd : useSus ? S->se : S->le;
     const bool looping = useSus || mainLoop;
     const bool pingpong = looping && (useSus ? S->spp : S->pp);
     const double span = le - ls, top = le - 1;
     if (!pingpong) v.dir = 1;
     const bool stereo = it3_ && !S->right->empty();
     const std::vector<float>& rightData = *S->right;
-    const double xf = it3_ && looping && !pingpong ? (useSus ? S->sxf : S->xf) : 0;
+    const double xf = it3_ && looping && !pingpong ? (tracked ? trackedXfade : useSus ? S->sxf : S->xf) : 0;
     const Reader readLeft{sample, interpolate, pingpong, looping, ls, le, span, top, len};
     const Reader readRight{rightData, interpolate, pingpong, looping, ls, le, span, top, len};
     double p = v.pos;

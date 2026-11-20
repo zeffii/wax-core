@@ -1,0 +1,17 @@
+{
+  "song": "itchantrack.wax",
+  "version": "0.802.0",
+  "sampleRate": 44100,
+  "frames": 642688,
+  "seconds": 14.573,
+  "peak": 0.747693,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "1367d2e8f6bd70b88ee201a8a61d5d72c258e863a891a5eacd16ff1fd0624627",
+  "nodeTypes": [
+    "bus-in",
+    "itchan",
+    "out",
+    "tempo"
+  ]
+}
