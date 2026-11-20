@@ -18,6 +18,9 @@
 //             over some 25 ms. 0 is off.
 //   scatter   the felt dissipates the blow unevenly: the muffle's opening is jagged, a correlated random wobble of the cutoff
 //             that dies away with the attack. 0 is the smooth rise.
+//   contact   how long the hammer stays on the string, as a multiple of what the pitch, `hard` and the blow give (1): longer
+//             is a softer, rounder front and a heavier thud, shorter a sharper click. A high note's blow is held to half a
+//             period of its string at 1; a longer contact lets it run on. 1 changes nothing.
 //   strike    the treble's sharp hammer, layered under the lower notes: a note is also given the short hard blow that a note
 //             high on the keyboard gets, through the same strike point, softened by a lowpass that follows the key and fading
 //             out towards the treble. The blow carries the same push as the note's own, only briefer. 0 is off.
@@ -37,7 +40,7 @@
 namespace wax {
 namespace {
 
-enum Param { kDecay = 0, kPrompt, kHard, kPos, kBright, kInharm, kDetune, kBody, kThump, kWidth, kPedal, kRelease, kTune, kVel, kLevel, kFelt, kBoard, kKnock, kMuffle, kScatter, kQuality, kStrike };
+enum Param { kDecay = 0, kPrompt, kHard, kPos, kBright, kInharm, kDetune, kBody, kThump, kWidth, kPedal, kRelease, kTune, kVel, kLevel, kFelt, kBoard, kKnock, kMuffle, kScatter, kQuality, kContact, kStrike };
 
 constexpr int kSize = 1 << 14, kMask = kSize - 1, kSections = 3, kMaxStr = 3;
 
@@ -317,11 +320,13 @@ private:
       weight_[s] = ns_ == 1 ? 1 : s == 0 ? prompt * 1.4 : (1 - prompt) * 1.4 / (ns_ - 1);
     }
     const double hard = g(kHard), v = velocity_;
-    const double Tc = 0.0032 * js::pow(f0 / 65.4, -0.45) * (0.6 + 0.9 * (1 - hard)) * (1.15 - 0.5 * v);   // seconds of contact: shorter for a hard felt, a hard blow and a high note
-    Lc_ = std::max(4.0, std::min(Tc * fs, 0.5 * fs / f0));   // a blow no longer than half a period, or the string would hardly feel it
+    const double contact = g(kContact);
+    const double Tn = 0.0032 * js::pow(f0 / 65.4, -0.45) * (0.6 + 0.9 * (1 - hard)) * (1.15 - 0.5 * v), Tc = Tn * contact;   // seconds of contact: shorter for a hard felt, a hard blow and a high note
+    Lc_ = std::max(4.0, std::min(Tc * fs, 0.5 * fs / f0 * std::max(1.0, contact)));
+    const double lcNatural = std::max(4.0, std::min(Tn * fs, 0.5 * fs / f0));   // the length at contact 1: a longer or shorter contact keeps the blow's push, so the level stays   // a blow no longer than half a period, or the string would hardly feel it
     dpos_ = std::max(1.0, jsRound(g(kPos) * fs / f0));
     const double vm = 1 - g(kVel) + g(kVel) * v;
-    amp_ = vm * vm * 0.5 * std::min(1.0, fs / f0 / Lc_) * js::pow(2, -pf * 0.4) * norm(pf);
+    amp_ = vm * vm * 0.5 * std::min(1.0, fs / f0 / Lc_) * js::pow(2, -pf * 0.4) * norm(pf) * (lcNatural / Lc_);
     felt_ = g(kFelt);
     pulseLen_ = 0;
     if (felt_ > 0) {
@@ -329,7 +334,7 @@ private:
       // harder or softer blow, felt and string change it from there
       const double mass = hammerMass(midi), p = 2.5 + 0.8 * pf, vm1 = 1;
       auto tcAt = [&](double vel, double h) { return 0.0032 * js::pow(f0 / 65.4, -0.45) * (0.6 + 0.9 * (1 - h)) * (1.15 - 0.5 * vel); };
-      const double K = stiffnessFor(scratch_.data(), fs, 0.7 * kHammerSpeed, mass, p, 0.75 * tcAt(0.7, 0.5)) * js::exp(3.66 * (hard - 0.5));
+      const double K = stiffnessFor(scratch_.data(), fs, 0.7 * kHammerSpeed, mass, p, 0.75 * tcAt(0.7, 0.5) * contact) * js::exp(3.66 * (hard - 0.5));
       const PulseResult now = hammerPulse(pulse_.data(), fs, vm * kHammerSpeed, mass, K, p, kPulseMax);
       const PulseResult ref = hammerPulse(scratch_.data(), fs, vm1 * kHammerSpeed, mass, K, p, kPulseMax);
       double refSum = 0;
@@ -421,6 +426,7 @@ void registerPiano(NodeRegistry& registry) {
     {"muffle", 0, 1, 0},           // how dull the first moments are
     {"scatter", 0, 1, 0},          // how jagged the muffle's opening is
     {"quality", 0, 1, 0, true},    // 0 standard, 1 eco
+    {"contact", 0.25, 4, 1},       // how long the hammer stays on the string, times the natural length
     {"strike", 0, 1, 0},           // the treble's hammer blow layered under the lower notes
   };
   type.create = [](const NodeContext& context) { return std::make_unique<Piano>(context); };

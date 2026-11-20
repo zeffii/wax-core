@@ -1,13 +1,13 @@
 {
   "song": "pianostrike.wax",
-  "version": "0.819.0",
+  "version": "0.820.0",
   "sampleRate": 44100,
   "frames": 441088,
   "seconds": 10.002,
-  "peak": 0.527905,
+  "peak": 0.498115,
   "tail": 6,
   "seed": 2654435769,
-  "sha256": "ed82b41277061d333ecf98b9440a76016973ae17c8ff747c69f85750eb6898a0",
+  "sha256": "d6ecc87232ce4b82aaf8f974a7a98f1d474e2d930fbcaee9cf6f24872250576f",
   "nodeTypes": [
     "bus-in",
     "out",
