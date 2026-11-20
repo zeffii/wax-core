@@ -2000,6 +2000,7 @@ int main(int argc, char** argv) {
   testRenderSong("itchanrate");
   testRenderSong("itchantrack");
   testRenderSong("pianofelt");
+  testRenderSong("pianostrike");
   testXmImport();
   testItImport();
   testRenderSong("compass");

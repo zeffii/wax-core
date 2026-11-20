@@ -15,6 +15,9 @@
 //             over some 25 ms. 0 is off.
 //   scatter   the felt dissipates the blow unevenly: the muffle's opening is jagged, a correlated random wobble of the cutoff
 //             that dies away with the attack. 0 is the smooth rise.
+//   strike    the treble's sharp hammer, layered under the lower notes: a note is also given the short hard blow that a note
+//             high on the keyboard gets, through the same strike point, softened by a lowpass that follows the key and fading
+//             out towards the treble. The blow carries the same push as the note's own, only briefer. 0 is off.
 //   body      three broad resonances below 600 Hz, and a soft thump of the hammer on the keybed.
 //   damper    note off lets the damper fall on the strings, over `release` ms, unless the pedal is down.
 //
@@ -31,7 +34,7 @@
 namespace wax {
 namespace {
 
-enum Param { kDecay = 0, kPrompt, kHard, kPos, kBright, kInharm, kDetune, kBody, kThump, kWidth, kPedal, kRelease, kTune, kVel, kLevel, kFelt, kBoard, kKnock, kMuffle, kScatter, kQuality };
+enum Param { kDecay = 0, kPrompt, kHard, kPos, kBright, kInharm, kDetune, kBody, kThump, kWidth, kPedal, kRelease, kTune, kVel, kLevel, kFelt, kBoard, kKnock, kMuffle, kScatter, kQuality, kStrike };
 
 constexpr int kSize = 1 << 14, kMask = kSize - 1, kSections = 3, kMaxStr = 3;
 
@@ -60,6 +63,7 @@ struct BodyFilter { double b0, b2, a1, a2, x1 = 0, x2 = 0, y1 = 0, y2 = 0; };
 
 // ---- the felt hammer (as in the web's piano.js) ------------------------------------------------------------------------------
 // The mass of the hammer (kg) by MIDI note, from measurements of grand pianos.
+constexpr double kStrikeNote = 96;   // the key whose hammer blow the `strike` layer borrows
 constexpr int kPulseMax = 4096;   // the longest pulse kept, in samples
 constexpr int kSubsteps = 8;      // the hammer is stepped this many times per sample, so the stiff felt stays stable
 constexpr double kHammerSpeed = 3;   // m/s at velocity 1
@@ -167,7 +171,12 @@ public:
       // the felt hammer's force through the same comb
       const int ki = static_cast<int>(k_) - 1, kd = ki - static_cast<int>(dpos_);
       const double ep = pulseLen_ == 0 ? 0 : (ki < pulseLen_ ? pulse_[static_cast<std::size_t>(ki)] : 0) - (kd >= 0 && kd < pulseLen_ ? pulse_[static_cast<std::size_t>(kd)] : 0);
-      const double drive = (1 - felt_) * e * amp_ + felt_ * ep * pulseAmp_;
+      double drive = (1 - felt_) * e * amp_ + felt_ * ep * pulseAmp_;
+      if (ampR_ > 0) {   // the layered blow: a short half-sine through the same comb, then the key's lowpass
+        const double kr = k_ - 1, kdr = kr - dpos_;
+        const double er = (kr >= 0 && kr < Lr_ ? js::sin(kPi * kr / Lr_) : 0) - (kdr >= 0 && kdr < Lr_ ? js::sin(kPi * kdr / Lr_) : 0);
+        strikeLp_ += strikeCoef_ * (er * ampR_ - strikeLp_); drive += strikeLp_;
+      }
       double sum = 0;
       for (int s = 0; s < ns_; s++) {
         std::vector<double>& b = buf_[static_cast<std::size_t>(s)];
@@ -311,6 +320,15 @@ private:
       pulseLen_ = now.length;
       pulseAmp_ = 0.35 * js::pow(2, -pf * 0.4) * norm(pf) * oldImpulse / refSum * js::pow(vm, 0.6);
     }
+    // the treble's blow (as a note at kStrikeNote would get it), with the same push as this note's own pulse and less of it as the
+    // note rises; its lowpass sits at a fixed number of harmonics above the fundamental, so it follows the key
+    {
+      const double fR = 440 * js::pow(2, (kStrikeNote - 69) / 12.0);
+      const double TcR = 0.0032 * js::pow(fR / 65.4, -0.45) * (0.6 + 0.9 * (1 - hard)) * (1.15 - 0.5 * v);
+      Lr_ = std::max(4.0, std::min(TcR * fs, 0.5 * fs / fR));
+      ampR_ = g(kStrike) * std::min(1.0, std::max(0.0, (kStrikeNote - midi) / 48)) * 0.5 * amp_ * Lc_ / Lr_;
+      strikeCoef_ = 1 - js::exp(-2 * kPi * std::min(12000.0, std::max(500.0, f0 * 8)) / fs); strikeLp_ = 0;
+    }
     k_ = 0; strikeEnd_ = std::max(Lc_, static_cast<double>(pulseLen_)) + dpos_ + 1;
     for (BoardMode& m : board_) m.x1 = m.x2 = m.y1 = m.y2 = 0;
     knockEnv_ = 0; knockLp_ = 0; muffleEnv_ = 1; muffleState_ = 0; scatterLp_ = 0; scatterSeed_ = 0x1b873593u; muffleDecay_ = js::exp(-1 / (0.025 * fs));
@@ -343,6 +361,7 @@ private:
   std::vector<double> pulse_, scratch_;
   int pulseLen_ = 0;
   double pulseAmp_ = 0, felt_ = 0;
+  double Lr_ = 0, ampR_ = 0, strikeLp_ = 0, strikeCoef_ = 1;   // the layered treble blow: its length, its height, and the lowpass that follows the key
   BoardMode board_[kBoardModes] = {};
   double knockEnv_ = 0, knockAmp_ = 0, knockLp_ = 0;
   double muffleEnv_ = 0, muffleState_ = 0, muffleDecay_ = 0, scatterLp_ = 0;
@@ -379,6 +398,7 @@ void registerPiano(NodeRegistry& registry) {
     {"muffle", 0, 1, 0},           // how dull the first moments are
     {"scatter", 0, 1, 0},          // how jagged the muffle's opening is
     {"quality", 0, 1, 0, true},    // 0 standard, 1 eco
+    {"strike", 0, 1, 0},           // the treble's hammer blow layered under the lower notes
   };
   type.create = [](const NodeContext& context) { return std::make_unique<Piano>(context); };
   registry.add(std::move(type));

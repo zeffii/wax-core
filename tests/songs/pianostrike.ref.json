@@ -1,0 +1,18 @@
+{
+  "song": "ps.wax",
+  "version": "0.818.0",
+  "sampleRate": 44100,
+  "frames": 441088,
+  "seconds": 10.002,
+  "peak": 0.487975,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "e9fd8fbfc7e090b856d033c116644fdda81b212462e6671f081725a1f502b513",
+  "nodeTypes": [
+    "bus-in",
+    "out",
+    "piano",
+    "tempo",
+    "voices"
+  ]
+}
