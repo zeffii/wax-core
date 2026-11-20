@@ -1,13 +1,13 @@
 {
-  "song": "bug.wax",
-  "version": "0.774.0",
+  "song": "bugsong.wax",
+  "version": "0.819.0",
   "sampleRate": 44100,
   "frames": 4025216,
   "seconds": 91.275,
-  "peak": 1.328658,
+  "peak": 1.328638,
   "tail": 6,
   "seed": 2654435769,
-  "sha256": "e28cba2fb37d2f5145936773003b349f5c712bd5202a6d8574a29b13dd9fd39e",
+  "sha256": "8f2c167f6212614146cbcf1cb95aab317a6dd9674593338d8a6ba9cc18c41673",
   "nodeTypes": [
     "addsynth",
     "blur",

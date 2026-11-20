@@ -1,13 +1,13 @@
 {
-  "song": "ps.wax",
-  "version": "0.818.0",
+  "song": "pianostrike.wax",
+  "version": "0.819.0",
   "sampleRate": 44100,
   "frames": 441088,
   "seconds": 10.002,
-  "peak": 0.487975,
+  "peak": 0.527905,
   "tail": 6,
   "seed": 2654435769,
-  "sha256": "e9fd8fbfc7e090b856d033c116644fdda81b212462e6671f081725a1f502b513",
+  "sha256": "ed82b41277061d333ecf98b9440a76016973ae17c8ff747c69f85750eb6898a0",
   "nodeTypes": [
     "bus-in",
     "out",

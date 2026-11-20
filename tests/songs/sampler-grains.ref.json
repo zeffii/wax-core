@@ -1,13 +1,13 @@
 {
-  "song": "sb.wax",
-  "version": "0.774.0",
+  "song": "sampler-grains.wax",
+  "version": "0.819.0",
   "sampleRate": 44100,
   "frames": 4025216,
   "seconds": 91.275,
-  "peak": 1.301332,
+  "peak": 1.301312,
   "tail": 6,
   "seed": 2654435769,
-  "sha256": "5f6f0805c5afc94426923599130f81761a573a63221b671d75daf50b89207d16",
+  "sha256": "a7efcbf69ba028672a1bb2e65ad7ceebd5d1e4c01a8299eb0d54b9491a5291de",
   "nodeTypes": [
     "addsynth",
     "blur",

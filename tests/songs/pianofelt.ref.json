@@ -1,13 +1,13 @@
 {
   "song": "pianofelt.wax",
-  "version": "0.792.0",
+  "version": "0.819.0",
   "sampleRate": 44100,
   "frames": 441088,
   "seconds": 10.002,
-  "peak": 0.400787,
+  "peak": 0.400551,
   "tail": 6,
   "seed": 2654435769,
-  "sha256": "6d314a0cc9acc1b7d44f9d706d9d7ed405424412fbd0bd3abda4d0c349172448",
+  "sha256": "a70967fe4968177b759bda5753f5866f16c2a669b377706128d4055887f95be6",
   "nodeTypes": [
     "bus-in",
     "out",

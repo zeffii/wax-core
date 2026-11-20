@@ -3,6 +3,9 @@
 //
 //   hammer    a half-sine force pulse. A hard blow is shorter (brighter, louder); the felt makes it longer in the bass
 //             and when `hard` is low. It enters the strings through a comb at the strike point, `pos`.
+//             The pulse is band-limited before it is sampled: each sample is the half-sine smoothed by a Hann kernel four samples
+//             wide (which has a null at the Nyquist frequency), so the short, hard blow of a high note does not alias. The
+//             smoothing delays the blow by two samples.
 //   strings   waveguides: a delay line the length of one period, a fractional-delay allpass to tune it exactly, a chain
 //             of allpasses that makes the high partials run slightly sharp (`inharm`), and a lowpass in the loop so the
 //             highs die first (`bright`). The strings of a note are detuned a little (`detune`) so they beat; one of
@@ -64,7 +67,23 @@ struct BodyFilter { double b0, b2, a1, a2, x1 = 0, x2 = 0, y1 = 0, y2 = 0; };
 // ---- the felt hammer (as in the web's piano.js) ------------------------------------------------------------------------------
 // The mass of the hammer (kg) by MIDI note, from measurements of grand pianos.
 constexpr double kStrikeNote = 96;   // the key whose hammer blow the `strike` layer borrows
-constexpr int kPulseMax = 4096;   // the longest pulse kept, in samples
+constexpr int kPulseMax = 4096;
+constexpr int kPulseOversample = 8, kPulseDelay = 2;
+// A half-sine of `length` samples (not a whole number), band-limited before it is sampled: the pulse is averaged against a Hann
+// kernel four samples wide, worked out at kPulseOversample points per sample, and delayed by kPulseDelay samples (half the kernel).
+int smoothPulse(double* out, double length) {
+  const int count = std::min(kPulseMax, static_cast<int>(std::ceil(length)) + 2 * kPulseDelay);
+  for (int k = 0; k < count; k++) {
+    const double centre = k - kPulseDelay;
+    double sum = 0;
+    for (int m = 0; m < 4 * kPulseOversample; m++) {
+      const double u = (m + 0.5) / kPulseOversample - 2, t = centre + u;
+      if (t >= 0 && t < length) sum += js::sin(kPi * t / length) * 0.25 * (1 + js::cos(kPi * u / 2));
+    }
+    out[k] = sum / kPulseOversample;
+  }
+  return count;
+}   // the longest pulse kept, in samples
 constexpr int kSubsteps = 8;      // the hammer is stepped this many times per sample, so the stiff felt stays stable
 constexpr double kHammerSpeed = 3;   // m/s at velocity 1
 constexpr int kBoardModes = 32;
@@ -165,7 +184,8 @@ public:
       // the hammer: a half-sine pulse, entering through the strike-point comb
       double e = 0;
       if (k_ < strikeEnd_) {
-        e = (k_ >= 0 && k_ < Lc_ ? js::sin(kPi * k_ / Lc_) : 0) - (k_ - dpos_ >= 0 && k_ - dpos_ < Lc_ ? js::sin(kPi * (k_ - dpos_) / Lc_) : 0);
+        const int kk = static_cast<int>(k_), kkd = kk - static_cast<int>(dpos_);
+        e = (kk < plainLen_ ? plainPulse_[static_cast<std::size_t>(kk)] : 0) - (kkd >= 0 && kkd < plainLen_ ? plainPulse_[static_cast<std::size_t>(kkd)] : 0);
       }
       k_++;
       // the felt hammer's force through the same comb
@@ -173,8 +193,8 @@ public:
       const double ep = pulseLen_ == 0 ? 0 : (ki < pulseLen_ ? pulse_[static_cast<std::size_t>(ki)] : 0) - (kd >= 0 && kd < pulseLen_ ? pulse_[static_cast<std::size_t>(kd)] : 0);
       double drive = (1 - felt_) * e * amp_ + felt_ * ep * pulseAmp_;
       if (ampR_ > 0) {   // the layered blow: a short half-sine through the same comb, then the key's lowpass
-        const double kr = k_ - 1, kdr = kr - dpos_;
-        const double er = (kr >= 0 && kr < Lr_ ? js::sin(kPi * kr / Lr_) : 0) - (kdr >= 0 && kdr < Lr_ ? js::sin(kPi * kdr / Lr_) : 0);
+        const int kr = static_cast<int>(k_) - 1, kdr = kr - static_cast<int>(dpos_);
+        const double er = (kr < blowLen_ ? blowPulse_[static_cast<std::size_t>(kr)] : 0) - (kdr >= 0 && kdr < blowLen_ ? blowPulse_[static_cast<std::size_t>(kdr)] : 0);
         strikeLp_ += strikeCoef_ * (er * ampR_ - strikeLp_); drive += strikeLp_;
       }
       double sum = 0;
@@ -329,7 +349,8 @@ private:
       ampR_ = g(kStrike) * std::min(1.0, std::max(0.0, (kStrikeNote - midi) / 48)) * 0.5 * amp_ * Lc_ / Lr_;
       strikeCoef_ = 1 - js::exp(-2 * kPi * std::min(12000.0, std::max(500.0, f0 * 8)) / fs); strikeLp_ = 0;
     }
-    k_ = 0; strikeEnd_ = std::max(Lc_, static_cast<double>(pulseLen_)) + dpos_ + 1;
+    plainLen_ = smoothPulse(plainPulse_.data(), Lc_); blowLen_ = ampR_ > 0 ? smoothPulse(blowPulse_.data(), Lr_) : 0;
+    k_ = 0; strikeEnd_ = std::max({static_cast<double>(plainLen_), static_cast<double>(pulseLen_), static_cast<double>(blowLen_)}) + dpos_ + 1;
     for (BoardMode& m : board_) m.x1 = m.x2 = m.y1 = m.y2 = 0;
     knockEnv_ = 0; knockLp_ = 0; muffleEnv_ = 1; muffleState_ = 0; scatterLp_ = 0; scatterSeed_ = 0x1b873593u; muffleDecay_ = js::exp(-1 / (0.025 * fs));
     knockAmp_ = g(kKnock) * vm * vm * 0.08;
@@ -361,6 +382,8 @@ private:
   std::vector<double> pulse_, scratch_;
   int pulseLen_ = 0;
   double pulseAmp_ = 0, felt_ = 0;
+  std::vector<double> plainPulse_ = std::vector<double>(kPulseMax), blowPulse_ = std::vector<double>(kPulseMax);   // the plain hammer's pulse, and the layered treble blow's
+  int plainLen_ = 0, blowLen_ = 0;
   double Lr_ = 0, ampR_ = 0, strikeLp_ = 0, strikeCoef_ = 1;   // the layered treble blow: its length, its height, and the lowpass that follows the key
   BoardMode board_[kBoardModes] = {};
   double knockEnv_ = 0, knockAmp_ = 0, knockLp_ = 0;

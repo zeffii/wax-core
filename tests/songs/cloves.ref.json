@@ -1,13 +1,13 @@
 {
   "song": "cloves.wax",
-  "version": "0.774.0",
+  "version": "0.819.0",
   "sampleRate": 44100,
   "frames": 4039040,
   "seconds": 91.588,
-  "peak": 1.233055,
+  "peak": 1.234679,
   "tail": 6,
   "seed": 2654435769,
-  "sha256": "2f930ca94f0241e0f12ecfc3c5a3615c750375de1086e68f45f7fd1d9fc7a78f",
+  "sha256": "1c6e530dfccc02af5fd491e43ef951838a94cbe22ff16e493959b0d009d85154",
   "nodeTypes": [
     "bus-in",
     "clang",

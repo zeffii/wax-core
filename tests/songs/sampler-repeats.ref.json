@@ -1,13 +1,13 @@
 {
-  "song": "sc.wax",
-  "version": "0.774.0",
+  "song": "sampler-repeats.wax",
+  "version": "0.819.0",
   "sampleRate": 44100,
   "frames": 4025216,
   "seconds": 91.275,
-  "peak": 1.287193,
+  "peak": 1.287173,
   "tail": 6,
   "seed": 2654435769,
-  "sha256": "259e4c2c0b414f050fdc4dfa107783356f74bf6355ba3f98731e08ad61474932",
+  "sha256": "9760a87d39e06e4852890e0ec74e6a3864c4edd772dc925dde73e198b5c40ba8",
   "nodeTypes": [
     "addsynth",
     "blur",
