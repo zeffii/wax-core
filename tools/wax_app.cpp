@@ -707,12 +707,12 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       }
       if (ImGui::IsKeyPressed(ImGuiKey_A, false)) editor.selectAll();
     }
-    const bool typing = session->edit && !ctrl && !io.KeyAlt && !session->envelopes.wantsKeys() && session->screen != Screen::Song;   // (the sequence has its own keys, above)
+    const bool typing = session->edit && !ctrl && !io.KeyAlt && !session->envelopes.wantsKeys() && session->screen == Screen::Pattern;   // (only the pattern editor types into the grid: on the Instrument, Info and Config screens the keys only play; the sequence has its own keys, above)
     if (!typing && session->screen == Screen::Pattern && !ctrl && ImGui::IsKeyPressed(ImGuiKey_Escape, false) && !editor.selection().active) {   // Esc with editing off: back to the sequence as well
       if (session->solo.on) { session->solo = {}; editor.clearSolo(); session->editStatus = "Solo-edit ended."; }
       else { session->screen = Screen::Song; session->scrollToCursor = true; }
     }
-    const bool editing = session->edit && !session->envelopes.wantsKeys() && session->screen != Screen::Song;   // (typing, and the Ctrl keys that edit)
+    const bool editing = session->edit && !session->envelopes.wantsKeys() && session->screen == Screen::Pattern;   // (typing, and the Ctrl keys that edit)
       editor.setWrapRows(app::settings().rowWrap);
       const auto step = [&](int rows, int cells) {
         if (io.KeyShift) { editor.extend(rows, cells); return; }
