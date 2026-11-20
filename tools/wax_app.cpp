@@ -802,7 +802,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         edited |= wrote;
         session->editStatus = wrote ? std::string() : whole ? "This lane has no parameter columns with a live value." : "Only parameter columns have a live value; move to one.";
       }
-      if (ImGui::IsKeyPressed(ImGuiKey_Equal, false)) edited |= editor.typeNoteOff();
+      if (ImGui::IsKeyPressed(ImGuiKey_1, false) && !io.KeyShift && !ctrl && !io.KeyAlt && editor.character() == 0) edited |= editor.typeNoteOff();   // 1: a note off in this cell (as the web; Shift+1 is the whole row, below)
       if (io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_1, false)) {   // Shift+1 (!): a note off in every note column of this row (as the web)
         if (editor.typeNoteOffRow()) { edited = true; session->editStatus = "Note off in " + std::to_string(editor.noteOffColumns()) + (editor.noteOffColumns() == 1 ? " note column." : " note columns."); }
         else session->editStatus = "This lane has no note columns, or no pattern could be made here.";
