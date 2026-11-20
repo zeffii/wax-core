@@ -748,9 +748,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         if (ImGui::IsKeyPressed(ImGuiKey_Delete)) edited |= editor.shiftSelection(CellEditor::Shift::PullUp);   // the selection goes, the rows below move up
         if (ImGui::IsKeyPressed(ImGuiKey_Insert)) edited |= editor.shiftSelection(CellEditor::Shift::PushDown);   // the rows from the selection down move down
       }
-      if (!io.KeyAlt) {   // (Shift: an octave for notes, a digit for values)
-        if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) edited |= editor.transpose(true, 1, io.KeyShift);
-        if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) edited |= editor.transpose(true, -1, io.KeyShift);
+      if (!io.KeyAlt) {   // (Shift: a digit for values; Ctrl+Up/Down is not here: it steps through the pattern list, and Alt+Up/Down transposes notes)
         if (ImGui::IsKeyPressed(ImGuiKey_Period)) edited |= editor.transpose(false, 1, io.KeyShift);
         if (ImGui::IsKeyPressed(ImGuiKey_Comma)) edited |= editor.transpose(false, -1, io.KeyShift);
       } else if (editor.selection().active) {   // Ctrl+Alt+Up/Down: the selected rows rotate
@@ -758,6 +756,10 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) edited |= editor.shiftSelection(CellEditor::Shift::RotateDown);
       }
       if (before != editor.tick() * 4096 + editor.cell() || edited) session->scrollToCursor = true;
+    }
+    if (editing && io.KeyAlt && !ctrl && !io.WantTextInput) {   // Alt+Up/Down: transpose the notes under the cursor or in the selection by one (Alt+Shift: an octave)
+      if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) edited |= editor.transpose(true, 1, io.KeyShift);
+      if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) edited |= editor.transpose(true, -1, io.KeyShift);
     }
     if (typing) {
       const int before = editor.tick() * 4096 + editor.cell();
@@ -800,6 +802,10 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         session->editStatus = wrote ? std::string() : whole ? "This lane has no parameter columns with a live value." : "Only parameter columns have a live value; move to one.";
       }
       if (ImGui::IsKeyPressed(ImGuiKey_Equal, false)) edited |= editor.typeNoteOff();
+      if (io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_1, false)) {   // Shift+1 (!): a note off in every note column of this row (as the web)
+        if (editor.typeNoteOffRow()) { edited = true; session->editStatus = "Note off in " + std::to_string(editor.noteOffColumns()) + (editor.noteOffColumns() == 1 ? " note column." : " note columns."); }
+        else session->editStatus = "This lane has no note columns, or no pattern could be made here.";
+      }
       if (ImGui::IsKeyPressed(ImGuiKey_GraveAccent, false)) edited |= editor.typeNoteCut();
       if (editor.onHexCell() || editor.character() >= 1) {   // typing changes the character the cursor is on (a note's first character takes whole notes, below)
         // The characters the window was sent; when it was sent none (no text box has the keyboard, so the platform may not send text at all), the keys themselves.
@@ -1286,7 +1292,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         if (listed) for (const Pattern& pat : listed->patterns) if (pat.id == toPlace) editor.moveTo(std::min(before + static_cast<int>(pat.rows.size()), song.length - 1), editor.cell());   // on to where it ends
       }
     }
-    if (session->screen == Screen::Song && ImGui::GetIO().KeyCtrl && !ImGui::GetIO().WantTextInput) {   // Ctrl+Up / Ctrl+Down step through the list
+    if ((session->screen == Screen::Song || session->screen == Screen::Pattern) && ImGui::GetIO().KeyCtrl && !ImGui::GetIO().KeyAlt && !ImGui::GetIO().KeyShift && !ImGui::GetIO().WantTextInput) {   // Ctrl+Up / Ctrl+Down step through the pattern list (on the Pattern screen too)
       if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) app::stepPatternList(session->patternList, listed, -1);
       if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) app::stepPatternList(session->patternList, listed, 1);
     }

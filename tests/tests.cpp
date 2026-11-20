@@ -563,6 +563,8 @@ void testCellEditor() {
   check(row(1) == "... .. 12F0 ......" && ed.tick() == 4, "four digits fill a four-digit cell");
   ed.moveTo(3, 0);
   check(ed.typeNoteOff() && row(1) == "=== .. 12F0 ......", "note off writes the off mark");
+  ed.moveTo(3, 2);
+  check(ed.typeNoteOffRow() && row(1) == "=== .. 12F0 ......" && ed.noteOffColumns() == 1 && ed.tick() == 4 && ed.cell() == 2, "Shift+1 writes a note off in every note column of the row, and the cursor steps down on the same column");
   ed.moveTo(4, 0);
   check(ed.typeNoteCut() && row(2).substr(0, 3) == "^^^", "note cut writes its mark");
   ed.moveTo(3, 1);

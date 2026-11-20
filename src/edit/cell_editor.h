@@ -84,6 +84,8 @@ public:
   // Typing. Each returns false when nothing was changed (no pattern here, or the cell does not take it).
   bool typeNote(int midi);          // a note cell (or a relative one, from its root)
   bool typeNoteOff();               // "==="  (a relative cell: 00)
+  bool typeNoteOffRow();            // Shift+!: "===" in every absolute note column of the cursor's row, then down a row (as the web)
+  int noteOffColumns() const { return noteOffColumns_; }   // how many columns the last typeNoteOffRow reached
   bool typeNoteCut();               // "^^^"
   bool typeHexDigit(int digit);     // 0..15
   // A parameter's live value written back as the cell that would give it (the inverse of how the sequencer reads a cell), then down a row.
@@ -114,7 +116,7 @@ private:
   Document& document_;
   std::string lane_;
   std::vector<Column> columns_;
-  int tick_ = 0, cell_ = 0, typed_ = 0, step_ = 1, char_ = 0;
+  int tick_ = 0, cell_ = 0, typed_ = 0, step_ = 1, char_ = 0, noteOffColumns_ = 0;
   bool selecting_ = false, wrapRows_ = false;
   int soloLo_ = -1, soloHi_ = -1;   // the rows of the solo-edited pattern (hi is one past its last); -1: not solo-editing
   int firstTick() const;   // the first and last row the cursor may be on

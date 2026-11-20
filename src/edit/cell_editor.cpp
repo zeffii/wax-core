@@ -271,6 +271,32 @@ bool CellEditor::typeNoteOff() {
   return true;
 }
 
+bool CellEditor::typeNoteOffRow() {
+  // a note off in every absolute note column of this row (relative columns are left alone, as the web's Shift+1 does); one change, one undo step
+  Place at = place();
+  bool created = false;
+  if (!at.pattern) {
+    if (!createPatternHere()) return false;
+    created = true;
+    at = place();
+    if (!at.pattern) return false;
+  }
+  std::string updated = at.pattern->rows[static_cast<std::size_t>(at.row)];
+  int count = 0;
+  for (int i = 0; i < static_cast<int>(columns_.size()); i++) {
+    const Column& column = columns_[static_cast<std::size_t>(i)];
+    if (column.kind != ColumnKind::Note || column.token != Token::Note) continue;
+    updated = rowWithCell(updated, columns_, i, "===");
+    count++;
+  }
+  if (count == 0) return false;
+  document_.apply(std::make_unique<SetRow>(lane_, at.pattern->id, at.row, updated), created);
+  noteOffColumns_ = count;
+  char_ = 0;
+  advance();
+  return true;
+}
+
 bool CellEditor::typeNoteCut() {
   if (!onNoteCell()) return false;
   if (!setCell("^^^", false)) return false;
