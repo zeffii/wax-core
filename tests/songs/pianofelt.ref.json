@@ -1,0 +1,18 @@
+{
+  "song": "pianofelt.wax",
+  "version": "0.790.0",
+  "sampleRate": 44100,
+  "frames": 441088,
+  "seconds": 10.002,
+  "peak": 0.402763,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "1b3b520d73c7d77f1a70f642800512c0a1b3260162084d47a779de9dc7bec8cf",
+  "nodeTypes": [
+    "bus-in",
+    "out",
+    "piano",
+    "tempo",
+    "voices"
+  ]
+}

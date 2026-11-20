@@ -1993,6 +1993,7 @@ int main(int argc, char** argv) {
   testRenderSong("itchan");
   testRenderSong("itchanamiga");
   testRenderSong("itchan3");
+  testRenderSong("pianofelt");
   testXmImport();
   testItImport();
   testRenderSong("compass");

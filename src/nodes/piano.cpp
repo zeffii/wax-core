@@ -7,6 +7,10 @@
 //             of allpasses that makes the high partials run slightly sharp (`inharm`), and a lowpass in the loop so the
 //             highs die first (`bright`). The strings of a note are detuned a little (`detune`) so they beat; one of
 //             them decays quickly and the others slowly, the two-stage decay (`prompt` is how much of the first).
+//   felt      the hammer as physics: a mass on a nonlinear felt spring (force grows as compression to the power 2.5 to 3.3)
+//             pressing on a rigid string, so a hard blow is shorter, sharper and brighter. 0 is the plain pulse, 1 is all physics.
+//   board     the soundboard as short, damped resonances from 90 Hz to 5 kHz (32; 12 at quality eco). 0 leaves them out.
+//   knock     the damper felt's tick when a key comes up.
 //   body      three broad resonances below 600 Hz, and a soft thump of the hammer on the keybed.
 //   damper    note off lets the damper fall on the strings, over `release` ms, unless the pedal is down.
 //
@@ -23,7 +27,7 @@
 namespace wax {
 namespace {
 
-enum Param { kDecay = 0, kPrompt, kHard, kPos, kBright, kInharm, kDetune, kBody, kThump, kWidth, kPedal, kRelease, kTune, kVel, kLevel };
+enum Param { kDecay = 0, kPrompt, kHard, kPos, kBright, kInharm, kDetune, kBody, kThump, kWidth, kPedal, kRelease, kTune, kVel, kLevel, kFelt, kBoard, kKnock, kQuality };
 
 constexpr int kSize = 1 << 14, kMask = kSize - 1, kSections = 3, kMaxStr = 3;
 
@@ -50,6 +54,72 @@ double clampTo(double x, double a, double b) { return std::min(b, std::max(a, x)
 
 struct BodyFilter { double b0, b2, a1, a2, x1 = 0, x2 = 0, y1 = 0, y2 = 0; };
 
+// ---- the felt hammer (as in the web's piano.js) ------------------------------------------------------------------------------
+// The mass of the hammer (kg) by MIDI note, from measurements of grand pianos.
+constexpr int kPulseMax = 4096;   // the longest pulse kept, in samples
+constexpr int kSubsteps = 8;      // the hammer is stepped this many times per sample, so the stiff felt stays stable
+constexpr double kHammerSpeed = 3;   // m/s at velocity 1
+constexpr int kBoardModes = 32;
+
+double hammerMass(double midi) {
+  static const double table[5][2] = {{21, 9e-3}, {48, 5.5e-3}, {60, 4e-3}, {84, 2.8e-3}, {108, 2e-3}};
+  if (midi <= table[0][0]) return table[0][1];
+  for (int i = 1; i < 5; i++) {
+    if (midi <= table[i][0]) {
+      const double x0 = table[i - 1][0], y0 = table[i - 1][1], x1 = table[i][0], y1 = table[i][1];
+      return y0 + (y1 - y0) * (midi - x0) / (x1 - x0);
+    }
+  }
+  return table[4][1];
+}
+
+struct PulseResult { int length; double seconds; };
+
+// Run the hammer into the (rigid) string. `out` gets the force at each sample (N).
+PulseResult hammerPulse(double* out, double fs, double speed, double mass, double K, double p, int limit) {
+  const double dt = 1 / (fs * kSubsteps);
+  double x = 0, v = speed;
+  int steps = 0;
+  bool started = false;
+  const int cap = std::min(kPulseMax, limit);
+  for (int k = 0; k < cap; k++) {
+    double sum = 0;
+    for (int s = 0; s < kSubsteps; s++) {
+      const double force = x > 0 ? K * js::pow(x, p) : 0;
+      v -= force / mass * dt;
+      x += v * dt;
+      sum += force;
+      steps++;
+      if (force > 0) started = true;
+      else if (started) { out[k] = sum / kSubsteps; return {k + 1, steps * dt}; }
+    }
+    out[k] = sum / kSubsteps;
+  }
+  return {cap, steps * dt};
+}
+
+// The felt stiffness that gives a contact of `seconds` (bisection on its logarithm).
+double stiffnessFor(double* scratch, double fs, double speed, double mass, double p, double seconds) {
+  double lo = js::log(1e6), hi = js::log(1e13);
+  for (int it = 0; it < 40; it++) {
+    const double mid = 0.5 * (lo + hi);
+    const double got = hammerPulse(scratch, fs, speed, mass, js::exp(mid), p, kPulseMax).seconds;
+    if (got > seconds) lo = mid; else hi = mid;
+  }
+  return js::exp(0.5 * (lo + hi));
+}
+
+struct BoardMode { double b0, b2, a1, a2, gain, x1 = 0, x2 = 0, y1 = 0, y2 = 0; };
+
+BoardMode boardMode(int j, int count, double fs) {
+  const double t = static_cast<double>(j) / (count - 1);
+  const double f = std::min(0.45 * fs, 90 * js::pow(5000.0 / 90, t) * (1 + 0.05 * js::sin(j * 2.7)));
+  const double q = 22 + 14 * js::sin(j * 1.3 + 0.5) + 30 * (1 - t);
+  const double gain = js::pow(f / 200, -0.4) * (0.65 + 0.35 * js::cos(j * 1.7));
+  const double w0 = 2 * kPi * f / fs, al = js::sin(w0) / (2 * q), a0 = 1 + al;
+  return {al / a0, -al / a0, -2 * js::cos(w0) / a0, (1 - al) / a0, gain};
+}
+
 class Piano final : public Node {
 public:
   explicit Piano(const NodeContext& context) : fs_(context.sampleRate), pitchOn_(!context.connected.empty() && context.connected[0]) {
@@ -60,6 +130,8 @@ public:
       const double w0 = 2 * kPi * table[i][0] / fs_, al = js::sin(w0) / (2 * table[i][1]), a0 = 1 + al;
       bq_[i] = {al / a0, -al / a0, -2 * js::cos(w0) / a0, (1 - al) / a0};
     }
+    pulse_.assign(kPulseMax, 0.0); scratch_.assign(kPulseMax, 0.0);
+    for (int j = 0; j < kBoardModes; j++) board_[j] = boardMode(j, kBoardModes, fs_);
   }
 
   void note(const NoteEvent& event) override {
@@ -74,8 +146,11 @@ public:
     if (!active_) { std::fill(outL, outL + n, 0.0f); std::fill(outR, outR + n, 0.0f); return; }
     auto g = [&](int i) -> double { return params[slots[i]]; };
     if (pending_) { pending_ = false; strike(g, pitchOn_ ? inputs[0][0] : 0.0); }
-    if (keyUp_ && !damped_ && g(kPedal) < 0.5) damped_ = true;   // the damper falls, or the pedal comes up
+    if (keyUp_ && !damped_ && g(kPedal) < 0.5) { damped_ = true; knockEnv_ = 1; }   // the damper falls, or the pedal comes up
     const double level = g(kLevel) * 2, body = g(kBody);
+    const double boardAmount = g(kBoard);
+    const int modes = g(kQuality) >= 0.5 ? 12 : kBoardModes;
+    const double stride = static_cast<double>(kBoardModes) / modes;
     for (int s = 0; s < ns_; s++) gs_[s] = loop_[s] * (damped_ ? damp_[s] : 1);
     double peak = 0;
     for (int i = 0; i < n; i++) {
@@ -85,6 +160,10 @@ public:
         e = (k_ >= 0 && k_ < Lc_ ? js::sin(kPi * k_ / Lc_) : 0) - (k_ - dpos_ >= 0 && k_ - dpos_ < Lc_ ? js::sin(kPi * (k_ - dpos_) / Lc_) : 0);
       }
       k_++;
+      // the felt hammer's force through the same comb
+      const int ki = static_cast<int>(k_) - 1, kd = ki - static_cast<int>(dpos_);
+      const double ep = pulseLen_ == 0 ? 0 : (ki < pulseLen_ ? pulse_[static_cast<std::size_t>(ki)] : 0) - (kd >= 0 && kd < pulseLen_ ? pulse_[static_cast<std::size_t>(kd)] : 0);
+      const double drive = (1 - felt_) * e * amp_ + felt_ * ep * pulseAmp_;
       double sum = 0;
       for (int s = 0; s < ns_; s++) {
         std::vector<double>& b = buf_[static_cast<std::size_t>(s)];
@@ -96,14 +175,17 @@ public:
         }
         lp_[s] = (1 - lc_[s]) * x + lc_[s] * lp_[s];   // the highs die first
         sum += lp_[s] * weight_[s];
-        b[static_cast<std::size_t>(w_ & kMask)] = lp_[s] * gs_[s] + e * amp_ * weight_[s];
+        b[static_cast<std::size_t>(w_ & kMask)] = lp_[s] * gs_[s] + drive * weight_[s];
       }
       w_ = (w_ + 1) & kMask;
       // the thump of the hammer on the keybed: lowpassed noise that dies in about 12 ms
       thumpLp_ += 0.35 * (rand() - thumpLp_);
       const double t = thumpLp_ * thumpEnv_ * thumpAmp_;
       thumpEnv_ *= thumpDecay_;
-      const double dry = sum + t;
+      // the damper's tick: softer, shorter noise than the hammer's thump
+      double tick = 0;
+      if (knockEnv_ > 1e-4) { knockLp_ += 0.5 * (rand() - knockLp_); tick = knockLp_ * knockEnv_ * knockAmp_; knockEnv_ *= 0.9965; }
+      const double dry = sum + t + tick;
       double resonance = 0;
       static const double bodyGain[3] = {0.9, 0.7, 0.45};
       for (int r = 0; r < 3; r++) {
@@ -112,7 +194,16 @@ public:
         f.x2 = f.x1; f.x1 = dry; f.y2 = f.y1; f.y1 = o;
         resonance += o * bodyGain[r];
       }
-      const double m = (dry + body * resonance * 2) * level;
+      double wood = 0;
+      if (boardAmount > 0) {
+        for (int j = 0; j < modes; j++) {
+          BoardMode& f = board_[static_cast<int>(std::floor(j * stride))];
+          const double o = f.b0 * dry + f.b2 * f.x2 - f.a1 * f.y1 - f.a2 * f.y2;
+          f.x2 = f.x1; f.x1 = dry; f.y2 = f.y1; f.y1 = o;
+          wood += o * f.gain;
+        }
+      }
+      const double m = (dry + body * resonance * 2 + boardAmount * wood) * level;
       outL[i] = static_cast<float>(m * panL_); outR[i] = static_cast<float>(m * panR_);
       const double a = std::abs(m);
       if (a > peak) peak = a;
@@ -186,7 +277,28 @@ private:
     dpos_ = std::max(1.0, jsRound(g(kPos) * fs / f0));
     const double vm = 1 - g(kVel) + g(kVel) * v;
     amp_ = vm * vm * 0.5 * std::min(1.0, fs / f0 / Lc_) * js::pow(2, -pf * 0.4) * norm(pf);
-    k_ = 0; strikeEnd_ = Lc_ + dpos_ + 1;
+    felt_ = g(kFelt);
+    pulseLen_ = 0;
+    if (felt_ > 0) {
+      // the felt hammer: the stiffness is found so that a middling blow lasts as long as the plain pulse's would, then a
+      // harder or softer blow, felt and string change it from there
+      const double mass = hammerMass(midi), p = 2.5 + 0.8 * pf, vm1 = 1;
+      auto tcAt = [&](double vel, double h) { return 0.0032 * js::pow(f0 / 65.4, -0.45) * (0.6 + 0.9 * (1 - h)) * (1.15 - 0.5 * vel); };
+      const double K = stiffnessFor(scratch_.data(), fs, 0.7 * kHammerSpeed, mass, p, 0.75 * tcAt(0.7, 0.5)) * js::exp(3.66 * (hard - 0.5));
+      const PulseResult now = hammerPulse(pulse_.data(), fs, vm * kHammerSpeed, mass, K, p, kPulseMax);
+      const PulseResult ref = hammerPulse(scratch_.data(), fs, vm1 * kHammerSpeed, mass, K, p, kPulseMax);
+      double refSum = 0;
+      for (int i = 0; i < ref.length; i++) refSum += scratch_[static_cast<std::size_t>(i)];
+      // the loudest blow is as loud as the plain pulse's loudest, so switching `felt` on changes the touch, not the level
+      const double Lc1 = std::max(4.0, std::min(tcAt(1, hard) * fs, 0.5 * fs / f0));
+      const double oldImpulse = std::min(1.0, fs / f0 / Lc1) * Lc1 * 2 / kPi;
+      pulseLen_ = now.length;
+      pulseAmp_ = 0.35 * js::pow(2, -pf * 0.4) * norm(pf) * oldImpulse / refSum * js::pow(vm, 0.6);
+    }
+    k_ = 0; strikeEnd_ = std::max(Lc_, static_cast<double>(pulseLen_)) + dpos_ + 1;
+    for (BoardMode& m : board_) m.x1 = m.x2 = m.y1 = m.y2 = 0;
+    knockEnv_ = 0; knockLp_ = 0;
+    knockAmp_ = g(kKnock) * vm * vm * 0.08;
     thumpEnv_ = 1; thumpDecay_ = js::exp(-1 / (0.012 * fs)); thumpAmp_ = g(kThump) * vm * vm * 0.5;
     const double pos = 0.5 + (pf - 0.5) * g(kWidth);
     panL_ = js::cos(pos * kPi / 2) * kSqrt2; panR_ = js::sin(pos * kPi / 2) * kSqrt2;
@@ -211,6 +323,12 @@ private:
   std::uint32_t seed_ = 0x2545f491u;
   double quiet_ = 0, panL_ = 1, panR_ = 1;
   BodyFilter bq_[3] = {};
+  // the felt hammer's pulse, scratch space for finding its stiffness, the soundboard, the damper's tick
+  std::vector<double> pulse_, scratch_;
+  int pulseLen_ = 0;
+  double pulseAmp_ = 0, felt_ = 0;
+  BoardMode board_[kBoardModes] = {};
+  double knockEnv_ = 0, knockAmp_ = 0, knockLp_ = 0;
 };
 
 }  // namespace
@@ -237,6 +355,10 @@ void registerPiano(NodeRegistry& registry) {
     {"tune", -48, 48, 0},
     {"vel", 0, 1, 0.7},
     {"level", 0, 1, 0.5},
+    {"felt", 0, 1, 0},             // 0: the plain half-sine pulse, 1: the felt hammer model
+    {"board", 0, 1, 0},            // the soundboard's resonances
+    {"knock", 0, 1, 0},            // the damper's tick on note off
+    {"quality", 0, 1, 0, true},    // 0 standard, 1 eco
   };
   type.create = [](const NodeContext& context) { return std::make_unique<Piano>(context); };
   registry.add(std::move(type));
