@@ -25,6 +25,9 @@ public:
   // How busy the callback is: the share of the time a buffer lasts that filling it took (the worst of the recent ones),
   // and how many buffers took longer than they last (each one is a click).
   double load() const;
+  // How many cores the rendering kept busy on average (work over wall time, smoothed; 1 when single-threaded) and how many it may use.
+  double coresBusy() const;
+  int coresAvailable() const;
   long lateBuffers() const;
 
   struct Impl;   // (public only so the audio callback in audio_out.cpp can name it)

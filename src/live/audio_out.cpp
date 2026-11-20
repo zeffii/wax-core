@@ -15,6 +15,7 @@ struct AudioOut::Impl {
   bool contextUp = false, deviceUp = false;
   Player* player = nullptr;
   std::atomic<double> load{0};
+  std::atomic<double> cores{1};
   std::atomic<long> late{0};
 };
 
@@ -26,6 +27,11 @@ static void onAudio(ma_device* device, void* output, const void*, ma_uint32 fram
   const double budget = static_cast<double>(frames) / device->sampleRate;
   const double use = took / budget;
   if (use > 1.0) impl->late.fetch_add(1, std::memory_order_relaxed);
+  const double work = static_cast<double>(impl->player->engine().runtime().takeWorkNanoseconds()) * 1e-9;
+  if (took > 0) {   // the average number of cores busy across this callback's render, smoothed so the figure is readable
+    const double busy = std::max(1.0, work / took), was = impl->cores.load(std::memory_order_relaxed);
+    impl->cores.store(was * 0.98 + busy * 0.02, std::memory_order_relaxed);
+  }
   const double before = impl->load.load(std::memory_order_relaxed);
   impl->load.store(use > before ? use : before * 0.995 + use * 0.005, std::memory_order_relaxed);   // peaks at once, falls slowly
 }
@@ -66,6 +72,8 @@ double AudioOut::latencySeconds() const {
   return static_cast<double>(d.playback.internalPeriodSizeInFrames) * std::max<ma_uint32>(1, d.playback.internalPeriods) / std::max<ma_uint32>(1, d.sampleRate);
 }
 double AudioOut::load() const { return impl_->load.load(std::memory_order_relaxed); }
+double AudioOut::coresBusy() const { return impl_->cores.load(std::memory_order_relaxed); }
+int AudioOut::coresAvailable() const { return impl_->player->engine().runtime().threads(); }
 long AudioOut::lateBuffers() const { return impl_->late.load(std::memory_order_relaxed); }
 
 }  // namespace wax

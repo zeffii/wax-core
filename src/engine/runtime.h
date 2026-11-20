@@ -93,6 +93,9 @@ public:
   // same whatever the number: an instrument waits for the ones it hears through a sidechain, and the mix is added up in order.
   void setThreads(int threads);
   int threads() const { return pool_ ? pool_->threads() : 1; }
+  // The time the instruments' own rendering took since the last call, summed over all threads (nanoseconds), then reset: against the
+  // wall time of the same blocks it says how many cores were busy.
+  long long takeWorkNanoseconds() { return workNanoseconds_.exchange(0, std::memory_order_relaxed); }
 
   // How many samples everything is held back by, with delay compensation on: the delay of the slowest instrument.
   int alignment();
@@ -173,6 +176,7 @@ private:
   std::unique_ptr<Plan> plan_;                                   // the order made into tasks for the pool (built with order_)
   std::map<std::string, std::set<std::string>> deps_;             // for each instrument, the ones it hears that run before it (built with order_)
   std::unique_ptr<TaskPool> pool_;
+  std::atomic<long long> workNanoseconds_{0};
   std::mutex probeMutex_;
   std::map<std::string, std::shared_ptr<SpectrumProbe>> probes_;   // by "instrument/node"
   std::mutex takeMutex_;

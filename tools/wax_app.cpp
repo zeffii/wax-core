@@ -1744,10 +1744,13 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + width - ImGui::CalcTextSize(value).x);
         ImGui::TextColored(colour, "%s", value);
       };
-      char cpu[16], late[16];
+      char cpu[16], late[16], cores[24];
       std::snprintf(cpu, sizeof cpu, "%.0f%%", 100 * load);
+      std::snprintf(cores, sizeof cores, "%.1f/%d", session->audio->coresBusy(), session->audio->coresAvailable());
       std::snprintf(late, sizeof late, "%ld", session->audio->lateBuffers());
       cell("cpu ", "100%", cpu);
+      ImGui::SameLine(0, 0);
+      cell("  cores ", "00.0/00", cores);
       ImGui::SameLine(0, 0);
       cell("  late ", "0000", late);
       ImGui::SameLine(0, 14 * scale);

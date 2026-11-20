@@ -1,6 +1,7 @@
 #include "engine/runtime.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 #include "core/js_math.h"
@@ -789,7 +790,9 @@ void GraphRuntime::process(float* left, float* right, int n) {
 
   // Every instrument but the master makes its sound, side by side where the sidechains allow it.
   const std::function<void(int)> render = [&](int t) {
+    const auto started = std::chrono::steady_clock::now();
     mixesIn_[static_cast<std::size_t>(plan.orderIndex[static_cast<std::size_t>(t)])] = renderInstrument(plan.ids[static_cast<std::size_t>(t)], n) ? 1 : 0;
+    workNanoseconds_.fetch_add(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count(), std::memory_order_relaxed);
   };
   if (pool_) {
     pool_->run(plan.depCount, plan.dependents, render);
