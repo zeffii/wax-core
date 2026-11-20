@@ -1842,6 +1842,7 @@ int main(int argc, char** argv) {
     testRenderSong("itchanamiga");
     testRenderSong("itchan3");
     testRenderSong("itchanproxy");
+    testRenderSong("itchanrate");
     testItImport();
     if (failures) std::printf("%d check%s failed\n", failures, failures == 1 ? "" : "s");
     else std::printf("it tests passed\n");
@@ -1995,6 +1996,7 @@ int main(int argc, char** argv) {
   testRenderSong("itchanamiga");
   testRenderSong("itchan3");
   testRenderSong("itchanproxy");
+  testRenderSong("itchanrate");
   testRenderSong("pianofelt");
   testXmImport();
   testItImport();

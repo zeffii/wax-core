@@ -50,6 +50,7 @@ int waveOf(int kind, int pos) {   // -64..64 for a position 0..63 of the cycle: 
 struct Envelope {
   std::vector<double> pts;
   int ls = -1, le = -1, ss = -1, se = -1;
+  double rate = 1;   // how far the position moves in a song tick (1 is IT's own speed)
   double at(int point) const {   // the tick of a point, NaN when there is no such point (so a comparison with it is false)
     const long index = static_cast<long>(point) * 2;
     return index >= 0 && index < static_cast<long>(pts.size()) ? pts[static_cast<std::size_t>(index)] : kNaN;
@@ -69,7 +70,7 @@ double envValue(const Envelope& env, double pos) {
 
 // The tick after `pos`: the sustain loop holds while the key is down, the loop turns at its end.
 double envNext(const Envelope& env, double pos, bool keyOn) {
-  const double next = pos + 1;
+  const double next = pos + env.rate;
   if (keyOn && env.ss >= 0 && next > env.at(env.se)) return env.at(env.ss);
   if (env.ls >= 0 && next > env.at(env.le)) return env.at(env.ls);
   return next;
@@ -154,6 +155,8 @@ std::optional<Envelope> envelopeOf(const Json& j, const char* key) {
   out.le = static_cast<int>(numberAt(e, "le", -1));
   out.ss = static_cast<int>(numberAt(e, "ss", -1));
   out.se = static_cast<int>(numberAt(e, "se", -1));
+  const double rate = numberAt(e, "rate", 1);
+  out.rate = rate > 0 ? std::max(0.05, std::min(16.0, rate)) : 1;
   return out;
 }
 

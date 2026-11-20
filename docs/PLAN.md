@@ -273,3 +273,5 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 - Cardinal picture (app/cardinal_picture): the web's four panels (oscillators, filter, envelopes, LFOs) ported, drawn from the node's own code run offline. Draggable: cutoff dot, the mod-envelope sweep edge (e2cut), each LFO's height (amount). Not drawn by hand-check yet; the picture is tall, so in the strip it is small until the full-size toggle exists.
 
 - Drawn-hit strip (drumsynth2, hat2): a grid of two columns of two cells, each cell a Bezier drawing (in the colours the old small graphs had, with its ms axis from the rate settings) or a hit waveform: pitch over volume, then noise over the hit; a hat has closed over open, then the two hits. The graph tile's picture (`drawDrawnHit`) is unchanged.
+
+- IT channel envelope `rate` (web 802): an envelope's position moves `rate` per song tick (default 1); native follows. The web panel's rulers (ticks and time), the rate slider, the loop slide, the playhead level and the xfade bands are not ported: there is no native itchan panel yet.
