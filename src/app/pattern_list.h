@@ -12,6 +12,7 @@ struct PatternListState {
   std::string picked;      // the outlined pattern's id
   char name[32] = {0};     // the rename box
   std::string nameFor;     // the pattern that text belongs to
+  bool scrollToPicked = false;   // the keys moved the outline: the list scrolls so it is in view (a click needs no scroll, the pattern is under the mouse)
 };
 
 struct PatternListResult {

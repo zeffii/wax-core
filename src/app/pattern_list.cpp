@@ -75,6 +75,7 @@ PatternListResult drawPatternList(PatternListState& state, const Lane* lane, flo
       state.picked = p.id;
       if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) result.place = p.id;
     }
+    if (picked && state.scrollToPicked) ImGui::SetScrollHereY(0.5f);
     ImDrawList* draw = ImGui::GetWindowDrawList();
     const float top = at.y + (ImGui::GetTextLineHeight() - side) * 0.5f;
     draw->AddRectFilled(ImVec2(at.x + 2 * scale, top), ImVec2(at.x + 2 * scale + side, top + side), patternColour(p, 220));   // the pattern's colour
@@ -97,6 +98,7 @@ PatternListResult drawPatternList(PatternListState& state, const Lane* lane, flo
     draw->AddText(ImVec2(at.x + side + 8 * scale, at.y), ink, text);
     draw->AddText(ImVec2(at.x + width - ImGui::CalcTextSize(length).x - 6 * scale, at.y), ink, length);
   }
+  state.scrollToPicked = false;
   ImGui::EndChild();
   if (textButton("New")) result.create = true;
   ImGui::SameLine(0, 10 * scale);
@@ -118,6 +120,7 @@ void stepPatternList(PatternListState& state, const Lane* lane, int step) {
   for (std::size_t i = 0; i < lane->patterns.size(); i++) if (lane->patterns[i].id == state.picked) at = static_cast<int>(i);
   at = std::clamp(at + step, 0, static_cast<int>(lane->patterns.size()) - 1);
   state.picked = lane->patterns[static_cast<std::size_t>(at)].id;
+  state.scrollToPicked = true;
 }
 
 }  // namespace wax::app
