@@ -41,6 +41,7 @@ const std::vector<Shortcut>& patternShortcuts() {
       {"Ctrl+Comma, Ctrl+Period", "move the hex values under the cursor or in the selection by one (Shift: a digit)"},
       {"Esc", "drops the selection; with none, leaves solo-edit if on; then back to the sequence (Song screen)"},
       {"Tab / Esc", "in solo-edit: Tab switches between the pattern alone and the whole song with the rest locked; Esc (with no selection) leaves it"},
+      {"Ctrl+G", "this placement gets its own copy of the pattern under the cursor: edit it without changing the other places it is used"},
       {"Ctrl+C, X, V, A", "copy, cut, paste; select the whole lane. Ctrl+Z undoes, Ctrl+Y or Ctrl+Shift+Z redoes"},
       {"Ctrl+B, Ctrl+E, Ctrl+L", "start the loop at this row, end it with this row; Ctrl+L switches it off and on"},
       {"Z-M, Q-P", "play notes (and type them while editing)"},

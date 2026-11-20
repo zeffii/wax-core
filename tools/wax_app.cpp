@@ -687,6 +687,17 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         session->editStatus = "Pattern colour changed.";
       } else session->editStatus = "No pattern here.";
     }
+    if (ctrl && !io.KeyAlt && !io.KeyShift && session->screen == Screen::Pattern && ImGui::IsKeyPressed(ImGuiKey_G, false)) {   // Ctrl+G: this placement gets its own copy of its pattern, so editing it no longer changes the others (as the web)
+      const Lane* current = nullptr;
+      for (const Lane& l : doc.project().lanes) if (l.id == selectedLane) current = &l;
+      Lane copy = current ? *current : Lane{};
+      if (current && seq::clonePlacement(copy, session->solo.on ? session->solo.lo : editor.tick())) {
+        doc.apply(std::make_unique<SetLaneSequence>(copy, "clone pattern"));
+        edited = true;
+        editor.clearSelection();
+        session->editStatus = "Cloned: this placement now has its own copy.";
+      } else session->editStatus = "No pattern here.";
+    }
     if (ctrl && session->edit && session->screen == Screen::Pattern && !io.KeyAlt) {   // block editing: copy, cut, paste, select all
       if (ImGui::IsKeyPressed(ImGuiKey_C, false)) ImGui::SetClipboardText(editor.copy().c_str());
       if (ImGui::IsKeyPressed(ImGuiKey_X, false)) { ImGui::SetClipboardText(editor.copy().c_str()); edited |= editor.cut(); }
