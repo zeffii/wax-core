@@ -33,6 +33,7 @@
 #include "app/envelope_window.h"
 #include "app/node_help.h"
 #include "app/config.h"
+#include "app/file_association.h"
 #include "app/sample_browser.h"
 #include "app/sample_view.h"
 #include "project/backups.h"
@@ -1575,6 +1576,13 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (app::checkbox("Up and Down wrap round the first and last row", &cfg.rowWrap)) changed = true;
     if (app::checkbox("Graph: dragging a node far out of its chain takes it out", &cfg.graphPullOut)) changed = true;
     if (app::checkbox("Left and Right wrap round the first and last lane (All lanes view)", &cfg.laneWrap)) changed = true;
+    if (app::fileAssociationSupported()) {
+      group("Files", "Double-clicking a .wax file in the file manager.");
+      static std::string associationNote;   // what the last press of the button did
+      if (app::isOpenerOfWaxFiles()) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), ".wax files open in this Wax when double-clicked.");
+      else if (app::textButton("Open .wax files with this Wax")) associationNote = app::registerAsOpenerOfWaxFiles();
+      if (!associationNote.empty()) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "%s", associationNote.c_str());
+    }
     group("Backup", "Snapshots of the song in the preferences folder; File > Backups opens one.");
     if (app::checkbox("Automatic backups", &cfg.backupOn)) changed = true;
     ImGui::SetNextItemWidth(220 * scale);
@@ -1857,6 +1865,13 @@ bool parse(int argc, char** argv, Options& o) {
 
 int main(int argc, char** argv) {
   Options options;
+  std::vector<std::string> utf8Args = app::commandLineUtf8();   // (Windows: a double-clicked file's path, with its accents)
+  std::vector<char*> utf8Pointers;
+  if (!utf8Args.empty()) {
+    for (std::string& arg : utf8Args) utf8Pointers.push_back(arg.data());
+    argc = static_cast<int>(utf8Pointers.size());
+    argv = utf8Pointers.data();
+  }
   if (!parse(argc, argv, options)) {
     std::printf("usage: wax-app [song.wax] [--rate hz] [--threads n] [--midi n] [--null] [--screenshot out.bmp [--frames n] [--play-from tick]]\n");
     return 1;
