@@ -84,13 +84,26 @@ struct Instrument {
   bool filter = false;
 };
 
+// One loop of a sample proxy, in the bank sample's frames.
+struct ProxyLoop {
+  bool set = false, on = true, pingpong = false;
+  double start = 0, end = 0, xfade = 0;
+};
+
 struct Extra {   // a sample's own extras from the node's data
   bool vib = false;
   int speed = 0, depth = 0, rate = 0, type = 0;
+  // the proxy: a stretch of the bank sample and loops of the slot's own (see the web's itchan.js, buildSlot)
+  bool hasStretch = false;
+  double start = 0, end = 0;
+  ProxyLoop loop, sus;
 };
 
 struct Bank {
   std::shared_ptr<const SampleMessage> msg;
+  std::vector<float> cutLeft, cutRight;                    // the stretch a proxy plays, when it is not the whole sample
+  const std::vector<float>* left = nullptr;                // what the slot plays: the sample's own data or the stretch
+  const std::vector<float>* right = nullptr;
   double volume = 1, globalVolume = 1, pan = 0, tune = 0;
   bool panSet = false, pp = false, spp = false;
   bool loop = false, sus = false;
@@ -157,8 +170,33 @@ public:
   void sample(const std::shared_ptr<const SampleMessage>& message) override {
     const std::size_t slot = static_cast<std::size_t>(std::max(0, message->slot));
     if (bank_.size() <= slot) bank_.resize(slot + 1);
+    bank_[slot] = buildBank(message);
+  }
+
+  // A slot is a proxy of a bank sample: it takes the sample's loops as they are, unless the node's own settings for the slot pick a
+  // stretch of the sample and give it loops of its own. Loops the bank gives that lie inside the stretch come along, moved to its
+  // start; ones outside it are dropped.
+  std::unique_ptr<Bank> buildBank(const std::shared_ptr<const SampleMessage>& message) const {
+    const Extra* X = extra(message->slot);
+    const double whole = static_cast<double>(message->data.size());
+    double a = 0, b = whole;
+    if (X && X->hasStretch) {
+      a = std::max(0.0, std::min(whole - 1, std::floor(X->start)));
+      b = std::max(a + 1, std::min(whole, std::floor(X->end)));
+    }
+    const bool cut = a > 0 || b < whole;
     auto S = std::make_unique<Bank>();
     S->msg = message;
+    S->left = &message->data;
+    S->right = &message->right;
+    if (cut) {
+      S->cutLeft.assign(message->data.begin() + static_cast<std::ptrdiff_t>(a), message->data.begin() + static_cast<std::ptrdiff_t>(b));
+      S->left = &S->cutLeft;
+      if (!message->right.empty()) {
+        S->cutRight.assign(message->right.begin() + static_cast<std::ptrdiff_t>(a), message->right.begin() + static_cast<std::ptrdiff_t>(b));
+        S->right = &S->cutRight;
+      }
+    }
     S->volume = message->volume;
     S->globalVolume = message->globalVolume;
     S->pan = std::max(-1.0, std::min(1.0, message->pan));
@@ -166,18 +204,24 @@ public:
     S->pp = message->pingpong;
     S->spp = message->susPingpong;
     S->tune = 12 * js::log2(std::max(1.0, message->rate) / 8363);   // semitones from IT's C-5 (8363 Hz): the sample's own speed
-    const double size = static_cast<double>(message->data.size());
-    const double start = message->loopStart, end = message->loopEnd;
-    if (message->loopOn && end - start >= 2 && end <= size && start >= 0) {
-      S->loop = true; S->ls = start; S->le = end;
-      S->xf = std::max(0.0, std::min({std::floor(message->loopXfade), start, end - start}));
-    }
-    const double ss = message->susStart, se = message->susEnd;
-    if (message->susOn && se - ss >= 2 && se <= size && ss >= 0) {
-      S->sus = true; S->ss = ss; S->se = se;
-      S->sxf = std::max(0.0, std::min({std::floor(message->susXfade), ss, se - ss}));
-    }
-    bank_[slot] = std::move(S);
+    const double size = static_cast<double>(S->left->size());
+    struct Placed { bool ok = false; double start = 0, end = 0, xfade = 0; bool ping = false; };
+    auto place = [&](const ProxyLoop* own, bool bankOn, double bankStart, double bankEnd, double bankXfade, bool bankPing) {
+      bool on, ping;
+      double start, end, xfade;
+      if (own && own->set) { on = own->on; start = own->start - a; end = own->end - a; xfade = own->xfade; ping = own->pingpong; }
+      else { on = bankOn; start = bankStart - a; end = bankEnd - a; xfade = bankXfade; ping = bankPing; }
+      Placed p;
+      if (!(on && end - start >= 2 && start >= 0 && end <= size)) return p;
+      p.ok = true; p.start = start; p.end = end; p.ping = ping;
+      p.xfade = std::max(0.0, std::min({std::floor(xfade), start, end - start}));
+      return p;
+    };
+    const Placed loop = place(X ? &X->loop : nullptr, message->loopOn, message->loopStart, message->loopEnd, message->loopXfade, message->pingpong);
+    if (loop.ok) { S->loop = true; S->ls = loop.start; S->le = loop.end; S->xf = loop.xfade; S->pp = loop.ping; }
+    const Placed sus = place(X ? &X->sus : nullptr, message->susOn, message->susStart, message->susEnd, message->susXfade, message->susPingpong);
+    if (sus.ok) { S->sus = true; S->ss = sus.start; S->se = sus.end; S->sxf = sus.xfade; S->spp = sus.ping; }
+    return S;
   }
 
   void note(const NoteEvent& event) override {
@@ -261,9 +305,29 @@ private:
           x.speed = at(0); x.depth = at(1); x.rate = at(2); x.type = at(3);
           x.vib = x.depth != 0 && x.rate != 0;
         }
+        if (s.is_object() && s.contains("proxy") && s["proxy"].is_object()) {
+          const Json& p = s["proxy"];
+          x.hasStretch = p.contains("start") || p.contains("end");
+          x.start = numberAt(p, "start", 0);
+          x.end = numberAt(p, "end", 1e18);
+          auto loopOf = [&](const char* key) {
+            ProxyLoop l;
+            if (p.contains(key) && p[key].is_object()) {
+              const Json& o = p[key];
+              l.set = true;
+              l.on = !(o.contains("on") && o["on"].is_boolean() && !o["on"].get<bool>());
+              l.start = numberAt(o, "start", 0); l.end = numberAt(o, "end", 0); l.xfade = numberAt(o, "xfade", 0);
+              l.pingpong = o.contains("pingpong") && o["pingpong"].is_boolean() && o["pingpong"].get<bool>();
+            }
+            return l;
+          };
+          x.loop = loopOf("loop"); x.sus = loopOf("sus");
+        }
         extras_.push_back(x);
       }
     }
+    // a change to the node's data (from the editor) rebuilds the slots, so a proxy is heard at once
+    for (auto& slotBank : bank_) if (slotBank) slotBank = buildBank(slotBank->msg);
   }
 
   static int clampVol(double v) { return std::max(0, std::min(64, jsRoundInt(v))); }
@@ -348,7 +412,7 @@ private:
     v.vol = host_.vol; v.pan = host_.pan; v.cut = cut_; v.res = res_;
     v.period = v.outPeriod = v.target = clampPeriod(periodOf(played + tuneOf(slot), linear_));
     v.pos = offset;
-    v.active = v.pos < static_cast<double>(S->msg->data.size());
+    v.active = v.pos < static_cast<double>(S->left->size());
     host_ = v;
     return true;
   }
@@ -691,7 +755,7 @@ private:
   void mixVoice(Voice& v, bool isHost, int n, float* outL, float* outR, double level, bool interpolate) {
     const Bank* S = bankAt(v.slot);
     if (!v.active || !S) { v.gain = 0; return; }
-    const std::vector<float>& sample = S->msg->data;
+    const std::vector<float>& sample = *S->left;
     const double len = static_cast<double>(sample.size());
     const Instrument* I = instrumentOf(v);
     const double pitch = clampPeriod(v.outPeriod - v.pitchOff + (v.autoDelta ? (linear_ ? -v.autoDelta : v.autoDelta) : 0));
@@ -709,8 +773,8 @@ private:
     const bool pingpong = looping && (useSus ? S->spp : S->pp);
     const double span = le - ls, top = le - 1;
     if (!pingpong) v.dir = 1;
-    const bool stereo = it3_ && !S->msg->right.empty();
-    const std::vector<float>& rightData = S->msg->right;
+    const bool stereo = it3_ && !S->right->empty();
+    const std::vector<float>& rightData = *S->right;
     const double xf = it3_ && looping && !pingpong ? (useSus ? S->sxf : S->xf) : 0;
     const Reader readLeft{sample, interpolate, pingpong, looping, ls, le, span, top, len};
     const Reader readRight{rightData, interpolate, pingpong, looping, ls, le, span, top, len};
