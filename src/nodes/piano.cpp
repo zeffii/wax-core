@@ -11,6 +11,8 @@
 //             pressing on a rigid string, so a hard blow is shorter, sharper and brighter. 0 is the plain pulse, 1 is all physics.
 //   board     the soundboard as short, damped resonances from 90 Hz to 5 kHz (32; 12 at quality eco). 0 leaves them out.
 //   knock     the damper felt's tick when a key comes up.
+//   muffle    the wood takes the edge off the percussive part: the attack goes through a lowpass that starts dark and opens
+//             over some 25 ms. 0 is off.
 //   body      three broad resonances below 600 Hz, and a soft thump of the hammer on the keybed.
 //   damper    note off lets the damper fall on the strings, over `release` ms, unless the pedal is down.
 //
@@ -27,7 +29,7 @@
 namespace wax {
 namespace {
 
-enum Param { kDecay = 0, kPrompt, kHard, kPos, kBright, kInharm, kDetune, kBody, kThump, kWidth, kPedal, kRelease, kTune, kVel, kLevel, kFelt, kBoard, kKnock, kQuality };
+enum Param { kDecay = 0, kPrompt, kHard, kPos, kBright, kInharm, kDetune, kBody, kThump, kWidth, kPedal, kRelease, kTune, kVel, kLevel, kFelt, kBoard, kKnock, kMuffle, kQuality };
 
 constexpr int kSize = 1 << 14, kMask = kSize - 1, kSections = 3, kMaxStr = 3;
 
@@ -148,7 +150,7 @@ public:
     if (pending_) { pending_ = false; strike(g, pitchOn_ ? inputs[0][0] : 0.0); }
     if (keyUp_ && !damped_ && g(kPedal) < 0.5) { damped_ = true; knockEnv_ = 1; }   // the damper falls, or the pedal comes up
     const double level = g(kLevel) * 2, body = g(kBody);
-    const double boardAmount = g(kBoard);
+    const double muffle = g(kMuffle), boardAmount = g(kBoard);
     const int modes = g(kQuality) >= 0.5 ? 12 : kBoardModes;
     const double stride = static_cast<double>(kBoardModes) / modes;
     for (int s = 0; s < ns_; s++) gs_[s] = loop_[s] * (damped_ ? damp_[s] : 1);
@@ -185,7 +187,12 @@ public:
       // the damper's tick: softer, shorter noise than the hammer's thump
       double tick = 0;
       if (knockEnv_ > 1e-4) { knockLp_ += 0.5 * (rand() - knockLp_); tick = knockLp_ * knockEnv_ * knockAmp_; knockEnv_ *= 0.9965; }
-      const double dry = sum + t + tick;
+      double dry = sum + t + tick;
+      if (muffle > 0) {   // one pole lowpass, fully open (coefficient 1) once the envelope has gone
+        muffleState_ += (1 - muffle * muffleEnv_ * 0.92) * (dry - muffleState_);
+        muffleEnv_ *= muffleDecay_;
+        dry = muffleState_;
+      }
       double resonance = 0;
       static const double bodyGain[3] = {0.9, 0.7, 0.45};
       for (int r = 0; r < 3; r++) {
@@ -297,7 +304,7 @@ private:
     }
     k_ = 0; strikeEnd_ = std::max(Lc_, static_cast<double>(pulseLen_)) + dpos_ + 1;
     for (BoardMode& m : board_) m.x1 = m.x2 = m.y1 = m.y2 = 0;
-    knockEnv_ = 0; knockLp_ = 0;
+    knockEnv_ = 0; knockLp_ = 0; muffleEnv_ = 1; muffleState_ = 0; muffleDecay_ = js::exp(-1 / (0.025 * fs));
     knockAmp_ = g(kKnock) * vm * vm * 0.08;
     thumpEnv_ = 1; thumpDecay_ = js::exp(-1 / (0.012 * fs)); thumpAmp_ = g(kThump) * vm * vm * 0.5;
     const double pos = 0.5 + (pf - 0.5) * g(kWidth);
@@ -329,6 +336,7 @@ private:
   double pulseAmp_ = 0, felt_ = 0;
   BoardMode board_[kBoardModes] = {};
   double knockEnv_ = 0, knockAmp_ = 0, knockLp_ = 0;
+  double muffleEnv_ = 0, muffleState_ = 0, muffleDecay_ = 0;
 };
 
 }  // namespace
@@ -358,6 +366,7 @@ void registerPiano(NodeRegistry& registry) {
     {"felt", 0, 1, 0},             // 0: the plain half-sine pulse, 1: the felt hammer model
     {"board", 0, 1, 0},            // the soundboard's resonances
     {"knock", 0, 1, 0},            // the damper's tick on note off
+    {"muffle", 0, 1, 0},           // how dull the first moments are
     {"quality", 0, 1, 0, true},    // 0 standard, 1 eco
   };
   type.create = [](const NodeContext& context) { return std::make_unique<Piano>(context); };
