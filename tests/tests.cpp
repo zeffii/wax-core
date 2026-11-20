@@ -2003,6 +2003,7 @@ int main(int argc, char** argv) {
   testRenderSong("itchantrack");
   testRenderSong("pianofelt");
   testRenderSong("pianostrike");
+  testRenderSong("padsynth");
   testXmImport();
   testItImport();
   testRenderSong("compass");

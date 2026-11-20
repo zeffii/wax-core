@@ -101,6 +101,8 @@ const NodeRegistry& builtinNodes() {
     registerString(r);
     registerWavetable(r);
     registerAddSynth(r);
+    registerPadSynth(r);
+    registerSpreadOsc(r);
     registerArp(r);
     registerSpecPan(r);
     registerBlur(r);

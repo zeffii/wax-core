@@ -107,7 +107,7 @@ void SDLCALL dialogDone(void* userdata, const char* const* files, int) {
 }
 
 struct Options {
-  std::string path, screenshot, press, clicks, envelope, dxnode, vectornode, genexprnode, screen, theme;   // clicks: "x,y;x,y" mouse clicks, one every 6 frames; envelope: "instrument.node" opens its envelope window   // press: keys to press one after another (for checking the window without a keyboard)
+  std::string path, screenshot, press, clicks, drag, envelope, dxnode, vectornode, genexprnode, screen, theme;   // clicks: "x,y;x,y" mouse clicks, one every 6 frames; envelope: "instrument.node" opens its envelope window   // press: keys to press one after another (for checking the window without a keyboard)
   double rate = 48000;
   int threads = 0, midiPort = 0, frames = 3, playFrom = -1, buffer = 0;
   bool useNull = false;
@@ -1812,6 +1812,17 @@ void feedClicks(const std::string& script, int frame) {
   if (phase == 4) io.AddMouseButtonEvent(buttons[static_cast<std::size_t>(index)], false);
 }
 
+// "x1,y1;x2,y2" -> the mouse goes to the first place, presses, moves to the second over six frames and stays pressed (a screenshot then shows
+// a drag in progress).
+void feedDrag(const std::string& script, int frame) {
+  float x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+  if (std::sscanf(script.c_str(), "%f,%f;%f,%f", &x1, &y1, &x2, &y2) != 4) return;
+  ImGuiIO& io = ImGui::GetIO();
+  if (frame == 0) io.AddMousePosEvent(x1, y1);
+  if (frame == 2) io.AddMouseButtonEvent(0, true);
+  if (frame >= 4 && frame <= 10) { const float t = std::min(1.0f, (frame - 4) / 6.0f); io.AddMousePosEvent(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t); }
+}
+
 void feedKeys(const std::string& script, int frame) {
   std::vector<std::string> keys;
   std::stringstream stream(script);
@@ -1846,6 +1857,7 @@ bool parse(int argc, char** argv, Options& o) {
     else if (a == "--screenshot" && more) o.screenshot = argv[++i];
     else if (a == "--press" && more) o.press = argv[++i];
     else if (a == "--clicks" && more) o.clicks = argv[++i];
+    else if (a == "--drag" && more) o.drag = argv[++i];
     else if (a == "--envelope" && more) o.envelope = argv[++i];
     else if (a == "--dx" && more) o.dxnode = argv[++i];
     else if (a == "--vector" && more) o.vectornode = argv[++i];
@@ -1965,6 +1977,7 @@ int main(int argc, char** argv) {
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     if (!options.clicks.empty() && frame >= 4) feedClicks(options.clicks, frame - 4);
+    if (!options.drag.empty() && frame >= 4) feedDrag(options.drag, frame - 4);
     if (!options.dxnode.empty() && frame == 3 && session) {
       const std::size_t dot = options.dxnode.find('.');
       app::showDx(session->dx, options.dxnode.substr(0, dot), options.dxnode.substr(dot + 1));

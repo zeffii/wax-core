@@ -111,6 +111,8 @@ void registerPhaser(NodeRegistry& registry);   // phaser
 void registerSpecPan(NodeRegistry& registry);   // specpan
 void registerBlur(NodeRegistry& registry);   // blur
 void registerAddSynth(NodeRegistry& registry);   // addsynth
+void registerPadSynth(NodeRegistry& registry);   // padsynth
+void registerSpreadOsc(NodeRegistry& registry);   // spreadosc
 void registerArp(NodeRegistry& registry);   // arp
 void registerTape(NodeRegistry& registry);   // tape
 void registerString(NodeRegistry& registry);   // string

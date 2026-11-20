@@ -100,6 +100,9 @@ add_library(waxcore
   src/nodes/string.cpp
   src/nodes/wavetable.cpp
   src/nodes/addsynth.cpp
+  src/nodes/padcore.cpp
+  src/nodes/padsynth.cpp
+  src/nodes/spreadosc.cpp
   src/nodes/arp.cpp
   src/nodes/specpan.cpp
   src/nodes/blur.cpp

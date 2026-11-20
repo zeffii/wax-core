@@ -1,0 +1,19 @@
+{
+  "song": "padsynth.wax",
+  "version": "0.823.0",
+  "sampleRate": 44100,
+  "frames": 705664,
+  "seconds": 16.001,
+  "peak": 1.184397,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "d027b4a29e6372b18232eb6cfbf8eb549f7e3d88f60adae89302dda318ef2007",
+  "nodeTypes": [
+    "bus-in",
+    "out",
+    "padsynth",
+    "spreadosc",
+    "tempo",
+    "voices"
+  ]
+}
