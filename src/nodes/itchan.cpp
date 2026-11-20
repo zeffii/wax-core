@@ -28,6 +28,7 @@ enum Param { kIns = 0, kVcol, kFx, kLevel, kInterp };
 const int kSine[32] = {0, 24, 49, 74, 97, 120, 141, 161, 180, 197, 212, 224, 235, 244, 250, 253, 255, 253, 250, 244, 235, 224, 212, 197, 180, 161, 141, 120, 97, 74, 49, 24};
 constexpr int kMidiC0 = 12;            // a note's MIDI number for C-0
 constexpr int kC5 = 60;                // the note a sample plays at its own rate (IT note numbers count from C-0)
+constexpr double kCutQuiet = 1e-5;   // below this gain a voice that is cut is not worth letting down
 constexpr std::size_t kMaxBack = 31;   // background voices
 constexpr double kMaxPeriod = 32000;
 constexpr double kFadeFull = 65536;    // the fadeout volume of a new note; every tick of a fade takes 64 times the instrument's fadeout
@@ -125,6 +126,7 @@ struct Voice {
   int vol = 64, outVol = 64, pan = 32;
   double gain = 0;
   bool keyOn = true, fading = false;
+  bool cutting = false;   // let down to silence in a few milliseconds (a note cut by a new one), then ended
   double fadeVol = kFadeFull, volEnvPos = 0, panEnvPos = 0, pitEnvPos = 0;
   int autoPos = 0, autoAmp = 0;
   int cut = 127, res = 0;
@@ -415,9 +417,10 @@ private:
     if (host_.active) {
       const Instrument* old = instrumentOf(host_);
       const int action = nnaOverride_ >= 0 ? nnaOverride_ : old ? old->nna : 0;
-      if (action != 0) {
+      // a note cut by the new one is let down to silence in a few milliseconds, as a background voice, rather than stopped in mid-wave (a click)
+      if (action != 0 || host_.gain > kCutQuiet) {
         Voice bg = host_;
-        if (action == 2) keyOffVoice(bg); else if (action == 3) bg.fading = true;
+        if (action == 0) bg.cutting = true; else if (action == 2) keyOffVoice(bg); else if (action == 3) bg.fading = true;
         back_.push_back(bg);
         if (back_.size() > kMaxBack) back_.erase(back_.begin());
       }
@@ -784,7 +787,7 @@ private:
     const int panned = clampPan(pan + (v.envPan - 32) * (32 - std::abs(pan - 32)) / 32);
     const double gl = std::min(1.0, (64 - panned) / 32.0), gr = std::min(1.0, panned / 32.0);
     const int outVol = isHost ? v.outVol : v.vol;
-    const double goal = (isHost && !tremorOn_) ? 0
+    const double goal = v.cutting || (isHost && !tremorOn_) ? 0
         : outVol / 64.0 * chanVol_ / 64 * S->globalVolume * (I ? I->gbv / 128 : 1.0) * v.envVol / 64 * v.fadeVol / kFadeFull * level;
     const bool useSus = v.keyOn && S->sus, mainLoop = S->loop;
     const bool tracked = useSus && S->strackMode != 0;   // the sustain loop as this note's pitch makes it
@@ -831,6 +834,7 @@ private:
         if (stereo) sr = sr * wa + readRight(p - span) * wb;
       }
       v.gain += (goal - v.gain) * 0.02;
+      if (v.cutting && v.gain < kCutQuiet) { v.active = false; break; }
       double l = sl * v.gain * gl, r = sr * v.gain * gr;
       if (filterOn) {
         const double fl = l * fg + y[0] * fb0 + y[1] * fb1; y[1] = y[0]; y[0] = fl; l = fl;

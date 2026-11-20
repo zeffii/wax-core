@@ -1,13 +1,13 @@
 {
   "song": "itchanrate.wax",
-  "version": "0.801.0",
+  "version": "0.803.0",
   "sampleRate": 44100,
   "frames": 642688,
   "seconds": 14.573,
   "peak": 1.489844,
   "tail": 6,
   "seed": 2654435769,
-  "sha256": "21cb942383e306b98171b041affcf10683d0ad3a89ac6dcc45c808ffcfa8c85c",
+  "sha256": "05e37d19b1801050dbb7a87204212ba44dbddeb4271ad24f58a71620419522a2",
   "nodeTypes": [
     "bus-in",
     "itchan",
