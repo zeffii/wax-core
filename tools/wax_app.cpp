@@ -1898,7 +1898,7 @@ int main(int argc, char** argv) {
   app::loadSettings();   // (before the window: it opens at the size it had when it was last closed)
   SDL_Window* window = SDL_CreateWindow("Wax", app::settings().windowWidth, app::settings().windowHeight, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | (app::settings().windowMaximised ? SDL_WINDOW_MAXIMIZED : 0));
   SDL_Renderer* renderer = window ? SDL_CreateRenderer(window, nullptr) : nullptr;
-  if (renderer) app::iconsInit(renderer);
+  if (renderer) { app::iconsInit(renderer); app::setWindowIcon(window, "wax-icon"); }
   if (!renderer) {
     std::printf("SDL: %s\n", SDL_GetError());
     return 2;

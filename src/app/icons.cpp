@@ -97,6 +97,22 @@ ImTextureID pixelTexture(const std::string& key, const unsigned char* rgba, int 
 
 void iconsInit(SDL_Renderer* renderer) { gRenderer = renderer; }
 
+void setWindowIcon(SDL_Window* window, const char* name) {
+  constexpr int kPixels = 256;
+  NSVGimage* image = nsvgParseFromFile((std::string(WAX_ICON_DIR) + "/" + name + ".svg").c_str(), "px", 96.0f);
+  if (!image) return;
+  NSVGrasterizer* rasterizer = nsvgCreateRasterizer();
+  SDL_Surface* surface = SDL_CreateSurface(kPixels, kPixels, SDL_PIXELFORMAT_RGBA32);
+  if (surface) {
+    SDL_memset(surface->pixels, 0, static_cast<std::size_t>(surface->pitch) * kPixels);
+    nsvgRasterize(rasterizer, image, 0, 0, static_cast<float>(kPixels) / std::max(image->width, image->height), static_cast<unsigned char*>(surface->pixels), kPixels, kPixels, surface->pitch);
+    SDL_SetWindowIcon(window, surface);
+    SDL_DestroySurface(surface);
+  }
+  nsvgDeleteRasterizer(rasterizer);
+  nsvgDelete(image);
+}
+
 void iconsShutdown() {
   for (auto& [key, texture] : gTextures) if (texture) SDL_DestroyTexture(texture);
   gTextures.clear();

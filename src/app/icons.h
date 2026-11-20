@@ -7,12 +7,16 @@
 #include "imgui.h"
 
 struct SDL_Renderer;
+struct SDL_Window;
 
 namespace wax::app {
 
 // Gives the icons the renderer their textures are made with. Call once after it is created, and iconsShutdown before it is destroyed.
 void iconsInit(SDL_Renderer* renderer);
 void iconsShutdown();
+
+// The program icon of the window (art/icons/<name>.svg, in its own colours), for the taskbar and title bar.
+void setWindowIcon(SDL_Window* window, const char* name);
 
 // An icon as a button: `name` is the file name without .svg ("arrange", "play"); `size` in points (scaled with the window).
 // `tip` shows when hovered. True when clicked. A name with no file shows its text instead.

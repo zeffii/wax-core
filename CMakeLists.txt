@@ -320,6 +320,11 @@ if(WAX_LIVE)
     target_include_directories(wax-app PRIVATE third_party/imgui third_party)
     target_compile_definitions(wax-app PRIVATE WAX_ICON_DIR="${CMAKE_SOURCE_DIR}/art/icons")
     target_link_libraries(wax-app PRIVATE waxcore waxlive waximgui)
+    if(WIN32)
+      # The program icon in Explorer and the taskbar (art/wax.ico, made by art/make_ico.py).
+      enable_language(RC)
+      target_sources(wax-app PRIVATE art/wax.rc)
+    endif()
     if(MSVC)
       # No console window behind the app, but keep main().
       set_target_properties(wax-app PROPERTIES WIN32_EXECUTABLE ON)
