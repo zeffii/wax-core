@@ -13,6 +13,8 @@
 //   knock     the damper felt's tick when a key comes up.
 //   muffle    the wood takes the edge off the percussive part: the attack goes through a lowpass that starts dark and opens
 //             over some 25 ms. 0 is off.
+//   scatter   the felt dissipates the blow unevenly: the muffle's opening is jagged, a correlated random wobble of the cutoff
+//             that dies away with the attack. 0 is the smooth rise.
 //   body      three broad resonances below 600 Hz, and a soft thump of the hammer on the keybed.
 //   damper    note off lets the damper fall on the strings, over `release` ms, unless the pedal is down.
 //
@@ -29,7 +31,7 @@
 namespace wax {
 namespace {
 
-enum Param { kDecay = 0, kPrompt, kHard, kPos, kBright, kInharm, kDetune, kBody, kThump, kWidth, kPedal, kRelease, kTune, kVel, kLevel, kFelt, kBoard, kKnock, kMuffle, kQuality };
+enum Param { kDecay = 0, kPrompt, kHard, kPos, kBright, kInharm, kDetune, kBody, kThump, kWidth, kPedal, kRelease, kTune, kVel, kLevel, kFelt, kBoard, kKnock, kMuffle, kScatter, kQuality };
 
 constexpr int kSize = 1 << 14, kMask = kSize - 1, kSections = 3, kMaxStr = 3;
 
@@ -150,7 +152,7 @@ public:
     if (pending_) { pending_ = false; strike(g, pitchOn_ ? inputs[0][0] : 0.0); }
     if (keyUp_ && !damped_ && g(kPedal) < 0.5) { damped_ = true; knockEnv_ = 1; }   // the damper falls, or the pedal comes up
     const double level = g(kLevel) * 2, body = g(kBody);
-    const double muffle = g(kMuffle), boardAmount = g(kBoard);
+    const double muffle = g(kMuffle), scatter = g(kScatter), boardAmount = g(kBoard);
     const int modes = g(kQuality) >= 0.5 ? 12 : kBoardModes;
     const double stride = static_cast<double>(kBoardModes) / modes;
     for (int s = 0; s < ns_; s++) gs_[s] = loop_[s] * (damped_ ? damp_[s] : 1);
@@ -189,7 +191,14 @@ public:
       if (knockEnv_ > 1e-4) { knockLp_ += 0.5 * (rand() - knockLp_); tick = knockLp_ * knockEnv_ * knockAmp_; knockEnv_ *= 0.9965; }
       double dry = sum + t + tick;
       if (muffle > 0) {   // one pole lowpass, fully open (coefficient 1) once the envelope has gone
-        muffleState_ += (1 - muffle * muffleEnv_ * 0.92) * (dry - muffleState_);
+        // the darkness is the envelope, wobbled by smoothed noise (its own generator, so the thump is not disturbed)
+        double dark = muffle * muffleEnv_ * 0.92;
+        if (scatter > 0) {
+          scatterSeed_ ^= scatterSeed_ << 13; scatterSeed_ ^= scatterSeed_ >> 17; scatterSeed_ ^= scatterSeed_ << 5;
+          scatterLp_ += 0.08 * (scatterSeed_ / 4294967296.0 * 2 - 1 - scatterLp_);
+          dark = std::min(0.97, dark * std::max(0.0, 1 + scatter * scatterLp_ * 5));
+        }
+        muffleState_ += (1 - dark) * (dry - muffleState_);
         muffleEnv_ *= muffleDecay_;
         dry = muffleState_;
       }
@@ -304,7 +313,7 @@ private:
     }
     k_ = 0; strikeEnd_ = std::max(Lc_, static_cast<double>(pulseLen_)) + dpos_ + 1;
     for (BoardMode& m : board_) m.x1 = m.x2 = m.y1 = m.y2 = 0;
-    knockEnv_ = 0; knockLp_ = 0; muffleEnv_ = 1; muffleState_ = 0; muffleDecay_ = js::exp(-1 / (0.025 * fs));
+    knockEnv_ = 0; knockLp_ = 0; muffleEnv_ = 1; muffleState_ = 0; scatterLp_ = 0; scatterSeed_ = 0x1b873593u; muffleDecay_ = js::exp(-1 / (0.025 * fs));
     knockAmp_ = g(kKnock) * vm * vm * 0.08;
     thumpEnv_ = 1; thumpDecay_ = js::exp(-1 / (0.012 * fs)); thumpAmp_ = g(kThump) * vm * vm * 0.5;
     const double pos = 0.5 + (pf - 0.5) * g(kWidth);
@@ -336,7 +345,8 @@ private:
   double pulseAmp_ = 0, felt_ = 0;
   BoardMode board_[kBoardModes] = {};
   double knockEnv_ = 0, knockAmp_ = 0, knockLp_ = 0;
-  double muffleEnv_ = 0, muffleState_ = 0, muffleDecay_ = 0;
+  double muffleEnv_ = 0, muffleState_ = 0, muffleDecay_ = 0, scatterLp_ = 0;
+  std::uint32_t scatterSeed_ = 0;
 };
 
 }  // namespace
@@ -367,6 +377,7 @@ void registerPiano(NodeRegistry& registry) {
     {"board", 0, 1, 0},            // the soundboard's resonances
     {"knock", 0, 1, 0},            // the damper's tick on note off
     {"muffle", 0, 1, 0},           // how dull the first moments are
+    {"scatter", 0, 1, 0},          // how jagged the muffle's opening is
     {"quality", 0, 1, 0, true},    // 0 standard, 1 eco
   };
   type.create = [](const NodeContext& context) { return std::make_unique<Piano>(context); };
