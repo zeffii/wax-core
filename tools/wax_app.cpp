@@ -262,12 +262,12 @@ struct Session {
   }
 };
 
-// The computer keyboard as a piano: two rows, the lower from C of the octave, the upper an octave higher.
+// The computer keyboard as a piano, the web's piano.js: two rows, the lower from C of the octave, the upper an octave higher (to the P key, two octaves up).
 const ImGuiKey kPianoKeys[] = {
     ImGuiKey_Z, ImGuiKey_S, ImGuiKey_X, ImGuiKey_D, ImGuiKey_C, ImGuiKey_V, ImGuiKey_G, ImGuiKey_B, ImGuiKey_H, ImGuiKey_N,
     ImGuiKey_J, ImGuiKey_M, ImGuiKey_Comma,
     ImGuiKey_Q, ImGuiKey_2, ImGuiKey_W, ImGuiKey_3, ImGuiKey_E, ImGuiKey_R, ImGuiKey_5, ImGuiKey_T, ImGuiKey_6, ImGuiKey_Y,
-    ImGuiKey_7, ImGuiKey_U, ImGuiKey_I};
+    ImGuiKey_7, ImGuiKey_U, ImGuiKey_I, ImGuiKey_9, ImGuiKey_O, ImGuiKey_0, ImGuiKey_P};
 
 void drawMeter(const char* id, float level, ImVec2 size) {
   ImDrawList* draw = ImGui::GetWindowDrawList();
@@ -676,7 +676,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   const bool menuOpen = ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);   // a menu has the keys while it is open
   if (!io.WantTextInput && !menuOpen) {
     if (ImGui::IsKeyPressed(ImGuiKey_LeftBracket, false)) octave = std::max(0, octave - 1);
-    if (ImGui::IsKeyPressed(ImGuiKey_RightBracket, false)) octave = std::min(8, octave + 1);
+    if (ImGui::IsKeyPressed(ImGuiKey_RightBracket, false)) octave = std::min(9, octave + 1);
     if (ImGui::IsKeyPressed(ImGuiKey_Pause, false)) {   // pause, or carry on from the pause
       if (player.playing()) { session->pausedAt = player.tick(); player.ring().push({LiveCommand::Stop, 0, 1}); }
       else if (session->pausedAt >= 0) { player.ring().push({LiveCommand::Play, session->pausedAt, 1}); session->pausedAt = -1; }
@@ -915,7 +915,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       for (int i = 0; i < static_cast<int>(sizeof kPianoKeys / sizeof kPianoKeys[0]); i++) {
         const ImGuiKey key = kPianoKeys[i];
         if (ImGui::IsKeyPressed(key, false) && !io.KeyCtrl && !io.KeyAlt && !io.KeyShift) {   // (Shift+letter is a command, e.g. Shift+I: the machine menu)
-          const int note = std::clamp(12 * (octave + 1) + i, 0, 127);
+          const int note = 12 * (octave + 1) + i;
+          if (note > 127) { session->editStatus = "Note out of range."; continue; }   // (as the web: nothing is entered)
           const bool entering = typing && editor.onNoteCell();   // the key puts a note in the grid
           held[key] = note;
           if (!entering || app::settings().notePreview) player.ring().push({LiveCommand::NoteOn, note, 0.8});   // (Note preview off: entering is silent)
@@ -2061,7 +2062,7 @@ int main(int argc, char** argv) {
   float meterL = 0, meterR = 0;
   bool titleUnsaved = false;
   std::map<ImGuiKey, int> held;
-  int octave = 4, playFromRequest = -1, frame = 0;
+  int octave = 3, playFromRequest = -1, frame = 0;
   std::string selectedLane;
   bool follow = app::settings().follow, running = true;
   bool showSplash = options.splash && (options.splashForced || (options.screenshot.empty() && !options.useNull));
