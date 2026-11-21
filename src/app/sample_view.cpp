@@ -367,6 +367,17 @@ bool drawSampleScreen(SampleView& v, Document& document, Preview& preview, float
     const float x0 = frameToX(r.start), x1 = frameToX(r.end);
     const bool on = r.sustain ? loopActive(s, true) : loopActive(s, false);
     draw->AddRectFilled(ImVec2(x0, origin.y), ImVec2(x1, origin.y + size.y), (r.colour & 0x00ffffff) | (static_cast<ImU32>(on ? 45 : 18) << 24));
+    // The edges of the region are lines, and they grow thicker with the crossfade: the start's reaches back over the audio that is blended in
+    // (the frames before the start), the end's over the last frames of the loop that are blended with it. No crossfade: a thin line each.
+    const float fade = std::min(s.number(r.sustain ? "susXfade" : "loopXfade"), static_cast<double>(std::min(r.start, r.end - r.start)));
+    const float fadeWidth = fade > 0 ? std::max(0.0f, frameToX(r.start) - frameToX(r.start - static_cast<int>(fade))) : 0.0f;
+    const float line = 2.0f * scale, thick = std::max(line, fadeWidth);
+    const ImU32 edge = (r.colour & 0x00ffffff) | (static_cast<ImU32>(on ? 230 : 90) << 24);
+    const ImU32 soft = (r.colour & 0x00ffffff) | (static_cast<ImU32>(on ? 110 : 50) << 24);   // (the crossfade's reach is paler than the line itself)
+    draw->AddRectFilled(ImVec2(x0 - (thick - line), origin.y), ImVec2(x0, origin.y + size.y), soft);
+    draw->AddRectFilled(ImVec2(x1 - thick, origin.y), ImVec2(x1 - line, origin.y + size.y), soft);
+    draw->AddRectFilled(ImVec2(x0, origin.y), ImVec2(x0 + line, origin.y + size.y), edge);
+    draw->AddRectFilled(ImVec2(x1 - line, origin.y), ImVec2(x1, origin.y + size.y), edge);
   }
   // the selection: shaded in the theme's text colour (so it shows on light themes too) with a line at each edge
   const auto shade = [&](int from, int to) {
