@@ -284,3 +284,6 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 ## Pad synth (native)
 - `padsynth` and `spreadosc` are ported from the web with bit-exact output (tests/songs/padsynth). Both share `padcore` (PADsynth table build); settings changes are heard from the next note.
 - `wax-app --drag "x1,y1;x2,y2"` holds a mouse drag for screenshots (graph wiring and tile-onto-wire checks).
+
+## Pattern editor right-click menu (gaps)
+The menu has the web's items. These are stubs that only say so in the status line: Interpolate (Ctrl+I), Randomize (Ctrl+R, with Alt+R to roll again), Chord palette (Alt+C), "What does XX do?" (command help), Machine help (Ctrl+Alt+H).

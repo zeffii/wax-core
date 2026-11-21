@@ -370,6 +370,50 @@ Project blankProject() {
   return parseProject(kBlank);
 }
 
+// The pattern editor's right-click menu (the web's items, with this app's keys). What is not in this app yet is a stub that says so.
+void drawPatternMenu(Session* session, Document& doc, Player& player) {
+  if (!ImGui::BeginPopup("patternmenu")) return;
+  CellEditor& editor = *session->editor;
+  const std::vector<Column> columns = player.engine().laneColumns(editor.lane());
+  const CellEditor::Selection sel = editor.selection();
+  const int from = sel.active ? std::min(sel.cell0, sel.cell1) : editor.cell(), to = sel.active ? std::max(sel.cell0, sel.cell1) : editor.cell();
+  bool hasNotes = false;
+  for (int c = from; c <= to && c < static_cast<int>(columns.size()); c++) hasNotes |= columns[static_cast<std::size_t>(c)].kind == ColumnKind::Note;
+  const char* up = hasNotes ? "Transpose up" : "Values up";
+  const char* down = hasNotes ? "Transpose down" : "Values down";
+  const float width = app::menuWidth({{"Cut", "Ctrl+X"}, {"Paste", "Ctrl+V"}, {"Transpose down", "Alt+Up"}, {"Values down", "Ctrl+,"}, {"Down an octave", "Alt+Shift+Down"}, {"Interpolate...", "Ctrl+I"}, {"Chord palette...", "Alt+C"}, {"Machine help", "Ctrl+Alt+H"}});
+  bool changed = false;
+  const auto stub = [&](const char* what) { session->editStatus = std::string(what) + " is not in this app yet."; ImGui::CloseCurrentPopup(); };
+  if (app::menuRow("Cut", "Ctrl+X", width)) { ImGui::SetClipboardText(editor.copy().c_str()); changed |= editor.cut(); ImGui::CloseCurrentPopup(); }
+  if (app::menuRow("Copy", "Ctrl+C", width)) { ImGui::SetClipboardText(editor.copy().c_str()); ImGui::CloseCurrentPopup(); }
+  if (app::menuRow("Paste", "Ctrl+V", width)) {
+    const char* text = ImGui::GetClipboardText();
+    changed |= (text && *text) ? editor.paste(text) : editor.paste();
+    ImGui::CloseCurrentPopup();
+  }
+  if (app::menuRow("Clear", "Delete", width)) { changed |= editor.clearCell(false); ImGui::CloseCurrentPopup(); }
+  ImGui::Separator();
+  if (app::menuRow(up, hasNotes ? "Alt+Up" : "Ctrl+.", width)) { changed |= editor.transpose(hasNotes, 1, false); ImGui::CloseCurrentPopup(); }
+  if (app::menuRow(down, hasNotes ? "Alt+Down" : "Ctrl+,", width)) { changed |= editor.transpose(hasNotes, -1, false); ImGui::CloseCurrentPopup(); }
+  if (hasNotes) {
+    if (app::menuRow("Up an octave", "Alt+Shift+Up", width)) { changed |= editor.transpose(true, 1, true); ImGui::CloseCurrentPopup(); }
+    if (app::menuRow("Down an octave", "Alt+Shift+Down", width)) { changed |= editor.transpose(true, -1, true); ImGui::CloseCurrentPopup(); }
+  }
+  ImGui::Separator();
+  if (app::menuRow("Interpolate...", "Ctrl+I", width)) stub("Interpolate");
+  if (app::menuRow("Randomize...", "Ctrl+R", width)) stub("Randomize");
+  if (hasNotes && app::menuRow("Chord palette...", "Alt+C", width)) stub("The chord palette");
+  ImGui::Separator();
+  const int at = editor.cell();
+  if (at >= 0 && at < static_cast<int>(columns.size()) && columns[static_cast<std::size_t>(at)].kind == ColumnKind::Cmd && app::menuRow("What does this command do?", "", width)) stub("Command help");
+  if (app::menuRow("Machine help", "Ctrl+Alt+H", width)) stub("Machine help");
+  ImGui::EndPopup();
+  if (changed) {
+    const std::vector<std::string> problems = syncLanes(doc, player.engine());
+    session->editStatus = problems.empty() ? std::string() : problems.front();
+  }
+}
+
 // Ctrl+Alt+Up/Down: one more (+1) or one fewer (-1) Note + Vol pair for the machine of the lane the cursor is in. The last pair only goes when it is
 // empty everywhere in the lane: nothing written is ever thrown away by a key. Returns the message for the status line.
 std::string changeNoteColumns(Session* session, Document& doc, Player& player, int direction) {
@@ -1440,6 +1484,21 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         editor.moveTo(result.cellTick, result.cell);
         session->edit = true;   // a click puts the caret there, ready to type
       }
+      if (result.menuCell >= 0 && result.menuLane >= 0) {   // right-click: the caret goes to the cell (a selection the click is inside stays), and a menu offers the usual things
+        const Lane& clicked = *shown[static_cast<std::size_t>(result.menuLane)];
+        if (!(session->solo.on && clicked.id != editor.lane())) {
+          const CellEditor::Selection block = editor.selection();
+          const bool inside = block.active && clicked.id == editor.lane() && result.menuTick >= std::min(block.tick0, block.tick1) && result.menuTick <= std::max(block.tick0, block.tick1) &&
+                              result.menuCell >= std::min(block.cell0, block.cell1) && result.menuCell <= std::max(block.cell0, block.cell1);
+          if (!inside) {
+            if (clicked.id != editor.lane()) { selectedLane = clicked.id; editor.setLane(clicked.id, session->player->engine().laneColumns(clicked.id)); }
+            editor.moveTo(result.menuTick, result.menuCell);
+          }
+          session->edit = true;
+          ImGui::OpenPopup("patternmenu");
+        }
+      }
+      drawPatternMenu(session, doc, player);
     };
     if (app::settings().patternAll) {
       std::vector<const Lane*> shown;
