@@ -370,6 +370,35 @@ Project blankProject() {
   return parseProject(kBlank);
 }
 
+// Ctrl+Alt+Up/Down: one more (+1) or one fewer (-1) Note + Vol pair for the machine of the lane the cursor is in. The last pair only goes when it is
+// empty everywhere in the lane: nothing written is ever thrown away by a key. Returns the message for the status line.
+std::string changeNoteColumns(Session* session, Document& doc, Player& player, int direction) {
+  const std::string laneId = session->editor->lane();
+  const Lane* lane = nullptr;
+  for (const Lane& l : doc.project().lanes) if (l.id == laneId) lane = &l;
+  const Instrument* machine = nullptr;
+  if (lane) for (const Instrument& i : doc.project().instruments) if (i.id == lane->instrument) machine = &i;
+  const std::vector<Column> columns = player.engine().laneColumns(laneId);
+  std::vector<std::size_t> notes;
+  for (std::size_t i = 0; i < columns.size(); i++) if (columns[i].kind == ColumnKind::Note) notes.push_back(i);
+  if (!machine || notes.empty()) return laneId + " has no note columns.";
+  if (direction > 0 && machine->noteColumns >= 8) return "A machine has at most eight note columns.";
+  if (direction < 0) {
+    if (notes.size() < 2) return "A machine keeps at least one note column.";
+    const std::size_t last = notes.back();
+    const bool hasVel = last + 1 < columns.size() && columns[last + 1].kind == ColumnKind::Vel;
+    for (const std::vector<std::string>& row : session->rows[laneId]) {
+      for (const std::size_t c : {last, last + 1}) {
+        if (c == last + 1 && !hasVel) continue;
+        if (c < row.size() && row[c].find_first_not_of('.') != std::string::npos) return "The last note column has notes in it: clear them first.";
+      }
+    }
+  }
+  doc.apply(std::make_unique<SetNoteColumns>(machine->id, machine->noteColumns + direction));
+  const std::vector<std::string> problems = syncLanes(doc, player.engine());
+  return problems.empty() ? machine->id + ": " + std::to_string(machine->noteColumns) + (machine->noteColumns == 1 ? " note column." : " note columns.") : problems.front();
+}
+
 void drawFrame(Session* session, const Options& options, const std::string& status, float& meterL, float& meterR, std::map<ImGuiKey, int>& held,
                int& octave, std::string& selectedLane, bool& follow, int& playFromRequest) {
   ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -755,6 +784,9 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       } else if (editor.selection().active) {   // Ctrl+Alt+Up/Down: the selected rows rotate
         if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) edited |= editor.shiftSelection(CellEditor::Shift::RotateUp);
         if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) edited |= editor.shiftSelection(CellEditor::Shift::RotateDown);
+      } else {   // Ctrl+Alt+Up/Down with nothing selected: one more or one fewer Note + Vol pair for the machine of this lane (as the web)
+        const int direction = ImGui::IsKeyPressed(ImGuiKey_UpArrow) ? 1 : ImGui::IsKeyPressed(ImGuiKey_DownArrow) ? -1 : 0;
+        if (direction != 0) session->editStatus = changeNoteColumns(session, doc, player, direction);
       }
       if (before != editor.tick() * 4096 + editor.cell() || edited) session->scrollToCursor = true;
     }
