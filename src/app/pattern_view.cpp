@@ -204,8 +204,8 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
             if (dimmed) ImGui::PopStyleColor();
             continue;
           }
-          ImGui::PushID(tick * 4096 + firstColumn[li] + c);
-          if (ImGui::Selectable(filled ? cells[static_cast<std::size_t>(c)].c_str() : "   ", false, ImGuiSelectableFlags_None)) { result.cellTick = tick; result.cell = c; result.lane = static_cast<int>(li); }
+          ImGui::PushID(tick * 4096 + firstColumn[li] + c);   // (a cell is picked at the press, as the web does: rows that scroll under the mouse cannot lose the click)
+          if (ImGui::Selectable(filled ? cells[static_cast<std::size_t>(c)].c_str() : "   ", false, ImGuiSelectableFlags_SelectOnClick)) { result.cellTick = tick; result.cell = c; result.lane = static_cast<int>(li); }
           ImGui::PopID();
           if (dimmed) ImGui::PopStyleColor();
         }
