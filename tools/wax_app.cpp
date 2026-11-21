@@ -1406,6 +1406,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         if (clicked.id != editor.lane()) { selectedLane = clicked.id; editor.setLane(clicked.id, session->player->engine().laneColumns(clicked.id)); }
         editor.moveTo(result.cellTick, result.cell);
         session->edit = true;   // a click puts the caret there, ready to type
+        if (follow && playing) { follow = false; session->editStatus = "Follow off while you edit: F9 follows again."; }   // (as the web: the pattern being edited stays on screen)
       }
     };
     if (app::settings().patternAll) {
