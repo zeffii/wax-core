@@ -1620,7 +1620,9 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   // The keys play the machine being worked on: the lane's machine, or the one picked in the browser.
   if (!laneInstrument.empty() && laneInstrument != session->keyjazzInstrument &&
       std::find(session->playable.begin(), session->playable.end(), laneInstrument) != session->playable.end()) {
-    player.ring().push({LiveCommand::AllOff, 0, 0});
+    // Only the keys held down are let go (on the machine they were played on): AllOff would also cut what the song is playing on it.
+    for (const auto& [key, note] : held) player.ring().push({LiveCommand::NoteOff, note, 0});
+    held.clear();
     session->keyjazzInstrument = laneInstrument;
     player.setInstrument(laneInstrument);
   }
