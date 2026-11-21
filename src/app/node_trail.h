@@ -20,6 +20,7 @@ struct NodeTrailState {
   bool dragging = false;        // the mouse has moved far enough from the press for it to be a drag
   bool bankOpen = false;        // the bank of all the nodes is showing
   float bankScroll = 0;         // how far it is scrolled, in pixels
+  bool bankBarDrag = false;     // the bank's scrollbar thumb is being dragged
   ImVec2 bankMin{0, 0}, bankMax{0, 0};   // where it was drawn last frame (empty when closed), so the graph can leave clicks there alone
   bool over(ImVec2 point) const { return bankOpen && point.x >= bankMin.x && point.x <= bankMax.x && point.y >= bankMin.y && point.y <= bankMax.y; }
 };

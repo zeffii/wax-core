@@ -35,6 +35,10 @@ struct NodeStripResult {
   bool dataChanged = false;     // a drawing was changed: the caller runs syncData
 };
 
+// How tall the strip is over a graph area `areaHeight` high (web pixels times the scale, i.e. screen pixels): 0 when the instrument has no node UIs,
+// the grip alone when the strip is pulled down. The graph keeps its own overlays (the node bank) above this line.
+float nodeStripHeight(const Document& doc, const std::string& instrumentId, float areaHeight);
+
 // Whether a node of this type has a UI the strip shows.
 bool hasStripUi(const std::string& nodeType);
 

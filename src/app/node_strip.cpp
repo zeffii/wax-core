@@ -94,6 +94,18 @@ bool hasStripUi(const std::string& nodeType) {
   return nodeType != "out" && (hasPicture(nodeType) || hasResponse(nodeType) || hasEditorWindow(nodeType));
 }
 
+float nodeStripHeight(const Document& doc, const std::string& instrumentId, float areaHeight) {
+  const NodeRegistry& types = builtinNodes();
+  for (const Instrument& instrument : doc.project().instruments) {
+    if (instrument.id != instrumentId) continue;
+    const bool any = std::any_of(instrument.graph.nodes.begin(), instrument.graph.nodes.end(), [&](const GraphNode& n) { return types.find(n.type) && hasStripUi(n.type); });
+    if (!any) return 0;
+    const float scale = ImGui::GetStyle().FontScaleDpi;
+    return settings().stripShown ? std::min(settings().stripHeight * scale, areaHeight * 0.9f) : kGripHeight * scale;
+  }
+  return 0;
+}
+
 NodeStripResult drawNodeStrip(NodeStripState& state, ParamPanelState& panel, Document& doc, const Engine& engine, const std::string& instrumentId, ImVec2 areaMin, ImVec2 areaMax,
                               const std::function<std::shared_ptr<SpectrumProbe>(const std::string& instrument, const std::string& node)>& probeOf) {
   NodeStripResult result;

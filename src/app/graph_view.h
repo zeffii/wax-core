@@ -42,6 +42,7 @@ struct GraphViewState {
   std::string hoverKey;      // the port the mouse rests on (with its side), and which of its wires Tab has lit
   int pickWire = 0;
   std::set<std::string> group;   // nodes picked together (lasso, or Shift+click): they move, duplicate and go as one
+  float bottomInset = 0;     // screen pixels at the bottom the node strip covers: the node bank stops above it (set by the caller each frame)
   bool tileClicked = false;  // a tile was clicked this frame
   bool tileDoubleClicked = false;   // a tile was double-clicked this frame (the caller shows its parameter window)
   std::string lastPicked;    // the node picked before the last click (a Shift+click starts the group from it)

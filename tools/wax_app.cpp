@@ -1573,6 +1573,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     laneInstrument = session->instrument;
     ImGui::BeginChild("instmain", ImVec2(0, 0), false);
     if (session->panel.instrument != laneInstrument) { session->panel.instrument = laneInstrument; session->panel.node.clear(); }
+    session->graphView.bottomInset = app::nodeStripHeight(doc, laneInstrument, ImGui::GetContentRegionAvail().y);
     session->graphView.dockMin = session->panel.dock.min; session->graphView.dockMax = session->panel.dock.max;
     session->graphView.probeOf = [&](const std::string& instrument, const std::string& node) { return session->player->engine().runtime().probe(instrument, node); };
     app::drawGraphView(session->graphView, doc, laneInstrument, session->panel.node, 0);

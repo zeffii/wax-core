@@ -659,7 +659,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     std::string dragType;
     std::set<std::string> trailAvailable;
     for (const std::string& name : types.typeNames()) if (name != "out" && name != "tempo") trailAvailable.insert(name);
-    const TrailEvent event = drawNodeTrail(state.trail, dl, areaMin, areaMax, scale, dragType, trailAvailable);
+    const TrailEvent event = drawNodeTrail(state.trail, dl, areaMin, ImVec2(areaMax.x, areaMax.y - state.bottomInset), scale, dragType, trailAvailable);
     if (event.kind != TrailEvent::Kind::None) {
       const ImVec2 where = event.kind == TrailEvent::Kind::Drop ? event.at : ImVec2((areaMin.x + areaMax.x) / 2, (areaMin.y + areaMax.y) / 2);
       const NodeType* type = types.find(event.type);
