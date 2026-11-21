@@ -287,3 +287,5 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 
 ## Pattern editor right-click menu (gaps)
 The menu has the web's items. These are stubs that only say so in the status line: Interpolate (Ctrl+I), Randomize (Ctrl+R, with Alt+R to roll again), Chord palette (Alt+C), "What does XX do?" (command help), Machine help (Ctrl+Alt+H).
+
+- Row remap: adding a note column now pads the placed patterns (SetNoteColumns). Exposing or removing parameters, and trigger columns, likely have the same gap (rows keep the old cell count); check and give them the same treatment.

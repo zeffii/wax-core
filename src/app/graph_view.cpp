@@ -557,14 +557,15 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     ImGui::SetCursorScreenPos(t.min);
     ImGui::PushID(n.id.c_str());
     ImGui::InvisibleButton("tile", ImVec2(std::max(1.0f, w), std::max(1.0f, h)));
-    ImGui::PopID();
     pressTile(n, t);
     if (ImGui::IsItemHovered() && hover.node.empty()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     if (n.type != "out" && ImGui::BeginPopupContextItem("tilemenu")) {
-      if (textButton("replace...")) { state.replacing = n.id; openInsertMenu(state.replaceMenu, "replacenode"); ImGui::CloseCurrentPopup(); }
-      if (textButton("delete")) { doc.apply(std::make_unique<DeleteNode>(instrumentId, n.id)); if (picked == n.id) picked.clear(); ImGui::CloseCurrentPopup(); ImGui::EndPopup(); ImGui::EndChild(); return true; }
+      if (textButton("extract")) { doc.apply(std::make_unique<ExtractNode>(instrumentId, n.id)); ImGui::CloseCurrentPopup(); }
+      if (textButton("replace with ->")) { state.replacing = n.id; openInsertMenu(state.replaceMenu, "replacenode"); ImGui::CloseCurrentPopup(); }
+      if (textButton("delete")) { doc.apply(std::make_unique<DeleteNode>(instrumentId, n.id)); if (picked == n.id) picked.clear(); ImGui::CloseCurrentPopup(); ImGui::EndPopup(); ImGui::PopID(); ImGui::EndChild(); return true; }
       ImGui::EndPopup();
     }
+    ImGui::PopID();   // (the menu's id is the node's own: one shared id would show every node's entries in whichever menu is open)
   }
 
   // Wiring, as in the web app. Pressing a port with wires (no Shift) picks up a wire by that end once the mouse has moved a little; pressing

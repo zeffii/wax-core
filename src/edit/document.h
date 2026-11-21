@@ -216,6 +216,8 @@ public:
 private:
   std::string instrument_;
   int columns_, old_ = 1;
+  struct Saved { std::size_t lane, pattern; std::vector<std::string> rows; };   // the patterns as they were (undo)
+  std::vector<Saved> before_;
 };
 
 // A parameter shown, or no longer shown, as a pattern column of its instrument (the web's "Expose as pattern column"). A new column gets
@@ -440,6 +442,21 @@ private:
   std::vector<Exposed> exposed_;
   std::vector<Command> commands_;
   Json raw_;
+};
+
+// A node lifted out of its chain and left on the canvas, unwired: whatever fed it is wired to whatever it fed (a -> node -> b becomes a -> b),
+// so the sound still flows. Wires of a parameter port (the "@" ports) cannot be carried across and go with the node. Undo puts every wire back.
+class ExtractNode final : public Edit {
+public:
+  ExtractNode(std::string instrument, std::string node) : instrument_(std::move(instrument)), node_(std::move(node)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Extract " + node_; }
+  std::string graphInstrument() const override { return instrument_; }
+
+private:
+  std::string instrument_, node_;
+  std::vector<Connection> before_;
 };
 
 // A node taken out with its wires; undo puts them back where they were.

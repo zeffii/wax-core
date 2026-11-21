@@ -1280,6 +1280,21 @@ void testInstrumentManage() {
   check(doc.project().instruments[1].noteColumns == 5, "tracks set");
   check(wax::parseProject(wax::serializeProject(doc.project())).instruments[1].noteColumns == 5, "tracks saved");
   doc.undo();
+  {   // a pattern already placed gains blank cells for a new note column, and loses them again
+    const auto placedRows = [&]() {
+      for (const wax::Lane& lane : doc.project().lanes)
+        if (lane.instrument == id && !lane.patterns.empty()) return lane.patterns.front().rows.front();
+      return std::string();
+    };
+    const auto cells = [](const std::string& row) { std::istringstream in(row); std::string c; std::size_t n = 0; while (in >> c) n++; return n; };
+    const std::size_t before = cells(placedRows());
+    if (before > 0) {
+      doc.apply(std::make_unique<wax::SetNoteColumns>(id, doc.project().instruments[1].noteColumns + 1));
+      check(cells(placedRows()) == before + 2, "a new note column adds a note and a velocity cell to placed patterns");
+      doc.undo();
+      check(cells(placedRows()) == before, "undo restores the rows");
+    }
+  }
   {   // a lane for a machine, and a clone of a lane with its machine
     const std::size_t lanes = doc.project().lanes.size();
     doc.apply(std::make_unique<wax::AddLane>(id, "extra"));
@@ -1295,6 +1310,24 @@ void testInstrumentManage() {
       check(empty, "the clone starts empty on its own machine");
       doc.undo();
       check(doc.project().instruments.size() == count && doc.project().lanes.size() == lanes, "clone undone");
+    }
+  }
+  {   // extract: the wires through a node are joined, the node is left unwired; undo restores them
+    const auto lane = std::find_if(doc.project().instruments.begin(), doc.project().instruments.end(), [&](const wax::Instrument& i) { return i.id == id; });
+    if (lane != doc.project().instruments.end()) {
+      for (const wax::GraphNode& node : lane->graph.nodes) {
+        const auto touching = [&](const wax::Instrument& i) { std::size_t n = 0; for (const wax::Connection& c : i.graph.connections) if (c.from.rfind(node.id + ".", 0) == 0 || c.to.rfind(node.id + ".", 0) == 0) n++; return n; };
+        if (node.type != "filter" || touching(*lane) == 0) continue;
+        const std::size_t wires = lane->graph.connections.size();
+        doc.apply(std::make_unique<wax::ExtractNode>(id, node.id));
+        const auto& after = std::find_if(doc.project().instruments.begin(), doc.project().instruments.end(), [&](const wax::Instrument& i) { return i.id == id; })->graph.connections;
+        bool free = true;
+        for (const wax::Connection& c : after) free &= c.from.rfind(node.id + ".", 0) != 0 && c.to.rfind(node.id + ".", 0) != 0;
+        check(free && !after.empty(), "an extracted node has no wires, the chain stays joined");
+        doc.undo();
+        check(std::find_if(doc.project().instruments.begin(), doc.project().instruments.end(), [&](const wax::Instrument& i) { return i.id == id; })->graph.connections.size() == wires, "extract undone");
+        break;
+      }
     }
   }
   std::printf("ok: instrument manage\n");

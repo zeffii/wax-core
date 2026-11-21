@@ -762,14 +762,49 @@ void SetPresets::revert(Project& project) {
   if (old_.is_null()) instrument.raw.erase("presets"); else instrument.raw["presets"] = old_;
 }
 
+// The cells of a row follow their column: a new Note + Vol pair goes in after the last one (blank), a pair taken away leaves with its cells. Rows are text,
+// one word per cell, so the words after the pairs keep their place relative to the columns they belong to.
+static std::string rowWithNoteColumns(const std::string& row, int from, int to, int cellsPerPair) {
+  std::vector<std::string> cells;
+  std::istringstream words(row);
+  for (std::string cell; words >> cell;) cells.push_back(cell);
+  const std::size_t at = static_cast<std::size_t>(std::min(from, to) * cellsPerPair);
+  if (to > from) {
+    std::vector<std::string> added;
+    for (int pair = from; pair < to; pair++) { added.push_back("..."); if (cellsPerPair > 1) added.push_back(".."); }
+    cells.insert(cells.begin() + static_cast<long>(std::min(at, cells.size())), added.begin(), added.end());
+  } else {
+    const std::size_t count = static_cast<std::size_t>((from - to) * cellsPerPair);
+    if (at < cells.size()) cells.erase(cells.begin() + static_cast<long>(at), cells.begin() + static_cast<long>(std::min(cells.size(), at + count)));
+  }
+  std::string text;
+  for (const std::string& cell : cells) text += (text.empty() ? "" : " ") + cell;
+  return text;
+}
+
 void SetNoteColumns::apply(Project& project) {
   if (columns_ < 1 || columns_ > 8) throw std::out_of_range("tracks must be 1 to 8");
   Instrument& instrument = instrumentNamed(project, instrument_);
   old_ = instrument.noteColumns;
+  before_.clear();
+  if (!instrument.isMeta && old_ > 0 && columns_ != old_) {   // the patterns of every lane this machine plays follow
+    const int cellsPerPair = instrument.noVel ? 1 : 2;
+    for (std::size_t l = 0; l < project.lanes.size(); l++) {
+      if (project.lanes[l].instrument != instrument_) continue;
+      for (std::size_t p = 0; p < project.lanes[l].patterns.size(); p++) {
+        std::vector<std::string>& rows = project.lanes[l].patterns[p].rows;
+        before_.push_back({l, p, rows});
+        for (std::string& row : rows) row = rowWithNoteColumns(row, old_, columns_, cellsPerPair);
+      }
+    }
+  }
   instrument.noteColumns = columns_;
 }
 
-void SetNoteColumns::revert(Project& project) { instrumentNamed(project, instrument_).noteColumns = old_; }
+void SetNoteColumns::revert(Project& project) {
+  instrumentNamed(project, instrument_).noteColumns = old_;
+  for (const Saved& saved : before_) if (saved.lane < project.lanes.size() && saved.pattern < project.lanes[saved.lane].patterns.size()) project.lanes[saved.lane].patterns[saved.pattern].rows = saved.rows;
+}
 
 void AddLane::apply(Project& project) {
   for (const Instrument& i : project.instruments) if (i.id == instrument_) { project.lanes.push_back(blankLane(lane_, instrument_)); return; }
@@ -1014,6 +1049,30 @@ void AddNode::revert(Project& project) {
   Graph& g = graphOf(project, instrument_);
   for (std::size_t i = g.nodes.size(); i-- > 0;) if (g.nodes[i].id == id_) { g.nodes.erase(g.nodes.begin() + static_cast<std::ptrdiff_t>(i)); return; }
 }
+
+void ExtractNode::apply(Project& project) {
+  Graph& g = graphOf(project, instrument_);
+  before_ = g.connections;
+  const auto nodeOf = [](const std::string& address) { return address.substr(0, address.find('.')); };
+  const auto portOf = [](const std::string& address) { return address.substr(address.find('.') + 1); };
+  const auto carried = [&](const std::string& address) { return !portOf(address).empty() && portOf(address)[0] != '@'; };
+  std::vector<std::string> feeding, fed;   // the outputs that went in, the inputs that came out
+  for (const Connection& c : g.connections) {
+    if (nodeOf(c.to) == node_ && nodeOf(c.from) != node_ && carried(c.to)) feeding.push_back(c.from);
+    if (nodeOf(c.from) == node_ && nodeOf(c.to) != node_) fed.push_back(c.to);
+  }
+  g.connections.erase(std::remove_if(g.connections.begin(), g.connections.end(),
+                                     [&](const Connection& c) { return nodeOf(c.from) == node_ || nodeOf(c.to) == node_; }),
+                      g.connections.end());
+  for (const std::string& source : feeding) {
+    for (const std::string& target : fed) {
+      const bool there = std::any_of(g.connections.begin(), g.connections.end(), [&](const Connection& c) { return c.from == source && c.to == target; });
+      if (!there) g.connections.push_back({source, target});
+    }
+  }
+}
+
+void ExtractNode::revert(Project& project) { graphOf(project, instrument_).connections = before_; }
 
 void DeleteNode::apply(Project& project) {
   Graph& g = graphOf(project, instrument_);

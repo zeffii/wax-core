@@ -30,6 +30,7 @@ std::set<std::string>& openGroups() {
 }
 std::string& lastPicked() { static std::string path; return path; }
 int cursor = 0;
+bool scrollToCursor = false;   // the keys (or opening) moved the cursor: bring its row to the middle; the mouse moving it must not scroll the list under the pointer
 
 // The rows that are showing, top to bottom.
 void walk(const std::vector<MachineNode>& nodes, int depth, const std::string& passes, int parent, std::vector<VisibleRow>& rows) {
@@ -56,6 +57,7 @@ void openMachineTree() {
   walk(machineTree(), 0, "", -1, rows);
   cursor = 0;
   for (std::size_t i = 0; i < rows.size(); i++) if (rows[i].node->path == lastPicked()) cursor = static_cast<int>(i);
+  scrollToCursor = true;
   ImGui::SetNextWindowPos(ImGui::GetMousePos());
   ImGui::OpenPopup("machinetree");
 }
@@ -89,6 +91,7 @@ std::string drawMachineTree(bool haveSamples) {
     }
   };
   if (n) {
+    const int cursorBefore = cursor;
     const VisibleRow& at = rows[static_cast<std::size_t>(cursor)];
     if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) cursor = (cursor + 1) % n;
     else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) cursor = (cursor + n - 1) % n;
@@ -110,6 +113,7 @@ std::string drawMachineTree(bool haveSamples) {
         if (!name.empty() && std::tolower(static_cast<unsigned char>(name[0])) == ch) { cursor = i; break; }
       }
     }
+    if (cursor != cursorBefore) scrollToCursor = true;
   }
 
   // the rows: guide lines in front, then the label (a shut group has a + after it)
@@ -123,7 +127,7 @@ std::string drawMachineTree(bool haveSamples) {
     ImGui::Selectable("##row", false, 0, ImVec2(w, lineH));
     if (i == cursor) dl->AddRectFilled(at, ImVec2(at.x + w, at.y + lineH), kTreeInk);
     ImGui::PopID();
-    if (ImGui::IsItemHovered() && (io.MouseDelta.x != 0 || io.MouseDelta.y != 0)) cursor = i;
+    if (ImGui::IsItemHovered() && (io.MouseDelta.x != 0 || io.MouseDelta.y != 0 || io.MouseWheel != 0)) cursor = i;   // (the wheel moves rows under a still pointer)
     if (ImGui::IsItemClicked()) { cursor = i; activate(i); }
     const ImU32 ink = i == cursor ? kTreeDark : withAlpha(kTreeInk, (row.node->disabled || (row.node->needsSample && !haveSamples)) ? 102 : 255);
     const ImU32 guide = i == cursor ? kTreeDark : kTreeGuide;
@@ -140,8 +144,9 @@ std::string drawMachineTree(bool haveSamples) {
     std::string label = row.node->name;
     if (!row.node->children.empty() && !openGroups().count(row.node->path)) label += " +";
     dl->AddText(ImVec2(at.x + static_cast<float>(row.guides.size()) * step + (row.guides.empty() ? 0 : step * 0.2f), at.y + (lineH - ImGui::GetTextLineHeight()) / 2), ink, label.c_str());
-    if (i == cursor) ImGui::SetScrollHereY(0.5f);
+    if (i == cursor && scrollToCursor) ImGui::SetScrollHereY(0.5f);
   }
+  scrollToCursor = false;
   if (!picked.empty()) ImGui::CloseCurrentPopup();
   ImGui::EndPopup();
   ImGui::PopStyleVar(3);
