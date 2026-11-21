@@ -1,3 +1,4 @@
+#include "app/node_trail.h"
 #include "app/param_panel.h"
 
 #include <algorithm>
@@ -287,7 +288,7 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
   // the window: first at the top right of the graph, then wherever the user puts it
   const float width = kNormalWidth * 1.25f * scale;
   if (!state.placed) {
-    ImGui::SetNextWindowPos(ImVec2(std::max(areaMin.x, areaMax.x - width - 12 * scale), areaMin.y + 12 * scale), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(std::max(areaMin.x, areaMax.x - width - 12 * scale - kTrailWidth * scale), areaMin.y + 12 * scale), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(width, 0), ImGuiCond_Always);
   }
   float height = wantedHeight(state.paramContent, picked ? static_cast<int>(type->params.size()) : 1, areaMax.y - areaMin.y, scale);

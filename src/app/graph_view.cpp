@@ -650,6 +650,35 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     try { doc.apply(std::move(edit)); moved = true; state.message.clear(); }
     catch (const std::exception& e) { state.message = e.what(); }
   };
+  // The quick-node trail down the right edge: a tile dragged out lights the wire it is over, and let go there the node goes into that wire; let
+  // go on empty graph it is placed there. A click on a tile places the node at the middle of the view.
+  {
+    const ImVec2 areaMin = ImGui::GetWindowPos(), areaMax(areaMin.x + ImGui::GetWindowWidth(), areaMin.y + ImGui::GetWindowHeight());
+    std::string dragType;
+    const TrailEvent event = drawNodeTrail(state.trail, dl, areaMin, areaMax, scale, dragType);
+    if (event.kind != TrailEvent::Kind::None) {
+      const ImVec2 where = event.kind == TrailEvent::Kind::Drop ? event.at : ImVec2((areaMin.x + areaMax.x) / 2, (areaMin.y + areaMax.y) / 2);
+      const NodeType* type = types.find(event.type);
+      std::string id = event.type;
+      for (int k = 1;; k++) {
+        bool taken = false;
+        for (const GraphNode& n : graph.nodes) taken |= n.id == id;
+        if (!taken) break;
+        id = event.type + std::to_string(k);
+      }
+      const float x = std::round(((where.x - origin.x) / scale - 12) / kGrid) * kGrid, y = std::round(((where.y - origin.y) / scale - 12) / kGrid) * kGrid;
+      std::vector<std::unique_ptr<Edit>> follow;
+      if (type && event.kind == TrailEvent::Kind::Drop && hoverWire && !type->inputs.empty() && !type->outputs.empty()) {   // into the wire it was let go on
+        const GraphNode blank{};
+        const PortKind in = portKind(*type, blank, type->inputs.front()), out = portKind(*type, blank, type->outputs.front());
+        const bool audioWire = std::any_of(wires.begin(), wires.end(), [&](const WireEnds& w) { return w.c == hoverWire && (w.kind == PortKind::Audio || w.kind == PortKind::Stereo); });
+        if (audioWire && (in == PortKind::Audio || in == PortKind::Stereo) && (out == PortKind::Audio || out == PortKind::Stereo))
+          follow.push_back(std::make_unique<InsertOnWire>(instrumentId, hoverWire->from, hoverWire->to, id + "." + type->inputs.front(), id + "." + type->outputs.front()));
+      }
+      tryApply(std::make_unique<FollowedEdit>(std::make_unique<AddNode>(instrumentId, event.type, id, std::max(0.0f, x), std::max(0.0f, y)), std::move(follow)));
+      if (state.message.empty()) picked = id;
+    }
+  }
   if (!state.wiring.empty()) {   // a new wire from an output: it lands on an input port
     const ImVec2 start = portAt(state.wiring, true);
     desire(start, landing);

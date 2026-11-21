@@ -12,6 +12,7 @@
 #include "imgui.h"
 
 #include "app/insert_menu.h"
+#include "app/node_trail.h"
 #include "app/node_response.h"
 #include "core/probe.h"
 #include "edit/document.h"
@@ -61,6 +62,7 @@ struct GraphViewState {
   int responseDrag = -1;     // the handle being dragged (its index in `response.list`), or -1
   bool responseFresh = false;   // the drag has not changed anything yet (its first change starts the undo step)
   bool paramEdited = false;  // a parameter was set by dragging in a picture: the caller runs syncParams (and clears this)
+  NodeTrailState trail;      // the quick-node trail at the right edge
   std::string deleteNode;    // set by the right-click menu; the caller never needs to clear it
 };
 
