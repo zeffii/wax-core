@@ -716,6 +716,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     }
     if (session->solo.on && session->screen != Screen::Pattern) { session->solo = {}; editor.clearSolo(); }   // (leaving the Pattern screen ends solo-edit)
     app::SongKeysEnv songEnv{doc, editor, player.engine(), selectedLane, session->editStatus, session->wantLane, session->wantTick, edited, session->edit};
+    if (session->screen == Screen::Song && !session->edit && !io.WantTextInput && !ctrl && !io.KeyAlt &&   // an arrow key in the sequence puts the caret in play, and moves it
+        (ImGui::IsKeyPressed(ImGuiKey_UpArrow) || ImGui::IsKeyPressed(ImGuiKey_DownArrow) || ImGui::IsKeyPressed(ImGuiKey_LeftArrow) || ImGui::IsKeyPressed(ImGuiKey_RightArrow))) session->edit = true;
     if (session->edit && session->screen == Screen::Song) app::songCursorKeys(session->song, songEnv);   // the Song screen cursor, selection and edits
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Z)) { if (io.KeyShift) doc.redo(); else doc.undo(); edited = true; }
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Y)) { doc.redo(); edited = true; }

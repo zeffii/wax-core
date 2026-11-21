@@ -12,7 +12,7 @@
 namespace wax::app {
 
 // The width the trail takes at the right edge of the graph view, in web pixels (the caller multiplies by the UI scale).
-constexpr float kTrailWidth = 30;
+constexpr float kTrailWidth = 40;
 
 struct NodeTrailState {
   std::string pressed;          // the tile the mouse went down on

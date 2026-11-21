@@ -16,7 +16,7 @@ namespace {
 // The nodes of the trail, top to bottom: node type names. Anything the graph knows by name can go here.
 constexpr const char* kTrailNodes[] = {"env2", "filterpro", "haas", "delay", "plate", "eq", "compressor", "pogue", "chorus", "flanger"};
 
-constexpr float kTileSize = 24;   // web pixels
+constexpr float kTileSize = 34;   // web pixels
 constexpr float kTileGap = 6;
 constexpr float kDragStart = 4;   // pixels the mouse must move from the press before it is a drag
 
@@ -33,6 +33,16 @@ ImU32 categoryColour(const std::string& category) {
   return IM_COL32(136, 135, 128, 255);
 }
 
+// The four letters under a tile. A type's first four letters, except where two types would share them.
+std::string shortName(const std::string& type) {
+  static const std::map<std::string, std::string> kNames = {
+      {"compass", "cmps"}, {"compressor", "comp"}, {"waveseq", "wseq"}, {"waveshaper", "wshp"}, {"wavefolder", "wfld"}, {"wavetable", "wtbl"},
+      {"pulsar", "pulr"}, {"pulsetrain", "ptrn"}, {"drumsynth", "drum"}, {"drumsynth2", "drm2"}, {"combperc", "cmbp"}, {"filterpro", "fpro"},
+      {"chord", "chrd"}, {"specdyn", "sdyn"}, {"specpan", "span"}, {"specsynth", "ssyn"}, {"gater", "gatr"}, {"notetrig", "ntrg"}, {"notepan", "npan"}, {"bus-in", "busi"}};
+  const auto found = kNames.find(type);
+  return found != kNames.end() ? found->second : type.substr(0, 4);
+}
+
 constexpr float kBankColumns = 8;
 constexpr float kBankGap = 4;       // between tiles
 constexpr float kBankBandGap = 10;  // between the bands of two categories
@@ -46,7 +56,14 @@ void drawTile(ImDrawList* dl, ImVec2 lo, float size, const std::string& type, fl
   dl->AddRectFilled(lo, hi, kFlat, 2 * scale);
   if (outline) dl->AddRect(lo, hi, (outline & 0x00FFFFFFu) | (80u << IM_COL32_A_SHIFT), 2 * scale, 0, 1.0f);   // a faint hairline: the glyph carries the colour
   if (lit) dl->AddRect(lo, hi, kAccent, 2 * scale, 0, std::max(1.0f, scale) * (outline ? 2.0f : 1.0f));
-  drawGlyph(dl, look.glyph, TileShape::Box, ImVec2(lo.x + size / 2, lo.y + size / 2), scale * 0.8f, outline ? outline : kText);
+  const ImU32 ink = outline ? outline : kText;
+  dl->PushClipRect(lo, hi, true);   // (a wide glyph stays inside its tile)
+  drawGlyph(dl, look.glyph, TileShape::Box, ImVec2(lo.x + size / 2, lo.y + size * 0.37f), scale * 0.7f, ink);
+  dl->PopClipRect();
+  const float fontSize = ImGui::GetFontSize() * 0.72f;
+  const std::string name = shortName(type);
+  const float width = ImGui::GetFont()->CalcTextSizeA(fontSize, FLT_MAX, 0, name.c_str()).x;
+  dl->AddText(ImGui::GetFont(), fontSize, ImVec2(lo.x + (size - width) / 2, hi.y - fontSize - 2 * scale), (ink & 0x00FFFFFFu) | (200u << IM_COL32_A_SHIFT), name.c_str());
 }
 
 // The mouse going down on a tile starts a press; returns true while the mouse is over the tile.
