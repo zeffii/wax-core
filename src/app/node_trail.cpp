@@ -44,7 +44,7 @@ void drawTile(ImDrawList* dl, ImVec2 lo, float size, const std::string& type, fl
   const ImVec2 hi(lo.x + size, lo.y + size);
   dl->AddRectFilled(lo, hi, kBg, 2 * scale);
   dl->AddRectFilled(lo, hi, kFlat, 2 * scale);
-  if (outline) dl->AddRect(lo, hi, outline, 2 * scale, 0, std::max(1.0f, scale));
+  if (outline) dl->AddRect(lo, hi, (outline & 0x00FFFFFFu) | (80u << IM_COL32_A_SHIFT), 2 * scale, 0, 1.0f);   // a faint hairline: the glyph carries the colour
   if (lit) dl->AddRect(lo, hi, kAccent, 2 * scale, 0, std::max(1.0f, scale) * (outline ? 2.0f : 1.0f));
   drawGlyph(dl, look.glyph, TileShape::Box, ImVec2(lo.x + size / 2, lo.y + size / 2), scale * 0.8f, outline ? outline : kText);
 }
