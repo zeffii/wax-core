@@ -216,6 +216,7 @@ struct Session {
   int audioBuffer = 0;                   // the sound card buffer asked for (0: the card's own)
   Session(const std::string& filePath, const Options& options) : Session(loadProject(filePath), filePath, options) {}
   Session(Project loaded, const std::string& filePath, const Options& options) : project(std::move(loaded)), path(filePath) {
+    repairNoteColumnRows(project);   // (a song saved after a note column was added without its cells reaches the pattern editor whole)
     for (const Instrument& inst : project.instruments) if (inst.id != kMaster && !inst.isMeta) playable.push_back(inst.id);
     keyjazzInstrument = playable.empty() ? std::string() : playable.front();
     player = std::make_unique<Player>(project, options.rate, options.threads > 0 ? options.threads : app::settings().threads, keyjazzInstrument, true);
@@ -414,27 +415,36 @@ void drawPatternMenu(Session* session, Document& doc, Player& player) {
   }
 }
 
-// Ctrl+Alt+Up/Down: one more (+1) or one fewer (-1) Note + Vol pair for the machine of the lane the cursor is in. The last pair only goes when it is
-// empty everywhere in the lane: nothing written is ever thrown away by a key. Returns the message for the status line.
-std::string changeNoteColumns(Session* session, Document& doc, Player& player, int direction) {
-  const std::string laneId = session->editor->lane();
-  const Lane* lane = nullptr;
-  for (const Lane& l : doc.project().lanes) if (l.id == laneId) lane = &l;
+// The id of the machine a lane plays (empty when there is no such lane).
+std::string laneMachine(const Document& doc, const std::string& laneId) {
+  for (const Lane& l : doc.project().lanes) if (l.id == laneId) return l.instrument;
+  return {};
+}
+
+// Ctrl+Alt+Up/Down: one more (+1) or one fewer (-1) Note + Vol pair for a machine (on the Pattern screen the machine of the lane the cursor is in, on
+// the Instrument screen the machine on show). The last pair only goes when it is empty everywhere in the machine's lanes: nothing written is ever
+// thrown away by a key. Returns the message for the status line.
+std::string changeNoteColumns(Session* session, Document& doc, Player& player, const std::string& machineId, int direction) {
   const Instrument* machine = nullptr;
-  if (lane) for (const Instrument& i : doc.project().instruments) if (i.id == lane->instrument) machine = &i;
-  const std::vector<Column> columns = player.engine().laneColumns(laneId);
+  for (const Instrument& i : doc.project().instruments) if (i.id == machineId) machine = &i;
+  std::vector<std::string> laneIds;   // the lanes that play it
+  for (const Lane& l : doc.project().lanes) if (l.instrument == machineId) laneIds.push_back(l.id);
+  if (!machine || laneIds.empty()) return machineId + " has no lane to hold note columns.";
+  const std::vector<Column> columns = player.engine().laneColumns(laneIds.front());
   std::vector<std::size_t> notes;
   for (std::size_t i = 0; i < columns.size(); i++) if (columns[i].kind == ColumnKind::Note) notes.push_back(i);
-  if (!machine || notes.empty()) return laneId + " has no note columns.";
+  if (notes.empty()) return machineId + " has no note columns.";
   if (direction > 0 && machine->noteColumns >= 8) return "A machine has at most eight note columns.";
   if (direction < 0) {
     if (notes.size() < 2) return "A machine keeps at least one note column.";
     const std::size_t last = notes.back();
     const bool hasVel = last + 1 < columns.size() && columns[last + 1].kind == ColumnKind::Vel;
-    for (const std::vector<std::string>& row : session->rows[laneId]) {
-      for (const std::size_t c : {last, last + 1}) {
-        if (c == last + 1 && !hasVel) continue;
-        if (c < row.size() && row[c].find_first_not_of('.') != std::string::npos) return "The last note column has notes in it: clear them first.";
+    for (const std::string& laneId : laneIds) {
+      for (const std::vector<std::string>& row : session->rows[laneId]) {
+        for (const std::size_t c : {last, last + 1}) {
+          if (c == last + 1 && !hasVel) continue;
+          if (c < row.size() && row[c].find_first_not_of('.') != std::string::npos) return "The last note column has notes in it: clear them first.";
+        }
       }
     }
   }
@@ -830,7 +840,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) edited |= editor.shiftSelection(CellEditor::Shift::RotateDown);
       } else {   // Ctrl+Alt+Up/Down with nothing selected: one more or one fewer Note + Vol pair for the machine of this lane (as the web)
         const int direction = ImGui::IsKeyPressed(ImGuiKey_UpArrow) ? 1 : ImGui::IsKeyPressed(ImGuiKey_DownArrow) ? -1 : 0;
-        if (direction != 0) session->editStatus = changeNoteColumns(session, doc, player, direction);
+        if (direction != 0) session->editStatus = changeNoteColumns(session, doc, player, laneMachine(doc, editor.lane()), direction);
       }
       if (before != editor.tick() * 4096 + editor.cell() || edited) session->scrollToCursor = true;
     }
@@ -939,6 +949,10 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       } else {
         session->screen = Screen::Song;
       }
+    }
+    if (session->screen == Screen::Instrument && ctrl && io.KeyAlt && !io.KeyShift) {   // Ctrl+Alt+Up/Down: a Note + Vol pair more or fewer for the machine on show
+      const int direction = ImGui::IsKeyPressed(ImGuiKey_UpArrow) ? 1 : ImGui::IsKeyPressed(ImGuiKey_DownArrow) ? -1 : 0;
+      if (direction != 0) session->editStatus = changeNoteColumns(session, doc, player, session->panel.instrument, direction);
     }
     if (ImGui::IsKeyPressed(ImGuiKey_F2, false)) session->screen = Screen::Pattern;
     if (ImGui::IsKeyPressed(ImGuiKey_F3, false)) session->screen = Screen::Instrument;

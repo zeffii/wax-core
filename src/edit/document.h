@@ -446,6 +446,10 @@ private:
 
 // A node lifted out of its chain and left on the canvas, unwired: whatever fed it is wired to whatever it fed (a -> node -> b becomes a -> b),
 // so the sound still flows. Wires of a parameter port (the "@" ports) cannot be carried across and go with the node. Undo puts every wire back.
+// Machines whose note columns were added by a build that left the patterns as they were (their rows lack whole Note + Vol pairs, so every later cell
+// sits one column early): the missing pairs go in, blank, after the last pair. Returns how many machines were mended.
+int repairNoteColumnRows(Project& project);
+
 class ExtractNode final : public Edit {
 public:
   ExtractNode(std::string instrument, std::string node) : instrument_(std::move(instrument)), node_(std::move(node)) {}

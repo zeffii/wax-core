@@ -806,6 +806,33 @@ void SetNoteColumns::revert(Project& project) {
   for (const Saved& saved : before_) if (saved.lane < project.lanes.size() && saved.pattern < project.lanes[saved.lane].patterns.size()) project.lanes[saved.lane].patterns[saved.pattern].rows = saved.rows;
 }
 
+int repairNoteColumnRows(Project& project) {
+  int repaired = 0;
+  for (const Instrument& instrument : project.instruments) {
+    if (instrument.isMeta || instrument.noteColumns < 2) continue;
+    const int cellsPerPair = instrument.noVel ? 1 : 2;
+    const bool hasPresets = !instrument.raw.value("presets", Json::array()).empty();
+    const std::size_t expected = static_cast<std::size_t>(instrument.noteColumns * cellsPerPair) + instrument.triggers.size() + instrument.exposed.size() +
+                                 (!instrument.commands.empty() || hasPresets ? 1 : 0);
+    std::size_t longest = 0;   // the widest row of any pattern of the machine
+    const auto widthOf = [](const std::string& row) { std::istringstream words(row); std::size_t n = 0; for (std::string cell; words >> cell;) n++; return n; };
+    for (const Lane& lane : project.lanes) {
+      if (lane.instrument != instrument.id) continue;
+      for (const Pattern& pattern : lane.patterns) for (const std::string& row : pattern.rows) longest = std::max(longest, widthOf(row));
+    }
+    const std::size_t missing = longest < expected ? expected - longest : 0;
+    if (longest == 0 || missing == 0 || missing % cellsPerPair != 0) continue;
+    const int pairs = static_cast<int>(missing) / cellsPerPair;
+    if (pairs >= instrument.noteColumns) continue;
+    for (Lane& lane : project.lanes) {
+      if (lane.instrument != instrument.id) continue;
+      for (Pattern& pattern : lane.patterns) for (std::string& row : pattern.rows) row = rowWithNoteColumns(row, instrument.noteColumns - pairs, instrument.noteColumns, cellsPerPair);
+    }
+    repaired++;
+  }
+  return repaired;
+}
+
 void AddLane::apply(Project& project) {
   for (const Instrument& i : project.instruments) if (i.id == instrument_) { project.lanes.push_back(blankLane(lane_, instrument_)); return; }
   throw std::out_of_range("no machine " + instrument_);

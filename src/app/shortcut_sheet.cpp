@@ -34,7 +34,7 @@ const std::vector<Shortcut>& patternShortcuts() {
       {"PgUp / PgDn", "a bar of rows up or down"},
       {"Shift+arrows", "select cells; Esc drops the selection"},
       {"Ctrl+Delete, Ctrl+Insert", "the selection (or cell) goes and the rows below move up; the rows from it down move down (within one pattern)"},
-      {"Ctrl+Alt+Up, Ctrl+Alt+Down", "rotate the selected rows by one"},
+      {"Ctrl+Alt+Up, Ctrl+Alt+Down", "rotate the selected rows by one; with nothing selected, add or remove a Note + Vol column (also on the Instrument screen)"},
       {"Left, Right", "one character of the cell (a note's # or - and octave, a hex digit): type over it; on into the next cell at the ends"},
       {"Ctrl+Left, Ctrl+Right", "the first character of the next or previous column"},
       {"Alt+Up, Alt+Down", "transpose the notes under the cursor or in the selection by one (Shift: an octave)"},
