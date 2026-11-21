@@ -107,9 +107,12 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
   static float measuredPitch = 0;
   const float rowPitch = measuredPitch > 1 ? measuredPitch : rowHeight;
   const int firstRow = std::max(0, cursor.rowFirst), endRow = cursor.rowEnd < 0 ? static_cast<int>(rows.size()) : std::min(static_cast<int>(rows.size()), cursor.rowEnd);
+  float followScroll = -1;   // where the follow scroll is heading, once the playhead has reached its resting place (otherwise -1: the playhead moves)
   if (follow && playTick >= firstRow && playTick < endRow) {
     const float visible = ImGui::GetWindowHeight() - rowHeight * 2;
-    ImGui::SetScrollY(std::max(0.0f, (static_cast<float>(playTick - firstRow) + cursor.playFrac) * rowPitch - visible * 0.4f));
+    const float wanted = (static_cast<float>(playTick - firstRow) + cursor.playFrac) * rowPitch - visible * 0.4f;
+    ImGui::SetScrollY(std::max(0.0f, wanted));
+    if (wanted > 0 && wanted < ImGui::GetScrollMaxY()) followScroll = wanted;
   }
 
   const int beat = std::max(1, ticksPerBeat), bar = beat * std::max(1, beatsPerBar);
@@ -211,7 +214,9 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
   }
   if (lastTick > firstTick) measuredPitch = (lastY - firstY) / static_cast<float>(lastTick - firstTick);
   if (playY >= 0) {   // the playhead: a thin red line across the table, moving down through the row as the song plays
-    const float y = playY + cursor.playFrac * rowPitch;
+    // Where the pattern is moving past it the playhead stands still: it is held at its resting place, not worked out again from the rows
+    // each frame (those are drawn where the scroll was a frame ago, and the clock's small jitter showed as the line trembling).
+    const float y = playY + cursor.playFrac * rowPitch + (followScroll >= 0 ? ImGui::GetScrollY() - followScroll : 0.0f);
     const ImVec2 from = ImGui::GetWindowPos();
     ImDrawList* draw = ImGui::GetWindowDrawList();
     const float headerBottom = from.y + rowHeight * 1.5f;   // keep the line out from under the column headings
