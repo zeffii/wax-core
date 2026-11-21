@@ -34,6 +34,7 @@ struct CursorView {
   int tick = -1, cell = -1;
   int character = 0;                     // the character of the cursor's cell the cursor is on
   bool scrollTo = false;
+  int revealFrom = -1, revealTo = -1;   // with scrollTo: bring the rows revealFrom..revealTo-1 (the pattern just entered) into view, all of them if they fit, else from the top
   bool selected = false;                 // a block of cells is selected: ticks tick0..tick1, cells cell0..cell1
   int tick0 = 0, tick1 = 0, cell0 = 0, cell1 = 0;
   bool loop = false;                     // the song has a loop: ticks loopStart..loopEnd-1 (loopOn false: set, but switched off)

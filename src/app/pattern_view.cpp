@@ -121,7 +121,18 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
   float loopTopY = -1, loopBottomY = -1;   // screen y of the loop's first row's top and last row's bottom, when drawn
   const ImU32 loopYellow = IM_COL32(240, 200, 60, 255);
   int firstTick = -1, lastTick = -1; float firstY = 0, lastY = 0;   // the first and last rows drawn, to measure the pitch
+  // Entering a pattern: the whole pattern is brought into view, centred when it fits; when it is longer than the window its first row is at
+  // the top, and further down if that would leave the cursor out of view.
+  int revealTop = -1;
+  if (cursor.show && cursor.scrollTo && cursor.revealFrom >= 0 && cursor.revealTo > cursor.revealFrom) {
+    const int fit = std::max(1, static_cast<int>((ImGui::GetWindowHeight() - rowHeight * 3) / rowPitch));   // (rows that show under the headers)
+    const int length = cursor.revealTo - cursor.revealFrom;
+    int top = length <= fit ? cursor.revealFrom - (fit - length) / 2 : cursor.revealFrom;
+    if (cursor.tick > top + fit - 2) top = cursor.tick - fit + 2;
+    revealTop = std::clamp(top, firstRow, std::max(firstRow, endRow - 1));
+  }
   clipper.Begin(std::max(0, endRow - firstRow));
+  if (revealTop >= 0) clipper.IncludeItemByIndex(revealTop - firstRow);
   if (cursor.show && cursor.scrollTo && cursor.tick >= firstRow && cursor.tick < endRow) clipper.IncludeItemByIndex(cursor.tick - firstRow);
   while (clipper.Step()) {
     for (int tick = firstRow + clipper.DisplayStart; tick < firstRow + clipper.DisplayEnd; tick++) {
@@ -130,6 +141,7 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
       const ImU32 tint = shown % bar == 0 ? kBarRow : shown % beat == 0 ? kBeatRow : 0;
       if (tint) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, tint);
       ImGui::TableSetColumnIndex(0);
+      if (tick == revealTop) ImGui::SetScrollHereY(0.0f);   // (the row that goes at the top)
       if (tick == playTick) playY = ImGui::GetCursorScreenPos().y - 1;
       if (firstTick < 0) { firstTick = tick; firstY = ImGui::GetCursorScreenPos().y; }
       lastTick = tick; lastY = ImGui::GetCursorScreenPos().y;
@@ -180,7 +192,7 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
           }
           if (here) {
             ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, kCursorCell);
-            if (cursor.scrollTo) ImGui::SetScrollHereY(0.5f);
+            if (cursor.scrollTo && revealTop < 0) ImGui::SetScrollHereY(0.5f);
           }
           const bool filled = c < static_cast<int>(cells.size());
           if (marks & PatternLane::kStart) {   // where a pattern starts: a bar across its top, in the pattern's colour

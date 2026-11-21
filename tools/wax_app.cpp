@@ -167,6 +167,7 @@ struct Session {
   std::time_t backupAt = 0;              // when the last snapshot was made (or the song opened)
   int rowsRevision = -1;                 // the revision of `doc` that `rows` shows
   bool scrollToCursor = false;
+  int revealFrom = -1, revealTo = -1;    // after Enter in the sequence: the pattern entered, to bring fully into view in the Pattern screen
   std::string editStatus;
   app::ParamPanelState panel;
   app::MixerState mixer;
@@ -710,7 +711,18 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         }
       } else if (session->screen == Screen::Song && session->edit) {   // in the sequence, Enter goes into the pattern under the cursor (a new one where none is)
         if (!editor.patternHere()) edited |= editor.createPatternHere();
-        if (editor.patternHere()) { selectedLane = editor.lane(); session->wantLane = selectedLane; session->wantTick = editor.tick(); session->screen = Screen::Pattern; }
+        if (editor.patternHere()) {
+          selectedLane = editor.lane(); session->wantLane = selectedLane; session->wantTick = editor.tick(); session->screen = Screen::Pattern;
+          session->revealFrom = session->revealTo = -1;
+          for (const Lane& lane : doc.project().lanes) {   // the pattern under the cursor: its rows are what the Pattern screen shows
+            if (lane.id != editor.lane()) continue;
+            if (const Placement* p = seq::placementAt(lane, editor.tick())) {
+              const Pattern* pat = seq::patternOf(lane, p->pattern);
+              session->revealFrom = p->start;
+              session->revealTo = p->start + std::min(p->length, pat ? static_cast<int>(pat->rows.size()) : p->length);
+            }
+          }
+        }
         else session->editStatus = "No pattern here, and one cannot start here.";
       } else session->edit = !session->edit;
     }
@@ -1485,6 +1497,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       cursor.cell = editor.cell();
       cursor.character = editor.character();
       cursor.scrollTo = session->scrollToCursor;
+      if (session->scrollToCursor) { cursor.revealFrom = session->revealFrom; cursor.revealTo = session->revealTo; session->revealFrom = session->revealTo = -1; }
       const CellEditor::Selection sel = editor.selection();
       { const LoopRange lr = loopOf(song); cursor.loop = song.raw.is_object() && song.raw.contains("loop") && song.raw["loop"].is_object(); cursor.loopOn = lr.on; cursor.loopStart = lr.start; cursor.loopEnd = lr.end; }
       cursor.playFrac = playing ? session->heard.frac : 0.0f;
