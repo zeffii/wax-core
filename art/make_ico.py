@@ -1,15 +1,22 @@
-"""Builds art/wax.ico (the Windows program icon) from the paths in art/icons/wax-icon.svg. Needs Pillow. Run: python3 art/make_ico.py"""
-import re
-from PIL import Image, ImageDraw
-SVG = open(__file__.replace("make_ico.py", "icons/wax-icon.svg")).read()
-BG, FG, S = (22, 27, 31, 255), (79, 209, 184, 255), 1024
-def logo_point(x, y, dx):   # path coordinates -> icon square (same transform as the svg)
-    return ((x + dx - 70) * 0.3276 + 110) * S / 1000, ((y - 90) * 0.3276 + 366) * S / 1000
-img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-d = ImageDraw.Draw(img)
-d.rounded_rectangle((0, 0, S - 1, S - 1), radius=190 * S / 1000, fill=BG)
-for dx, path in re.findall(r'translate\((\d+)\)" d="([^"]+)"', SVG):
-    for k, sub in enumerate(p for p in path.split("Z") if p.strip()):
-        pts = [logo_point(*map(float, m), int(dx)) for m in re.findall(r"[ML]\s*(-?[\d.]+)\s+(-?[\d.]+)", sub)]
-        d.polygon(pts, fill=FG if k == 0 else BG)   # the second subpath is the hole in the A
-img.save(__file__.replace("make_ico.py", "wax.ico"), sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+"""Builds art/wax.ico (the Windows program icon) from art/icons/wax-icon.svg: every size is rendered from the vector with its own antialiasing
+(not a big picture shrunk), then packed as PNG entries. Needs rsvg-convert. Run: python3 art/make_ico.py"""
+import os, struct, subprocess, tempfile
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+SVG = os.path.join(HERE, "icons", "wax-icon.svg")
+SIZES = [16, 24, 32, 48, 64, 128, 256]
+
+def render(size):
+    with tempfile.TemporaryDirectory() as tmp:
+        png = os.path.join(tmp, "icon.png")
+        subprocess.run(["rsvg-convert", "-w", str(size), "-h", str(size), SVG, "-o", png], check=True)
+        return open(png, "rb").read()
+
+images = [(size, render(size)) for size in SIZES]
+header = struct.pack("<HHH", 0, 1, len(images))
+offset = 6 + 16 * len(images)
+entries, data = b"", b""
+for size, png in images:
+    entries += struct.pack("<BBBBHHII", size % 256, size % 256, 0, 0, 1, 32, len(png), offset + len(data))   # (256 is stored as 0)
+    data += png
+open(os.path.join(HERE, "wax.ico"), "wb").write(header + entries + data)
