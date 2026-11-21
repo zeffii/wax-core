@@ -35,6 +35,7 @@ struct ParamPanelState {
   std::string genexprNode;   // set when the user asked to edit this genexpr node's code   // set when the user asked for the diamond / wave sequences of this node (compass, waveseq, vecpath, vecmix)
   bool dragging = false;    // a drag is in progress: its steps are one undo
   bool placed = false;      // the window has been put at the graph's corner once; after that it stays where the user left it
+  float areaRight = 0;      // the right edge of the area last frame: when it moves (the node bank opening) the window moves with it
   int paramCursor = 0;      // the row the keys act on
   float paramContent = 0;   // what the panel's rows needed in height last frame (it is as high as that)
   ExposedWindow dock;       // the exposed dock in the graph screen (min/max: as drawn last, zero size when none, for the graph to keep clear of)

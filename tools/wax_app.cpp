@@ -1576,7 +1576,10 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     app::drawGraphView(session->graphView, doc, laneInstrument, session->panel.node, 0);
     if (session->graphView.tileClicked) session->panel.open = true;   // clicking a node brings its parameters back after the window's X hid them
     if (!session->graphView.openDrawings.empty()) session->panel.drawNode = std::exchange(session->graphView.openDrawings, std::string());
-    const ImVec2 graphMin = ImGui::GetWindowPos(), graphMax(graphMin.x + ImGui::GetWindowWidth(), graphMin.y + ImGui::GetWindowHeight());
+    const ImVec2 graphMin = ImGui::GetWindowPos();
+    ImVec2 graphMax(graphMin.x + ImGui::GetWindowWidth(), graphMin.y + ImGui::GetWindowHeight());
+    const app::NodeTrailState& trail = session->graphView.trail;
+    if (trail.bankOpen) graphMax.x -= trail.bankMax.x - trail.bankMin.x;   // the parameters sit left of the open bank
     ImGui::EndChild();
     const bool panelChanged = app::drawParamPanel(session->panel, doc, player.engine(), laneInstrument, graphMin, graphMax);   // the parameters float over the graph
     const bool dockChanged = app::drawExposedDock(session->panel, doc, player.engine(), laneInstrument, graphMin, graphMax);   // the exposed ones at its left

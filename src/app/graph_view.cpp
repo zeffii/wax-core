@@ -222,7 +222,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
   ImGui::BeginChild("graph", ImVec2(0, height), false, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoNav);
   ImDrawList* dl = ImGui::GetWindowDrawList();
   const ImGuiIO& io = ImGui::GetIO();
-  const bool windowHovered = ImGui::IsWindowHovered();
+  const bool windowHovered = ImGui::IsWindowHovered() && !state.trail.over(ImGui::GetIO().MousePos) && !overTrail(ImGui::GetIO().MousePos, ImGui::GetWindowPos(), ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(), ImGui::GetWindowPos().y + ImGui::GetWindowHeight()), scale);
   if (windowHovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 0)) {   // the middle button pans the whole graph, as in the web app (the view moves, not the tiles)
     state.pan.x += io.MouseDelta.x;
     state.pan.y += io.MouseDelta.y;
@@ -655,7 +655,9 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
   {
     const ImVec2 areaMin = ImGui::GetWindowPos(), areaMax(areaMin.x + ImGui::GetWindowWidth(), areaMin.y + ImGui::GetWindowHeight());
     std::string dragType;
-    const TrailEvent event = drawNodeTrail(state.trail, dl, areaMin, areaMax, scale, dragType);
+    std::set<std::string> trailAvailable;
+    for (const std::string& name : types.typeNames()) if (name != "out" && name != "tempo") trailAvailable.insert(name);
+    const TrailEvent event = drawNodeTrail(state.trail, dl, areaMin, areaMax, scale, dragType, trailAvailable);
     if (event.kind != TrailEvent::Kind::None) {
       const ImVec2 where = event.kind == TrailEvent::Kind::Drop ? event.at : ImVec2((areaMin.x + areaMax.x) / 2, (areaMin.y + areaMax.y) / 2);
       const NodeType* type = types.find(event.type);
@@ -870,7 +872,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     state.addAt = ImVec2(((rightWire->p0.x + rightWire->p1.x) / 2 - origin.x) / scale - 30, ((rightWire->p0.y + rightWire->p1.y) / 2 - origin.y) / scale - 12);
     openInsertMenu(state.wireMenu, "wireinsert");
   }
-  if (ImGui::IsWindowHovered(ImGuiHoveredFlags_None) && !ImGui::IsAnyItemHovered() && (ImGui::IsMouseClicked(ImGuiMouseButton_Right) || ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) && hover.node.empty() && !hoverWire) {   // (a double-click on empty space too, as the web)
+  if (windowHovered && !ImGui::IsAnyItemHovered() && (ImGui::IsMouseClicked(ImGuiMouseButton_Right) || ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) && hover.node.empty() && !hoverWire) {   // (a double-click on empty space too, as the web)
     state.addAt = ImVec2((io.MousePos.x - origin.x) / scale, (io.MousePos.y - origin.y) / scale);
     openInsertMenu(state.menu, "addnode");
   }

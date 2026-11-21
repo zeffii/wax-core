@@ -21,6 +21,10 @@ struct InsertMenuState {
   int active = 0;            // search: the row chosen
 };
 
+// The nodes of the menu by category, in the menu's order: for the tile bank. Only types in `available` are listed.
+struct BankGroup { std::string category; std::vector<std::string> types; };
+std::vector<BankGroup> menuBank(const std::set<std::string>& available);
+
 // Opens the popup `id` at the mouse and resets the menu.
 void openInsertMenu(InsertMenuState& state, const char* id);
 

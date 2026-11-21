@@ -299,6 +299,8 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
   ImGui::PushStyleColor(ImGuiCol_Text, colour(kHiFg));
   const bool visible = ImGui::Begin(title.c_str(), &state.open, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings);
   ImGui::PopStyleColor(3);
+  if (state.placed && state.areaRight > 0 && areaMax.x != state.areaRight) ImGui::SetWindowPos(ImVec2(ImGui::GetWindowPos().x + (areaMax.x - state.areaRight), ImGui::GetWindowPos().y));
+  state.areaRight = areaMax.x;
   state.placed = true;
   bool changed = false;
   if (!visible || !picked || !instrument) {

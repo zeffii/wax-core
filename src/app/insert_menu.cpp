@@ -78,6 +78,19 @@ void drawLabel(ImDrawList* dl, ImVec2 at, const std::string& label, int underlin
 
 }  // namespace
 
+std::vector<BankGroup> menuBank(const std::set<std::string>& available) {
+  std::vector<BankGroup> groups;
+  for (const Row& category : buildTree(available)) {
+    BankGroup group{category.label, {}};
+    for (const Row& sub : category.children) {
+      if (sub.children.empty()) group.types.push_back(sub.type);   // (a node outside any group)
+      for (const Row& leaf : sub.children) group.types.push_back(leaf.type);
+    }
+    if (!group.types.empty()) groups.push_back(group);
+  }
+  return groups;
+}
+
 void openInsertMenu(InsertMenuState& state, const char* id) {
   state = InsertMenuState();
   ImGui::SetNextWindowPos(ImGui::GetMousePos());
