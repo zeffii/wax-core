@@ -97,6 +97,7 @@ add_library(waxcore
   src/nodes/piano.cpp
   src/nodes/wave_table_data.cpp
   src/nodes/tape.cpp
+  src/nodes/circuit.cpp
   src/nodes/string.cpp
   src/nodes/wavetable.cpp
   src/nodes/addsynth.cpp

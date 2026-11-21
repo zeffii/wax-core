@@ -115,6 +115,7 @@ void registerPadSynth(NodeRegistry& registry);   // padsynth
 void registerSpreadOsc(NodeRegistry& registry);   // spreadosc
 void registerArp(NodeRegistry& registry);   // arp
 void registerTape(NodeRegistry& registry);   // tape
+void registerCircuit(NodeRegistry& registry);   // circuit
 void registerString(NodeRegistry& registry);   // string
 void registerWavetable(NodeRegistry& registry);   // wavetable
 void registerFmSynth(NodeRegistry& registry);   // fmsynth

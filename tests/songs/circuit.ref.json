@@ -1,0 +1,21 @@
+{
+  "song": "circuit.wax",
+  "version": "0.828.0",
+  "sampleRate": 44100,
+  "frames": 1146624,
+  "seconds": 26.001,
+  "peak": 1.0317,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "a79b70e9c714a919cf6428b777cd8d78901913f56428ec9ab0828c16b56c40d7",
+  "nodeTypes": [
+    "bus-in",
+    "chorus",
+    "circuit",
+    "out",
+    "shimmer",
+    "subsynth",
+    "tempo",
+    "voices"
+  ]
+}

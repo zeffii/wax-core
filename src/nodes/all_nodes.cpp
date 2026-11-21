@@ -98,6 +98,7 @@ const NodeRegistry& builtinNodes() {
     registerFmSynth(r);
     registerPiano(r);
     registerTape(r);
+    registerCircuit(r);
     registerString(r);
     registerWavetable(r);
     registerAddSynth(r);

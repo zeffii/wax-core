@@ -1968,6 +1968,8 @@ int main(int argc, char** argv) {
   testRenderSong("islands");
   testRenderSong("eqladdergate");
   testRenderSong("saturator");
+  testRenderSong("circuit");
+  testRenderSong("circuit2");
   testRenderSong("bongo");
   testRenderSong("membrane");
   testRenderSong("cardinal-eco");
