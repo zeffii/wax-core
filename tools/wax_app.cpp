@@ -686,7 +686,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (ImGui::IsKeyPressed(ImGuiKey_F7, false)) player.ring().push({LiveCommand::Row, editor.tick(), 1});   // the row under the cursor, once, all lanes together
     if (ImGui::IsKeyPressed(ImGuiKey_F8, false)) { player.ring().push({LiveCommand::Stop, 0, 1}); session->pausedAt = -1; }
     if (ImGui::IsKeyPressed(ImGuiKey_F9, false)) follow = !follow;
-    if (ImGui::IsKeyPressed(ImGuiKey_Space, false) && session->screen != Screen::Sample && !(session->edit && (session->screen == Screen::Song || session->screen == Screen::Pattern))) {   // (editing, Space places a pattern on the Song screen and writes the live value on the Pattern screen)
+    if (ImGui::IsKeyPressed(ImGuiKey_Space, false) && session->screen != Screen::Sample && session->screen != Screen::Song && !(session->edit && session->screen == Screen::Pattern)) {   // (on the Song screen Space places a pattern, editing or not, as the web; editing the Pattern screen it writes the live value)
       if (playing) player.ring().push({LiveCommand::Stop, 0, 1});
       else player.ring().push({LiveCommand::Play, 0, 1});
     }
@@ -1376,7 +1376,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       session->patternList.picked = copyId; listEdited = true;
     }
     std::string toPlace = listed2.place;
-    if (session->screen == Screen::Song && session->edit && ImGui::IsKeyPressed(ImGuiKey_Space, false) && !ImGui::GetIO().WantTextInput) toPlace = session->patternList.picked;   // Space: the outlined pattern here
+    if (session->screen == Screen::Song && ImGui::IsKeyPressed(ImGuiKey_Space, false) && !ImGui::GetIO().WantTextInput) toPlace = session->patternList.picked;   // Space: the outlined pattern here
     if (!toPlace.empty()) {
       const int before = editor.tick();
       if (editor.placePatternHere(toPlace)) {
