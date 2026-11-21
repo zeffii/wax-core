@@ -10,7 +10,7 @@ const types = Array.isArray(NODE_TYPES) ? NODE_TYPES : Object.values(NODE_TYPES)
 
 // GROUPS and ORDER are plain data in src/graph/menu.js; evaluate just that part of the file.
 const source = fs.readFileSync(path.join(root, 'src/graph/menu.js'), 'utf8');
-const start = source.indexOf('const GROUPS = {'), end = source.indexOf('// The hotkey of each row');
+const start = source.indexOf('const GROUPS = {'), end = source.indexOf('export function createInsertMenu');
 const { GROUPS, ORDER } = new Function(`${source.slice(start, end)}; return { GROUPS, ORDER };`)();
 
 const q = s => JSON.stringify(s);

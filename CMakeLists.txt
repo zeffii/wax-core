@@ -88,6 +88,7 @@ add_library(waxcore
   src/project/samples.cpp src/project/sample_edit.cpp src/project/spectrogram.cpp src/project/onsets.cpp src/project/backups.cpp
   src/nodes/mix.cpp
   src/nodes/dcblock.cpp
+  src/nodes/declick.cpp
   src/nodes/distortion.cpp
   src/nodes/multitap.cpp
   src/nodes/freqshift.cpp

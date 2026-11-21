@@ -133,6 +133,7 @@ void registerSampler(NodeRegistry& registry);   // sampler
 void registerGlsl(NodeRegistry& registry);   // glsl (a dummy: the picture is not drawn)
 void registerMix(NodeRegistry& registry);   // mix
 void registerDcBlock(NodeRegistry& registry);   // dcblock
+void registerDeclick(NodeRegistry& registry);   // declick
 void registerDistortion(NodeRegistry& registry);   // distortion
 
 }  // namespace wax

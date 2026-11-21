@@ -223,6 +223,7 @@ const UnitEntry kTypeUnits[] = {
   {"tempo", "boost", "dB"},
   {"tempo", "release", "ms"},
   {"dcblock", "freq", "Hz"},
+  {"declick", "fade", "ms"}, {"declick", "dc", "Hz"}, {"declick", "settle", "ms"},
   {"tap", "fade", "ms"},
   {"tap", "fadein", "ms"},
   {"vocoder", "low", "Hz"},

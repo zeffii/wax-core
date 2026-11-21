@@ -119,6 +119,7 @@ const NodeRegistry& builtinNodes() {
     registerGlsl(r);
     registerMix(r);
     registerDcBlock(r);
+    registerDeclick(r);
     registerDistortion(r);
     registerMosh(r);
     registerOsc(r);

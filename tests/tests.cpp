@@ -1970,6 +1970,7 @@ int main(int argc, char** argv) {
   testRenderSong("saturator");
   testRenderSong("circuit");
   testRenderSong("circuit2");
+  testRenderSong("declick");
   testRenderSong("bongo");
   testRenderSong("membrane");
   testRenderSong("cardinal-eco");

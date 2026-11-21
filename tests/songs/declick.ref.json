@@ -1,0 +1,19 @@
+{
+  "song": "declick.wax",
+  "version": "0.830.0",
+  "sampleRate": 44100,
+  "frames": 617472,
+  "seconds": 14.002,
+  "peak": 0.668116,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "54cd5dd03e2a44b6564c1c50300864524549cce45e101f150fa778c7bcc9a6dd",
+  "nodeTypes": [
+    "bus-in",
+    "declick",
+    "out",
+    "subsynth",
+    "tempo",
+    "voices"
+  ]
+}
