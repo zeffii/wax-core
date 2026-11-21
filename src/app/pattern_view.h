@@ -47,6 +47,7 @@ struct PatternViewResult {
   int clickedTick = -1;   // a row number was clicked: play from here
   int cellTick = -1, cell = -1;   // a cell was clicked
   int lane = -1;                  // ...in this one of the lanes shown
+  bool pressed = false;           // the mouse went down over the grid (before any release picks a cell: the rows may be moving under it)
 };
 
 // One lane (the solo view) or several side by side, the lane's name over its columns. `playTick`: the row to highlight (-1: none).

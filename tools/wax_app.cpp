@@ -1400,13 +1400,13 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       const app::PatternViewResult result = app::drawPatternView(grids, song.ticksPerBeat, song.beatsPerBar, playing ? tick : -1, follow && playing && !session->edit, cursor);
       ImGui::PopFont();
       if (result.clickedTick >= 0) playFromRequest = result.clickedTick;
+      if (result.pressed && follow && playing) { follow = false; session->editStatus = "Follow off while you edit: F9 follows again."; }   // (at the press, so the rows stop moving before the click lands)
       if (result.cell >= 0 && result.lane >= 0) {
         const Lane& clicked = *shown[static_cast<std::size_t>(result.lane)];
         if (session->solo.on && clicked.id != editor.lane()) return;   // (solo-edit keeps to its lane)
         if (clicked.id != editor.lane()) { selectedLane = clicked.id; editor.setLane(clicked.id, session->player->engine().laneColumns(clicked.id)); }
         editor.moveTo(result.cellTick, result.cell);
         session->edit = true;   // a click puts the caret there, ready to type
-        if (follow && playing) { follow = false; session->editStatus = "Follow off while you edit: F9 follows again."; }   // (as the web: the pattern being edited stays on screen)
       }
     };
     if (app::settings().patternAll) {

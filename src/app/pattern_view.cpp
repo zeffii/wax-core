@@ -213,6 +213,10 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
     }
   }
   if (lastTick > firstTick) measuredPitch = (lastY - firstY) / static_cast<float>(lastTick - firstTick);
+  {   // a press anywhere on the grid is reported at once: a cell is only picked on release, and while the rows scroll under the mouse the release may miss it
+    const ImVec2 corner = ImGui::GetWindowPos(), extent = ImGui::GetWindowSize();
+    result.pressed = ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImGui::IsMouseHoveringRect(ImVec2(corner.x, corner.y + rowHeight * 1.5f), ImVec2(corner.x + extent.x, corner.y + extent.y));
+  }
   if (playY >= 0) {   // the playhead: a thin red line across the table, moving down through the row as the song plays
     // Where the pattern is moving past it the playhead stands still: it is held at its resting place, not worked out again from the rows
     // each frame (those are drawn where the scroll was a frame ago, and the clock's small jitter showed as the line trembling).
