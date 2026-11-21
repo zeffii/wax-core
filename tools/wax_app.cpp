@@ -1574,7 +1574,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     session->graphView.dockMin = session->panel.dock.min; session->graphView.dockMax = session->panel.dock.max;
     session->graphView.probeOf = [&](const std::string& instrument, const std::string& node) { return session->player->engine().runtime().probe(instrument, node); };
     app::drawGraphView(session->graphView, doc, laneInstrument, session->panel.node, 0);
-    if (session->graphView.tileClicked) session->panel.open = true;   // clicking a node brings its parameters back after the window's X hid them
+    if (session->graphView.tileDoubleClicked) session->panel.open = true;   // a double-click on a node shows its parameters (a single click only selects it)
     if (!session->graphView.openDrawings.empty()) session->panel.drawNode = std::exchange(session->graphView.openDrawings, std::string());
     const ImVec2 graphMin = ImGui::GetWindowPos();
     ImVec2 graphMax(graphMin.x + ImGui::GetWindowWidth(), graphMin.y + ImGui::GetWindowHeight());

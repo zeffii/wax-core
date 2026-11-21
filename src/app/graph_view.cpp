@@ -211,6 +211,7 @@ bool drawNote(GraphViewState& state, Document& doc, const std::string& instrumen
 
 bool drawGraphView(GraphViewState& state, Document& doc, const std::string& instrumentId, std::string& picked, float height) {
   state.tileClicked = false;
+  state.tileDoubleClicked = false;
   const Instrument* instrument = nullptr;
   for (const Instrument& i : doc.project().instruments) if (i.id == instrumentId) instrument = &i;
   if (!instrument) return false;
@@ -471,6 +472,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     state.lassoing = false;
     state.lastPicked = picked; picked = n.id;
     state.tileClicked = true;
+    if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) state.tileDoubleClicked = true;
     state.held = n.id; state.dragFree = false; state.dragMoved = false; state.dragForce = io.KeyShift;
     state.grabX = io.MousePos.x - t.min.x; state.grabY = io.MousePos.y - t.min.y;
   };

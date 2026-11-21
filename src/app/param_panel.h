@@ -43,7 +43,7 @@ struct ParamPanelState {
   bool followOpen = false;  // ... and whether it is shown
   std::map<std::string, ExposedWindow> pinned;   // a window kept open for each pinned machine (its id)
   std::set<std::string> pinsSeen;                // the pins as keepPins last saw them (to tell what the user changed)
-  bool open = true;         // the window is shown (the close button hides it; the Instrument screen's tab brings it back)
+  bool open = false;        // the window is shown: a double-click on a node opens it, its close button hides it
 };
 
 // Whether a node type has a window of its own to edit something (drawings, steps, code, a wave...): the buttons of that window are what
