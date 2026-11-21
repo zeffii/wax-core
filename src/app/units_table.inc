@@ -115,6 +115,7 @@ const UnitEntry kTypeUnits[] = {
   {"pogue", "onset", ""},
   {"pogue", "pattern", ""},
   {"pogue", "patlen", ""},
+  {"pogue", "span", "s"},
   {"flanger", "depth", "ms"},
   {"flanger", "delay", "ms"},
   {"comb", "freq", "Hz"},

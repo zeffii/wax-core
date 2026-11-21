@@ -805,6 +805,7 @@ const ParamHint kParamHints[] = {
   {"pogue", "patrate", "How long a pattern step lasts, in song ticks (the arp's list: 1 is a tick, 4 a beat at 4 ticks to the beat)."},
   {"pogue", "moves", "What a trigger does. New targets: each voice picks a new random delay to glide to (needs Change above 0 to be heard). Phase jump: each voice's slow sine jumps to a random place. Both does both."},
   {"pogue", "lookahead", "Live: the sound is not delayed, and the move follows a hit by a fraction of a ms and a step in pitch by a few periods. Aligned: the sound is held back 10 ms so the move lands on the hit itself; the node reports that latency (only when onset is above 0)."},
+  {"pogue", "span", "How many seconds of history the voices picture shows, from the full six down to two: a shorter span stretches the recent movement wider. It changes only the picture, not the sound."},
   {"phaser", "rate", "Speed of the sweep in Hz."},
   {"phaser", "depth", "How far the sweep goes either side of `freq`, in octaves."},
   {"phaser", "freq", "Centre frequency of the sweep in Hz."},

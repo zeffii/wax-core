@@ -92,11 +92,15 @@ void drawVoices(const Canvas& c, const GraphNode& node, const NodeType& type, co
   for (const double ms : {lo, hi}) c.dashed(kPadLeft, std::round(dy(ms)) + 0.5f, kVoicesW - kPadRight, std::round(dy(ms)) + 0.5f, withAlphaF(kAmber, 0.8f), 1.2f, 4, 3);
   c.label("longest " + number(hi) + " ms", kVoicesW - kPadRight - 84, dy(hi) - 11, kAmber, 0.95f);
   c.label("shortest " + number(lo) + " ms", kVoicesW - kPadRight - 90, dy(lo) + 3, kAmber, 0.95f);
-  for (int s = 0; s <= kSeconds; s++) c.label(s == kSeconds ? "now" : "-" + std::to_string(kSeconds - s) + "s", kPadLeft + static_cast<float>(s) / kSeconds * pw - (s == kSeconds ? 8 : 6), kTop + kTrace + 3, ink, 0.45f);
+  // the span: how much of the history is shown (the node's `span`, 2 to 6 seconds); older reports run off the left edge and are clipped
+  const double span = std::clamp(valueOf(node, type, "span") > 0 ? valueOf(node, type, "span") : static_cast<double>(kSeconds), 2.0, static_cast<double>(kSeconds));
+  const float kept = static_cast<float>(kKept * span / kSeconds);
+  for (int back = 0; back <= static_cast<int>(span); back++) c.label(back == 0 ? "now" : "-" + std::to_string(back) + "s", kPadLeft + pw - static_cast<float>(back / span) * pw - (back == 0 ? 8 : 6), kTop + kTrace + 3, ink, 0.45f);
 
+  c.dl->PushClipRect(c.at(kPadLeft, kTop - 2), c.at(kPadLeft + pw, kTop + kTrace + 2), true);   // (older reports run off the left edge)
   const auto& reports = history.reports;
   const int stored = static_cast<int>(reports.size());
-  const auto hx = [&](int k) { return kPadLeft + pw - static_cast<float>(stored - 1 - k) / kKept * pw; };
+  const auto hx = [&](int k) { return kPadLeft + pw - static_cast<float>(stored - 1 - k) / kept * pw; };
   const bool patternOn = std::lround(valueOf(node, type, "pattern")) > 0;
   const ImVec2 rectMin = c.at(kPadLeft, kTop), rectSize(pw * c.scale, kTrace * c.scale);
   if (onset > 0) {   // the fast/slow level ratio on a log scale of its own, the sensitivity line
@@ -132,6 +136,7 @@ void drawVoices(const Canvas& c, const GraphNode& node, const NodeType& type, co
     const Report& last = reports.back();
     for (int v = 0; v < count; v++) if (static_cast<std::size_t>(v) < last.left.size()) c.dot(hx(stored - 1), dy(last.left[static_cast<std::size_t>(v)]), 3.2f, voiceColour(v, count));
   }
+  c.dl->PopClipRect();
   if (!history.live) c.label("play something through it to watch the voices", kPadLeft + pw / 2 - 118, kTop + kTrace / 2 - 4, ink, 0.5f);
   addLineHandles(handles, node, "@pogmin", c, dy(valueOf(node, type, "mindelay")), kPadLeft, kVoicesW - kPadRight, rectMin, rectSize);
   addLineHandles(handles, node, "@pogmax", c, dy(valueOf(node, type, "maxdelay")), kPadLeft, kVoicesW - kPadRight, rectMin, rectSize);

@@ -346,6 +346,7 @@ void registerPogue(NodeRegistry& registry) {
     {"patrate", 0, kRateCount - 1, 4, true},
     {"moves", 0, 2, 0, true},
     {"lookahead", 0, 1, 0, true},
+    {"span", 2, 6, 6},   // seconds of history the voices picture shows (a view setting: the sound ignores it)
   };
   type.latency = [](const std::map<std::string, double>& settings, double sampleRate) {
     return jsRound(settings.at("lookahead")) == 1 && settings.at("onset") > 0 ? jsRound(kLookMs * sampleRate / 1000) : 0.0;
