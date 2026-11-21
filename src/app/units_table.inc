@@ -241,6 +241,8 @@ const UnitEntry kTypeUnits[] = {
   {"ladder", "depth", "oct"},
   {"ladder", "mix", "%"},
   {"ladder", "phase", "%"},
+  {"ladder", "keytrack", "%"},
+  {"filter", "keytrack", "%"},
   {"filterpro", "cutoff", "Hz"},
   {"filterpro", "vowel", ""},
   {"filterpro", "damp", "%"},

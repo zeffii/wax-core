@@ -11,7 +11,7 @@
 namespace wax {
 namespace {
 
-enum Param { kCut = 0, kRes, kDrive, kRate, kDepth, kShape, kMix, kLevel, kPhase };
+enum Param { kCut = 0, kRes, kDrive, kRate, kDepth, kShape, kMix, kLevel, kPhase, kKeytrack };
 
 double sat(double x) {
   const double x2 = x * x;
@@ -25,12 +25,16 @@ public:
       : sr_(context.sampleRate), modOn_(context.connected.size() > 1 && context.connected[1]),
         cs_(1 - js::exp(-4 / (context.sampleRate * 0.004))), ms_(1 - js::exp(-1 / (context.sampleRate * 0.02))) {}
 
+  void note(const NoteEvent& event) override {   // (in a voice's own chain: before the voices node)
+    if (event.type == NoteType::On) keyOctaves_ = (event.note - 60) / 12.0;
+  }
+
   void process(const float* const* inputs, float* const* outputs, int n, const float* params, const int* slots) override {
     const float* input = inputs[0];
     float* out = outputs[0];
     const float* mod = modOn_ ? inputs[1] : nullptr;
     auto p = [&](int i) { return static_cast<double>(params[slots[i]]); };
-    const double base = p(kCut), res = std::min(std::max(p(kRes), 0.0), 1.0);
+    const double base = p(kCut) * js::pow(2, p(kKeytrack) * keyOctaves_), res = std::min(std::max(p(kRes), 0.0), 1.0);
     const double drive = 1 + p(kDrive) * 5, inc = p(kRate) / sr_, depth = p(kDepth);
     const double shift = p(kPhase);
     const int shape = jsRoundInt(p(kShape));
@@ -74,6 +78,7 @@ private:
   double cs_, ms_;
   double s_[4] = {0, 0, 0, 0};
   double phase_ = 0, fc_ = -1, mixNow_ = -1, lvl_ = -1;
+  double keyOctaves_ = 0;   // where the last note is, in octaves from middle C
 };
 
 }  // namespace
@@ -96,6 +101,7 @@ void registerLadder(NodeRegistry& registry) {
     {"mix", 0, 1, 1},
     {"level", 0, 2, 1},
     {"phase", 0, 1, 0},
+    {"keytrack", 0, 1, 0},   // how far the cutoff follows the note, 1 an octave per octave from middle C
   };
   type.create = [](const NodeContext& context) { return std::make_unique<Ladder>(context); };
   registry.add(std::move(type));

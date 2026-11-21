@@ -10,17 +10,21 @@
 namespace wax {
 namespace {
 
-enum Param { kCutoff = 0, kRes, kMode };
+enum Param { kCutoff = 0, kRes, kMode, kKeytrack };
 
 class Filter final : public Node {
 public:
   explicit Filter(const NodeContext& context)
       : sampleRate_(context.sampleRate), modOn_(context.connected.size() > 1 && context.connected[1]) {}
 
+  void note(const NoteEvent& event) override {   // (in a voice's own chain: before the voices node)
+    if (event.type == NoteType::On) keyOctaves_ = (event.note - 60) / 12.0;
+  }
+
   void process(const float* const* inputs, float* const* outputs, int n, const float* params, const int* slots) override {
     const float* input = inputs[0];
     float* out = outputs[0];
-    double target = params[slots[kCutoff]];
+    double target = params[slots[kCutoff]] * js::pow(2, params[slots[kKeytrack]] * keyOctaves_);
     if (modOn_) {
       const float* mod = inputs[1];
       double sum = 0;
@@ -50,6 +54,7 @@ private:
   double sampleRate_;
   bool modOn_;
   double ic1_ = 0, ic2_ = 0, fc_ = -1;
+  double keyOctaves_ = 0;   // where the last note is, in octaves from middle C
 };
 
 }  // namespace
@@ -66,6 +71,7 @@ void registerFilter(NodeRegistry& registry) {
     {"cutoff", 20, 18000, 2000},
     {"resonance", 0, 0.95, 0.2},
     {"mode", 0, 2, 0, true},
+    {"keytrack", 0, 1, 0},   // how far the cutoff follows the note, 1 an octave per octave from middle C
   };
   type.create = [](const NodeContext& context) { return std::make_unique<Filter>(context); };
   registry.add(std::move(type));
