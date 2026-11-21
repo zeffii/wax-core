@@ -25,9 +25,9 @@ const ImU32 kLoopColour = IM_COL32(90, 150, 255, 255), kSusColour = IM_COL32(255
 // The computer keyboard as a piano, the same keys as the pattern screen: two rows, the lower from C of the octave.
 const ImGuiKey kKeys[] = {
     ImGuiKey_Z, ImGuiKey_S, ImGuiKey_X, ImGuiKey_D, ImGuiKey_C, ImGuiKey_V, ImGuiKey_G, ImGuiKey_B, ImGuiKey_H, ImGuiKey_N,
-    ImGuiKey_J, ImGuiKey_M, ImGuiKey_Comma,
+    ImGuiKey_J, ImGuiKey_M,
     ImGuiKey_Q, ImGuiKey_2, ImGuiKey_W, ImGuiKey_3, ImGuiKey_E, ImGuiKey_R, ImGuiKey_5, ImGuiKey_T, ImGuiKey_6, ImGuiKey_Y,
-    ImGuiKey_7, ImGuiKey_U, ImGuiKey_I};
+    ImGuiKey_7, ImGuiKey_U, ImGuiKey_I, ImGuiKey_9, ImGuiKey_O, ImGuiKey_0, ImGuiKey_P};
 
 std::vector<std::string> sampleIds(const Project& project) {
   std::vector<std::string> ids;

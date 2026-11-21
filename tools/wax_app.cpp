@@ -265,7 +265,7 @@ struct Session {
 // The computer keyboard as a piano, the web's piano.js: two rows, the lower from C of the octave, the upper an octave higher (to the P key, two octaves up).
 const ImGuiKey kPianoKeys[] = {
     ImGuiKey_Z, ImGuiKey_S, ImGuiKey_X, ImGuiKey_D, ImGuiKey_C, ImGuiKey_V, ImGuiKey_G, ImGuiKey_B, ImGuiKey_H, ImGuiKey_N,
-    ImGuiKey_J, ImGuiKey_M, ImGuiKey_Comma,
+    ImGuiKey_J, ImGuiKey_M,
     ImGuiKey_Q, ImGuiKey_2, ImGuiKey_W, ImGuiKey_3, ImGuiKey_E, ImGuiKey_R, ImGuiKey_5, ImGuiKey_T, ImGuiKey_6, ImGuiKey_Y,
     ImGuiKey_7, ImGuiKey_U, ImGuiKey_I, ImGuiKey_9, ImGuiKey_O, ImGuiKey_0, ImGuiKey_P};
 
