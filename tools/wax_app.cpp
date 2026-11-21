@@ -931,6 +931,8 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     const std::vector<std::string> problems = syncLanes(doc, player.engine());
     session->editStatus = problems.empty() ? std::string() : problems.front();
   }
+  // the cursor's columns follow the lane as it is now (a Note + Vol pair added or taken away, an exposed parameter, an undo): the editor keeps its own copy
+  if (!editor.lane().empty()) editor.setLane(editor.lane(), player.engine().laneColumns(editor.lane()));
   for (auto it = held.begin(); it != held.end();) {   // a held key lets go when it is up (or the text box took the keyboard)
     if (!ImGui::IsKeyDown(it->first) || io.WantTextInput) {
       player.ring().push({LiveCommand::NoteOff, it->second, 0});
