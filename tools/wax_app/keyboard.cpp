@@ -21,16 +21,18 @@ bool enterPatternUnderCaret(Session* session, std::string& selectedLane) {
   if (!editor.patternHere()) edited |= editor.createPatternHere();
   if (!editor.patternHere()) { session->editStatus = "No pattern here, and one cannot start here."; return edited; }
   selectedLane = editor.lane();
-  session->handoff.openLane(selectedLane, editor.tick());
   session->screen = Screen::Pattern;
   session->handoff.forgetReveal();
-  for (const Lane& lane : doc.project().lanes) {   // the pattern under the cursor: its rows are what the Pattern screen shows
+  int cursorTick = editor.tick();
+  for (const Lane& lane : doc.project().lanes) {   // the pattern under the caret: the cursor goes to its first row, and its rows are what the Pattern screen shows
     if (lane.id != editor.lane()) continue;
     if (const Placement* p = seq::placementAt(lane, editor.tick())) {
       const Pattern* pat = seq::patternOf(lane, p->pattern);
+      cursorTick = p->start;
       session->handoff.revealRows(p->start, p->start + std::min(p->length, pat ? static_cast<int>(pat->rows.size()) : p->length));
     }
   }
+  session->handoff.openLane(selectedLane, cursorTick);
   return edited;
 }
 
