@@ -124,7 +124,7 @@ std::string drawMachineTree(bool haveSamples) {
     const ImVec2 at = ImGui::GetCursorScreenPos();
     const float w = std::max(ImGui::GetContentRegionAvail().x, 150.0f * scale);
     ImGui::PushID(i);
-    ImGui::Selectable("##row", false, 0, ImVec2(w, lineH));
+    ImGui::Selectable("##row", false, ImGuiSelectableFlags_NoAutoClosePopups, ImVec2(w, lineH));   // (a click on a group opens it; only picking a machine closes the menu)
     if (i == cursor) dl->AddRectFilled(at, ImVec2(at.x + w, at.y + lineH), kTreeInk);
     ImGui::PopID();
     if (ImGui::IsItemHovered() && (io.MouseDelta.x != 0 || io.MouseDelta.y != 0 || io.MouseWheel != 0)) cursor = i;   // (the wheel moves rows under a still pointer)
