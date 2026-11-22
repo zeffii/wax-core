@@ -73,6 +73,7 @@ void registerEnsemble(NodeRegistry& registry) {
   type.outputs = {"out"};
   type.kinds = {{"in", PortKind::Stereo}, {"out", PortKind::Stereo}};
   type.isEffect = true;
+  type.dryAtZero = "mix";
   type.params = {{"slow", 0.05, 2, 0.6}, {"fast", 2, 10, 6}, {"depth", 0, 1, 0.6}, {"shimmer", 0, 1, 0.5},
                  {"width", 0, 1, 0.8}, {"tone", 1000, 16000, 8000}, {"mix", 0, 1, 1}};
   type.create = [](const NodeContext& context) { return std::make_unique<Ensemble>(context); };

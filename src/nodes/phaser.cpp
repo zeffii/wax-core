@@ -75,6 +75,7 @@ void registerPhaser(NodeRegistry& registry) {
   type.inputs = {"in"};
   type.outputs = {"out"};
   type.isEffect = true;
+  type.dryAtZero = "mix";
   type.kinds = {{"in", PortKind::Stereo}, {"out", PortKind::Stereo}};
   type.params = {
     {"rate", 0.02, 10, 0.4},          // Hz

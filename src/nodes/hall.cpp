@@ -152,6 +152,7 @@ void registerHall(NodeRegistry& registry) {
   type.outputs = {"out"};
   type.kinds = {{"in", PortKind::Stereo}, {"out", PortKind::Stereo}};
   type.isEffect = true;
+  type.dryAtZero = "mix";
   type.params = {
     {"size", 0.5, 2, 1},
     {"decay", 0.2, 20, 2.5},        // seconds to fall by 60 dB

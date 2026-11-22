@@ -69,6 +69,7 @@ void registerFreqShift(NodeRegistry& registry) {
   type.inputs = {"in"};
   type.outputs = {"out"};
   type.isEffect = true;
+  type.dryAtZero = "mix";
   type.kinds = {{"in", PortKind::Stereo}, {"out", PortKind::Stereo}};
   type.params = {
     {"shift", -1000, 1000, 7},   // Hz, up or down

@@ -2,6 +2,10 @@
 // loop) that ring when the input has a partial of their pitch. The chord picks the pitches, or with `follow` the strings
 // are tuned to the notes the instrument plays. The dry sound stays; `mix` is the level of the strings.
 // Port of webtracker src/audio/nodes/sympathy.js.
+//
+// Layout: the strings' state is kept per quantity (all the low-pass states together, all the feedback gains together, ...) and a block is
+// run string by string in three plain loops, so the arithmetic loop is one the compiler can do several strings at a time. A string that
+// is not in use is all zeros (state, buffer, gains), so running it adds nothing and the loops need no test for it.
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -32,9 +36,9 @@ public:
   explicit Sympathy(const NodeContext& context)
       : sampleRate_(context.sampleRate), probe_(context.probe), size_(static_cast<int>(std::ceil(context.sampleRate / kLowest)) + 4),
         dcR_(1 - 2 * kPi * kDcHz / context.sampleRate) {
-    for (auto& b : bufs_) b.assign(static_cast<std::size_t>(size_), 0.0f);
+    store_.assign(static_cast<std::size_t>(size_) * kMaxStrings, 0.0f);
     pitch_.fill(-1);
-    for (int i = 0; i < kMaxStrings; i++) { pan_[static_cast<std::size_t>(i)] = {kSqrt1_2, kSqrt1_2}; panTo_[static_cast<std::size_t>(i)] = {kSqrt1_2, kSqrt1_2}; }
+    for (int i = 0; i < kMaxStrings; i++) { pan_[static_cast<std::size_t>(i)] = {0, 0}; panTo_[static_cast<std::size_t>(i)] = {0, 0}; }
   }
 
   void note(const NoteEvent& event) override {
@@ -68,36 +72,51 @@ public:
         pan_[s][0] += (panTo_[s][0] - pan_[s][0]) * 0.1;
         pan_[s][1] += (panTo_[s][1] - pan_[s][1]) * 0.1;
       }
+    const bool reporting = probe_ && probe_->watched();
+    if (dead_ && !reporting && allZero(inL, n) && allZero(inR, n)) {   // nothing rings and nothing comes in: the strings would add exactly nothing
+      std::copy(inL, inL + n, outL);
+      std::copy(inR, inR + n, outR);
+      return;
+    }
     const double mix = v(kMix) / std::sqrt(std::max(1, active_)) * 2;
     const double c = 1 - js::exp(-2 * kPi * v(kDamp) / sampleRate_), feed = 0.15;
-    const bool reporting = probe_ && probe_->watched();
+    const std::size_t top = top_;
     for (int i = 0; i < n; i++) {
       const double x = (static_cast<double>(inL[i]) + inR[i]) * 0.5 * feed;
-      double l = 0, r = 0;
-      for (std::size_t s = 0; s < kMaxStrings; s++) {
-        if (pitch_[s] < 0) continue;
-        std::vector<float>& b = bufs_[s];
-        double rp = pos_[s] - len_[s];
-        if (rp < 0) rp += size_;
-        const int j = static_cast<int>(rp);
-        const double f = rp - j;
-        const double a = b[static_cast<std::size_t>(j)];
-        const double y = a + (b[static_cast<std::size_t>(j + 1 == size_ ? 0 : j + 1)] - a) * f;
-        lp_[s] += (y - lp_[s]) * c;
-        // The DC blocker is inside the loop, so a constant part in the input does not pile up as an offset in the string.
-        const double u = lp_[s] * fb_[s] + x, d = u - hx_[s] + dcR_ * hy_[s];
+      dead_ = false;
+      // 1. read each string's delay line, a little between two neighbouring samples
+      for (std::size_t s = 0; s < top; s++) {
+        int j = pos_ - back_[s];
+        if (j < 0) j += size_;
+        const float* line = &store_[s * static_cast<std::size_t>(size_)];
+        const double a = line[j];
+        y_[s] = a + (line[j + 1 == size_ ? 0 : j + 1] - a) * frac_[s];
+      }
+      // 2. the loop: low-pass, then the DC blocker (inside the loop, so a constant part in the input does not pile up as an offset in the string)
+      for (std::size_t s = 0; s < top; s++) {
+        lp_[s] += (y_[s] - lp_[s]) * c;
+        const double u = lp_[s] * fb_[s] + x * fed_[s], d = u - hx_[s] + dcR_ * hy_[s];
         hx_[s] = u;
         hy_[s] = std::fabs(d) < 1e-20 ? 0 : d;
-        const double w = d;
-        b[static_cast<std::size_t>(pos_[s])] = std::fabs(w) < 1e-20 ? 0.0f : static_cast<float>(w);
-        if (++pos_[s] == size_) pos_[s] = 0;
-        l += y * pan_[s][0];
-        r += y * pan_[s][1];
-        if (reporting) energy_[s] = std::max(energy_[s] * 0.9995, std::fabs(y));
+        w_[s] = d;
       }
+      // 3. write the new sample into each line, and add the strings up (in string order, as always)
+      double l = 0, r = 0;
+      bool sounding = x != 0;
+      for (std::size_t s = 0; s < top; s++) {
+        const float written = std::fabs(w_[s]) < 1e-20 ? 0.0f : static_cast<float>(w_[s]);
+        store_[s * static_cast<std::size_t>(size_) + static_cast<std::size_t>(pos_)] = written;
+        sounding |= written != 0;
+        l += y_[s] * pan_[s][0];
+        r += y_[s] * pan_[s][1];
+        if (reporting) energy_[s] = std::max(energy_[s] * 0.9995, std::fabs(y_[s]));
+      }
+      if (++pos_ == size_) pos_ = 0;
+      quiet_ = sounding ? 0 : quiet_ + 1;
       outL[i] = static_cast<float>(inL[i] + l * mix);
       outR[i] = static_cast<float>(inR[i] + r * mix);
     }
+    if (quiet_ > size_) settle();
     if (reporting) {   // the picture: for each string its pitch, how much it rings and what it sends to each side, about every 80 ms
       sent_ += n;
       if (sent_ >= sampleRate_ * 0.08) { sent_ = 0; report(); }
@@ -105,6 +124,17 @@ public:
   }
 
 private:
+  static bool allZero(const float* samples, int n) {
+    for (int i = 0; i < n; i++) if (samples[i] != 0) return false;
+    return true;
+  }
+
+  // Every line has been written with zeros since the last sound: nothing is left in the strings but the dust in their filters, which is let go.
+  void settle() {
+    for (std::size_t i = 0; i < kMaxStrings; i++) { lp_[i] = 0; hx_[i] = 0; hy_[i] = 0; energy_[i] = 0; }
+    dead_ = true;
+  }
+
   // [report number, strings, then the pitches, the energies, the left gains and the right gains of the strings that are in use]
   void report() {
     std::vector<float> notes, energy, left, right;
@@ -121,6 +151,19 @@ private:
     const double hz = std::max(kLowest, space::midiHz(pitch_[i]) * js::pow(2, detune / 1200));
     len_[i] = std::min(static_cast<double>(size_ - 3), sampleRate_ / hz + sampleRate_ * js::atan(kDcHz / hz) / (2 * kPi * hz));
     fb_[i] = js::pow(0.001, len_[i] / (ring / 1000 * sampleRate_));
+    // the line is read `len` samples back: a whole number of samples and the fraction between that one and the one after it
+    const double whole = std::floor(len_[i]);
+    back_[i] = static_cast<int>(whole) + 1;
+    frac_[i] = 1 - (len_[i] - whole);
+    fed_[i] = 1;
+  }
+
+  // a string that is let go becomes silent at once, as if it were not there
+  void silence(std::size_t i) {
+    pitch_[i] = -1;
+    std::fill_n(store_.begin() + static_cast<std::ptrdiff_t>(i * static_cast<std::size_t>(size_)), size_, 0.0f);
+    lp_[i] = 0; hx_[i] = 0; hy_[i] = 0; w_[i] = 0; y_[i] = 0; fb_[i] = 0; fed_[i] = 0; frac_[i] = 0; back_[i] = 1;
+    pan_[i] = {0, 0}; panTo_[i] = {0, 0};
   }
 
   // Each string sits in the stereo field by how far its pitch is from the note that was played: the one on the note itself
@@ -144,19 +187,19 @@ private:
     std::vector<int> want(list.begin(), list.begin() + static_cast<std::ptrdiff_t>(std::min<std::size_t>(list.size(), kMaxStrings)));
     std::set<std::size_t> fresh;
     for (std::size_t i = 0; i < kMaxStrings; i++)
-      if (pitch_[i] >= 0 && std::find(want.begin(), want.end(), pitch_[i]) == want.end()) pitch_[i] = -1;
+      if (pitch_[i] >= 0 && std::find(want.begin(), want.end(), pitch_[i]) == want.end()) silence(i);
     for (const int note : want) {
       if (std::find(pitch_.begin(), pitch_.end(), note) != pitch_.end()) continue;
       const auto free = std::find(pitch_.begin(), pitch_.end(), -1);
       if (free == pitch_.end()) break;
       const std::size_t i = static_cast<std::size_t>(free - pitch_.begin());
       fresh.insert(i);
+      silence(i);   // (start from nothing)
       pitch_[i] = static_cast<short>(note);
-      std::fill(bufs_[i].begin(), bufs_[i].end(), 0.0f);
-      lp_[i] = 0; hx_[i] = 0; hy_[i] = 0;
     }
     active_ = 0;
-    for (std::size_t i = 0; i < kMaxStrings; i++) if (pitch_[i] >= 0) { tune(i, detune, ring); active_++; }
+    top_ = 0;
+    for (std::size_t i = 0; i < kMaxStrings; i++) if (pitch_[i] >= 0) { tune(i, detune, ring); active_++; top_ = i + 1; }
     place(reference, width, fresh);
   }
 
@@ -167,15 +210,19 @@ private:
   std::array<double, kMaxStrings> energy_{};
   double sent_ = 0;
   long reports_ = 0;
-  std::array<std::vector<float>, kMaxStrings> bufs_;
-  std::array<int, kMaxStrings> pos_{};
-  std::array<double, kMaxStrings> lp_{}, len_{}, fb_{}, hx_{}, hy_{};
+  std::vector<float> store_;   // the delay lines one after another, `size_` samples each
+  int pos_ = 0;                // where the next sample is written, the same in every line
+  std::size_t top_ = 0;        // the strings from this one up are all unused
+  std::array<int, kMaxStrings> back_{};
+  std::array<double, kMaxStrings> lp_{}, len_{}, fb_{}, hx_{}, hy_{}, frac_{}, fed_{}, y_{}, w_{};
   std::array<short, kMaxStrings> pitch_;   // the note each string is tuned to, -1 for a string not in use
   std::array<std::array<double, 2>, kMaxStrings> pan_, panTo_;
   std::vector<int> bag_;   // the notes played, newest first
   std::array<double, 9> key_{};
   bool haveKey_ = false, dirty_ = true;
   int active_ = 0;
+  int quiet_ = 0;       // samples in a row in which nothing came in and nothing was written into the lines
+  bool dead_ = false;   // the strings are empty (settled): a block with no input passes straight through
 };
 
 }  // namespace
@@ -187,6 +234,7 @@ void registerSympathy(NodeRegistry& registry) {
   type.outputs = {"out"};
   type.kinds = {{"in", PortKind::Stereo}, {"out", PortKind::Stereo}};
   type.isEffect = true;
+  type.dryAtZero = "mix";
   type.params = {
     {"root", 24, 84, 48, true},       // MIDI note
     {"chord", 0, 7, 1, true},

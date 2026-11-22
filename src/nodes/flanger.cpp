@@ -83,6 +83,7 @@ void registerFlanger(NodeRegistry& registry) {
   type.outputs = {"out"};
   type.kinds = {{"in", PortKind::Stereo}, {"out", PortKind::Stereo}};
   type.isEffect = true;
+  type.dryAtZero = "mix";
   type.params = {
     {"rate", 0.02, 8, 0.25},            // Hz
     {"depth", 0, 8, 1.5},               // ms either side of the delay

@@ -61,6 +61,7 @@ void registerDelay(NodeRegistry& registry) {
   type.outputs = {"out"};
   type.dual = true;   // runs as a left/right pair when a stereo signal arrives
   type.isEffect = true;
+  type.dryAtZero = "mix";
   type.params = {
     {"time", 1, 1000, 300},
     {"feedback", 0, 0.95, 0.35},

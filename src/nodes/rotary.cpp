@@ -119,6 +119,7 @@ void registerRotary(NodeRegistry& registry) {
   type.outputs = {"out"};
   type.kinds = {{"in", PortKind::Stereo}, {"out", PortKind::Stereo}};
   type.isEffect = true;
+  type.dryAtZero = "mix";
   type.params = {{"speed", 0, 2, 1, true}, {"slow", 0.1, 3, 0.8}, {"fast", 3, 12, 6.7}, {"inertia", 0.1, 4, 1}, {"drive", 0, 1, 0.2}, {"doppler", 0, 2, 1},
                  {"tremolo", 0, 1, 0.7}, {"spread", 0, 1, 0.7}, {"balance", 0, 1, 0.5}, {"cross", 200, 3000, 800}, {"mix", 0, 1, 1}};
   type.create = [](const NodeContext& context) { return std::make_unique<Rotary>(context); };

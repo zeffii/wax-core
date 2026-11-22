@@ -64,6 +64,7 @@ struct GraphRuntime::RunNode {
   const float* bypassFrom[2] = {nullptr, nullptr};
   float* bypassTo[2] = {nullptr, nullptr};
   int bypassChannels = 0;
+  int drySlot = -1;   // the slot of the parameter that makes the effect do nothing at 0 (NodeType::dryAtZero)
 
   int voicesTap = -1;   // a voices node of a polyphonic instrument: which tap of the voice sets it adds together
 
@@ -225,6 +226,8 @@ std::unique_ptr<GraphRuntime::RunNode> GraphRuntime::makeNode(const CompiledNode
     const BufferRef& to = compiled.outputs[0];
     run->bypassSlot = compiled.slots[static_cast<std::size_t>(bypassAt)];
     run->bypassChannels = to.isStereo() ? 2 : 1;
+    const int dryAt = compiled.def->dryAtZero.empty() ? -1 : compiled.def->paramIndex(compiled.def->dryAtZero);
+    if (dryAt >= 0) run->drySlot = compiled.slots[static_cast<std::size_t>(dryAt)];
     run->bypassFrom[0] = buffer(from.left);
     run->bypassFrom[1] = buffer(from.isStereo() ? from.right : from.left);
     run->bypassTo[0] = buffer(to.left);
@@ -385,6 +388,10 @@ void GraphRuntime::runNode(Instrument& inst, RunNode& node, int n) {
     const double x = clamp(feed.buffer[n - 1], 0, 1);
     const double v = p.log ? p.min * js::pow(p.max / p.min, x) : p.min + x * (p.max - p.min);
     if (std::isfinite(v)) params_[p.slot] = static_cast<float>(p.isInt ? jsRound(v) : v);
+  }
+  if (node.drySlot >= 0 && params_[node.drySlot] <= 0.0f) {   // an effect turned right down to nothing: the input goes on as it is
+    for (int c = 0; c < node.bypassChannels; c++) std::copy(node.bypassFrom[c], node.bypassFrom[c] + n, node.bypassTo[c]);
+    return;
   }
   node.node->process(node.inputs.data(), node.outputs.data(), n, params_, node.slots.data());
   if (node.rightNode) node.rightNode->process(node.inputsRight.data(), node.outputsRight.data(), n, params_, node.slots.data());

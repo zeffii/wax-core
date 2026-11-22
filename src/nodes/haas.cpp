@@ -66,6 +66,7 @@ void registerHaas(NodeRegistry& registry) {
   type.outputs = {"out"};
   type.kinds = {{"in", PortKind::Stereo}, {"out", PortKind::Stereo}};
   type.isEffect = true;
+  type.dryAtZero = "mix";
   type.params = {
     {"time", 0, kMaxMs, 14},          // ms
     {"gain", 0, 1.2, 0.9},

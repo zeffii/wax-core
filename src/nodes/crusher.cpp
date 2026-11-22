@@ -61,6 +61,7 @@ void registerCrusher(NodeRegistry& registry) {
   type.inputs = {"in"};
   type.outputs = {"out"};
   type.isEffect = true;
+  type.dryAtZero = "mix";
   type.kinds = {{"in", PortKind::Stereo}, {"out", PortKind::Stereo}};
   type.params = {
     {"bits", 1, 16, 8},

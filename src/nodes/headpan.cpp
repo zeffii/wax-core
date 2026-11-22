@@ -74,6 +74,7 @@ void registerHeadPan(NodeRegistry& registry) {
   type.outputs = {"out"};
   type.kinds = {{"in", PortKind::Stereo}, {"out", PortKind::Stereo}};
   type.isEffect = true;
+  type.dryAtZero = "mix";
   type.params = {{"angle", -180, 180, 40}, {"distance", 0.5, 20, 1.5}, {"head", 14, 22, 17.5}, {"shadow", 0, 1, 1}, {"mix", 0, 1, 1}};
   type.create = [](const NodeContext& context) { return std::make_unique<HeadPan>(context); };
   registry.add(std::move(type));
