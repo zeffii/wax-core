@@ -93,6 +93,8 @@ bool handleKeyboard(Session* session, KeyboardEnv& env) {
         edited |= editor.createPatternHere();
         session->edit = true;
         session->editStatus = editor.patternHere() ? "New pattern here." : "No pattern here, and one cannot start here.";
+      } else if (session->screen == Screen::Pattern) {   // Enter where a pattern already is does nothing (as the web)
+        if (!session->solo.on) session->editStatus = "A pattern is already here.";
       } else session->edit = !session->edit;
     }
     if (session->solo.on && session->screen != Screen::Pattern) { session->solo.end(editor); }   // (leaving the Pattern screen ends solo-edit)
