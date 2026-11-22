@@ -15,7 +15,8 @@ namespace wax::app {
 
 namespace {
 
-constexpr float kGutter = 44.0f;       // the tick numbers at the left
+constexpr float kLoopLane = 6.0f;      // the loop's bar, at the very left
+constexpr float kGutter = 44.0f + kLoopLane;   // the loop lane and the tick numbers
 // The whole sequence editor starts one character's width in from the browser's drag handle beside it (about 8 px).
 float leftMargin() { return ImGui::CalcTextSize("0").x; }
 float gutterWidth(float scale) { return kGutter * scale; }
@@ -181,12 +182,12 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
   const int last = std::min(rows - 1, static_cast<int>((scrollY + viewHeight) / rowHeight));
   const int bar16 = cell * 4;   // a brighter number every four bars
 
-  // the loop: a bar beside the tick numbers over its rows, and a line across the sheet at each end
+  // the loop: a thin bar in the lane left of the tick numbers over its rows, and a line across the sheet at each end
   const LoopRange loop = loopOf(project.song);
   if (loop.on) {
     const float top = origin.y + headHeight + static_cast<float>(loop.start / cell) * rowHeight;
     const float bottom = origin.y + headHeight + static_cast<float>((loop.end + cell - 1) / cell) * rowHeight;
-    draw->AddRectFilled(ImVec2(origin.x, top), ImVec2(origin.x + 3 * scale, bottom), kWarm);
+    draw->AddRectFilled(ImVec2(origin.x + scale, top), ImVec2(origin.x + 4 * scale, bottom), kWarm);   // (its own narrow lane, left of the tick numbers)
     draw->AddLine(ImVec2(origin.x, top), ImVec2(origin.x + totalWidth, top), withAlpha(kWarm, 110));
     draw->AddLine(ImVec2(origin.x, bottom), ImVec2(origin.x + totalWidth, bottom), withAlpha(kWarm, 110));
   }
@@ -197,7 +198,7 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
     const int t = r * cell;
     char number[16];
     std::snprintf(number, sizeof number, "%04d", t);
-    draw->AddText(ImVec2(origin.x + 2 * scale, y + scale), t % bar16 == 0 ? kText : kDimText, number);
+    draw->AddText(ImVec2(origin.x + (kLoopLane + 2) * scale, y + scale), t % bar16 == 0 ? kText : kDimText, number);
   }
 
   // the pictures of the patterns, when they are switched on (the lanes' rows and columns come from the caller)

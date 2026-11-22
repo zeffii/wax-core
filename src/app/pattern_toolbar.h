@@ -6,6 +6,9 @@
 
 namespace wax::app {
 
+// The follow icon (a playhead line with chevrons), shared by the toolbars that have a Follow switch.
+void iconFollowRow(ImDrawList* dl, ImVec2 lo, float u, ImU32 ink);
+
 // Draws the toolbar centred along the top of [areaMin, areaMax] and returns the height it takes (the grid starts below it). `follow` is the
 // Follow switch's state (kept by the caller; a click flips it and keeps the setting).
 float drawPatternToolbar(ImDrawList* dl, ImVec2 areaMin, ImVec2 areaMax, float scale, bool& follow);

@@ -41,7 +41,9 @@ void iconSoloSong(ImDrawList* dl, ImVec2 lo, float u, ImU32 ink) {   // a patter
   dl->AddLine(ImVec2(lo.x + 4 * u, lo.y + 12 * u), ImVec2(lo.x + 12 * u, lo.y + 12 * u), ink, w * 0.7f);
 }
 
-void iconFollow(ImDrawList* dl, ImVec2 lo, float u, ImU32 ink) {   // the playhead line with a chevron pointing the way it moves
+}  // namespace
+
+void iconFollowRow(ImDrawList* dl, ImVec2 lo, float u, ImU32 ink) {   // the playhead line with a chevron pointing the way it moves
   const float w = std::max(1.0f, 1.3f * u);
   dl->AddLine(ImVec2(lo.x + 2 * u, lo.y + 8 * u), ImVec2(lo.x + 14 * u, lo.y + 8 * u), ink, w);
   dl->AddLine(ImVec2(lo.x + 5 * u, lo.y + 3 * u), ImVec2(lo.x + 8 * u, lo.y + 6 * u), ink, w);
@@ -49,8 +51,6 @@ void iconFollow(ImDrawList* dl, ImVec2 lo, float u, ImU32 ink) {   // the playhe
   dl->AddLine(ImVec2(lo.x + 5 * u, lo.y + 13 * u), ImVec2(lo.x + 8 * u, lo.y + 10 * u), ink, w);
   dl->AddLine(ImVec2(lo.x + 11 * u, lo.y + 13 * u), ImVec2(lo.x + 8 * u, lo.y + 10 * u), ink, w);
 }
-
-}  // namespace
 
 float drawPatternToolbar(ImDrawList* dl, ImVec2 areaMin, ImVec2 areaMax, float scale, bool& follow) {
   Settings& s = settings();
@@ -63,7 +63,7 @@ float drawPatternToolbar(ImDrawList* dl, ImVec2 areaMin, ImVec2 areaMax, float s
       setting("Hear notes", "a note typed or moved onto sounds (note preview)", s.notePreview, iconHear),
       setting("Hide empty columns", "leaves out the columns nothing is written in", s.hideEmpty, iconHideEmpty),
       setting("Solo-edit shows the song", "in solo-edit the other patterns stay in view, hatched and locked (off: the pattern alone)", s.soloHatch, iconSoloSong),
-      ToolbarSwitch{"Follow the playing row", "the grid scrolls with the playhead while the song plays (F9)", [&follow] { return follow; }, [&follow, &s] { follow = !follow; s.follow = follow; saveSettings(); }, iconFollow},
+      ToolbarSwitch{"Follow the playing row", "the grid scrolls with the playhead while the song plays (F9)", [&follow] { return follow; }, [&follow, &s] { follow = !follow; s.follow = follow; saveSettings(); }, iconFollowRow},
   };
   const ToolbarBox box = toolbarBox(areaMin, areaMax, scale, static_cast<int>(list.size()));
   drawToolbar(dl, box, list, scale, ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows));

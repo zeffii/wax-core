@@ -27,6 +27,20 @@ void drawSongScreen(FrameContext& f) {
   if (!selectedLane.empty() && editor.lane() != selectedLane) editor.setLane(selectedLane, player.engine().laneColumns(selectedLane));   // (one cell is always active: the cursor is in the lane shown)
   const float songSheetW = session->showKeys ? 270 * scale : 0;
   ImGui::BeginChild("seqmain", ImVec2(-songSheetW, 0), false, ImGuiWindowFlags_NoNav);
+  {   // the toolbar along the top of the window; the sheet starts below it
+    const LoopRange loop = loopOf(song);
+    const std::function<void()> toggleLoop = [&] {   // (the same as Ctrl+L)
+      Json toggled = loopToggled(song);
+      if (toggled.is_null()) { session->editStatus = "No loop to switch: Ctrl+B and Ctrl+E set one."; return; }
+      const bool off = toggled.value("off", false);
+      doc.apply(std::make_unique<SetLoop>(std::move(toggled), off ? "Loop off" : "Loop on"));
+      syncLoop(doc, player.engine());
+      session->editStatus = off ? "Loop off (its points are kept)." : "Loop on.";
+    };
+    const ImVec2 areaMin = ImGui::GetWindowPos();
+    const float taken = app::drawSequenceToolbar(ImGui::GetWindowDrawList(), areaMin, ImVec2(areaMin.x + ImGui::GetWindowWidth(), areaMin.y + ImGui::GetWindowHeight()), scale, follow, loop.on, song.raw.contains("loop"), toggleLoop);
+    ImGui::Dummy(ImVec2(0, taken));
+  }
   const app::CurveView::Targets curveTargetsOf = [&](const Lane& lane) { return curveTargets(player.engine().laneColumns(lane.id), lane.instrument, player.engine().registry()); };
   std::map<std::string, app::MinimapLane> minimapLanes;   // what the pictures of the patterns read (only when they are on)
   if (app::settings().minimapOn)
