@@ -1563,6 +1563,12 @@ void testBackups() {
   wax::writeBackup(folder, "", "{}", 3, base + 5 * 200);
   std::vector<wax::BackupInfo> list = wax::listBackups(folder);
   check(list.size() == 3, "only the newest snapshots are kept");
+  if (list.size() != 3) {   // (say what is there, and do not index past it)
+    std::printf("  found %zu snapshots in %s:\n", list.size(), folder.string().c_str());
+    for (const auto& entry : fs::directory_iterator(folder)) std::printf("    %s\n", entry.path().filename().string().c_str());
+    fs::remove_all(folder);
+    return;
+  }
   check(list[0].name == "song" && list[1].name == "My_Song_" && list[0].time == base + 1000 && list[1].time == base + 800, "newest first, names made safe, times read back");
   std::ifstream in(list[1].file);
   std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
