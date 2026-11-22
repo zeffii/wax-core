@@ -289,3 +289,23 @@ sample, is greyed. Undo replaces the lane in the engine by an empty one (the idl
 The menu has the web's items. These are stubs that only say so in the status line: Interpolate (Ctrl+I), Randomize (Ctrl+R, with Alt+R to roll again), Chord palette (Alt+C), "What does XX do?" (command help), Machine help (Ctrl+Alt+H).
 
 - Row remap: adding a note column now pads the placed patterns (SetNoteColumns). Exposing or removing parameters, and trigger columns, likely have the same gap (rows keep the old cell count); check and give them the same treatment.
+
+## App structure (tools/wax_app.cpp)
+
+The web app was split so each concern has one owner; the native app is following, in steps that each keep behaviour identical. Check each step
+with `tools/golden.sh save DIR` before and `tools/golden.sh check DIR` after (build the "before" in a second worktree; run both from the same
+directory, since the Sample screen shows the folder).
+
+Done:
+- `app::Handoff` (src/app/handoff.h): what the Song screen asks of the Pattern screen (lane tab, cursor tick, scroll, reveal of the pattern
+  entered). One-shot messages with one entry point (`openLane`), taken once (`takeScroll`, `landed`).
+- `KeyFocus` / `keyFocusOf`: who the keyboard goes to (sequence caret, grid caret, grid editing, piano keys), asked at each key because Enter and
+  the arrow keys change it within the frame.
+- `handleKeyboard` (with `KeyboardEnv`): the whole keyboard section out of `drawFrame`.
+
+Left:
+- `drawFrame` is still about 1,300 lines: the header, the rail, the browser and one block per screen. Each screen wants its own file with a
+  `draw<Screen>(Session&, ...)` function; `Session` moves to a header (`tools/session.h`) first so the files can share it.
+- Text-box focus (`infoFocused`, `nameFocused`, `renamingMachine`, `wantTree`) is still separate flags next to `io.WantTextInput`; they belong in
+  `KeyFocus` once the screens are split.
+- Solo-edit (`Session::SoloEdit` and the places that end it) wants one owner.
