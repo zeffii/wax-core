@@ -312,3 +312,16 @@ Where things are:
 Left:
 - Nothing structural is open. (The text boxes' `infoFocused`, `nameFocused` and `renamingMachine` flags only stop a box's buffer being refilled
   while it is being typed in; the keys themselves are routed by ImGui's `WantTextInput`, so they stay where they are.)
+
+## Graph toolbar (src/app/graph_toolbar.cpp)
+
+A small row of icon switches, centred inside the top edge of the graph window; the node picker (the trail and the bank) stays at the right edge
+as its own thing. Each switch is a Config setting too: grid (`graphGrid`, with `graphGridSize`, `graphGridMajor`), snap (`graphSnap`), dashed
+wires (`wireDashed`), straight short wires (`wireStraight`, pixels; 0 keeps every wire curved), pull out (`graphPullOut`) and hide command
+parameters (`pvHideCc`).
+
+Gaps against the web's graph rail:
+- Compact nodes (`nodeLook`): native draws only the compact look, so the web's seventh switch has nothing to switch to until the classic tiles are
+  ported.
+- Hide command parameters hides the rows a command in the instrument's table writes; the web also hides the sampler's own command parameters
+  when the instrument has no table, and has a `cc` button in the parameter panel's title that does the same.

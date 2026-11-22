@@ -39,6 +39,12 @@ struct Settings {
   // and, with laneWrap, from the last lane back to the first
   bool rowWrap = false, laneWrap = false;
   int threads = 1;   // threads that render the instruments (the calling thread counts); 1: all on one. The sound is the same whatever the number
+  // the graph's toolbar switches (the web's graphGrid, graphGridSize, graphGridMajor, graphSnap, wireStraight, pvHideCc)
+  bool graphGrid = true;       // a faint dot grid behind the nodes
+  int graphGridSize = 24, graphGridMajor = 12;   // the pixels between dots, and the dots between the brighter ones (0: none brighter)
+  bool graphSnap = true;       // a node moved lands on a dot (Ctrl while dragging moves freely)
+  int wireStraight = 60;       // wires between nodes closer than this (pixels) lose their S-curve, easing in up to twice it; 0 keeps every wire curved
+  bool pvHideCc = false;       // the parameter view leaves out the parameters a command writes from a pattern
   bool graphPullOut = false;   // the web's graphPullOut: dragging a node far out of its chain takes it out (Shift+drag always does)
   // the Sample screen (the web's sliceSensitivity, sliceMinGap, sliceReplace, sliceWhole, waveHide*, hexMode, sampleAskMB)
   int sliceSensitivity = 50, sliceMinGap = 30;

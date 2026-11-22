@@ -93,6 +93,16 @@ void drawConfigScreen(FrameContext& f) {
   colour("Wire colour: stereo", cfg.wireStereo);
   colour("Wire colour: parameter", cfg.wireParam);
   if (app::checkbox("Control wires are dashed", &cfg.wireDashed)) changed = true;
+  if (app::checkbox("Graph: faint grid of dots", &cfg.graphGrid)) changed = true;
+  ImGui::SetNextItemWidth(180 * scale);
+  if (ImGui::SliderInt("Graph: grid spacing (pixels)", &cfg.graphGridSize, 8, 96)) changed = true;
+  ImGui::SetNextItemWidth(180 * scale);
+  if (ImGui::SliderInt("Graph: brighter dot every (0: none)", &cfg.graphGridMajor, 0, 64)) changed = true;
+  if (app::checkbox("Graph: nodes snap to the grid (Ctrl while dragging moves freely)", &cfg.graphSnap)) changed = true;
+  ImGui::SetNextItemWidth(180 * scale);
+  if (ImGui::SliderInt("Graph: wires between close nodes go straight below (pixels; 0: always curved)", &cfg.wireStraight, 0, 400)) changed = true;
+  if (app::checkbox("Graph: dragging a node far out of its chain takes it out", &cfg.graphPullOut)) changed = true;
+  if (app::checkbox("Parameter view: hide command parameters", &cfg.pvHideCc)) changed = true;
   group("Song screen", "The sequence editor.");
   if (app::checkbox("Song overview (a strip at the right showing the whole song scaled to fit: click or drag to scroll)", &cfg.seqOverview)) changed = true;
   if (app::checkbox("Pattern minimaps (each cell shows a small picture of its pattern)", &cfg.minimapOn)) changed = true;
@@ -106,7 +116,6 @@ void drawConfigScreen(FrameContext& f) {
   group("Editing", "How the cursor moves.");
   if (app::checkbox("Sequence editor: show pattern names (off: just the two-digit number; H toggles)", &cfg.seqNames)) changed = true;
   if (app::checkbox("Up and Down wrap round the first and last row", &cfg.rowWrap)) changed = true;
-  if (app::checkbox("Graph: dragging a node far out of its chain takes it out", &cfg.graphPullOut)) changed = true;
   if (app::checkbox("Left and Right wrap round the first and last lane (All lanes view)", &cfg.laneWrap)) changed = true;
   if (app::fileAssociationSupported()) {
     group("Files", "Double-clicking a .wax file in the file manager.");

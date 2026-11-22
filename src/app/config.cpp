@@ -80,6 +80,12 @@ void loadSettings() {
   s.backupKeep = std::clamp(data.value("backupKeep", s.backupKeep), 5, 200);
   s.rowWrap = data.value("rowWrap", s.rowWrap);
   s.graphPullOut = data.value("graphPullOut", s.graphPullOut);
+  s.graphGrid = data.value("graphGrid", s.graphGrid);
+  s.graphGridSize = std::clamp(data.value("graphGridSize", s.graphGridSize), 8, 96);
+  s.graphGridMajor = std::clamp(data.value("graphGridMajor", s.graphGridMajor), 0, 64);
+  s.graphSnap = data.value("graphSnap", s.graphSnap);
+  s.wireStraight = std::clamp(data.value("wireStraight", s.wireStraight), 0, 400);
+  s.pvHideCc = data.value("pvHideCc", s.pvHideCc);
   s.threads = std::clamp(data.value("threads", s.threads), 1, 64);
   s.laneWrap = data.value("laneWrap", s.laneWrap);
   s.sliceSensitivity = std::clamp(data.value("sliceSensitivity", s.sliceSensitivity), 0, 100);
@@ -103,7 +109,7 @@ void saveSettings() {
   const Settings& s = gSettings;
   Json data = {{"wireAudio", hexOf(s.wireAudio)}, {"wireControl", hexOf(s.wireControl)}, {"wireStereo", hexOf(s.wireStereo)},
                {"wireParam", hexOf(s.wireParam)}, {"wireDashed", s.wireDashed}, {"follow", s.follow}, {"arrangementRow", s.arrangementRow}, {"insertCut", s.insertCut}, {"patternAll", s.patternAll}, {"hideEmpty", s.hideEmpty}, {"soloHatch", s.soloHatch}, {"seqNames", s.seqNames}, {"patternText", s.patternText}, {"mixerHeight", s.mixerHeight}, {"stripHeight", s.stripHeight}, {"stripShown", s.stripShown}, {"windowWidth", s.windowWidth}, {"windowHeight", s.windowHeight}, {"windowMaximised", s.windowMaximised}, {"notePreview", s.notePreview}, {"tintPatterns", s.tintPatterns}, {"seqOverview", s.seqOverview}, {"minimapOn", s.minimapOn}, {"minimapLengths", s.minimapLengths}, {"minimapCaps", s.minimapCaps}, {"minimapParams", s.minimapParams}, {"pinnedMachines", s.pinnedMachines},
-               {"backupOn", s.backupOn}, {"backupMinutes", s.backupMinutes}, {"backupKeep", s.backupKeep}, {"rowWrap", s.rowWrap}, {"graphPullOut", s.graphPullOut}, {"threads", s.threads}, {"laneWrap", s.laneWrap}, {"sliceSensitivity", s.sliceSensitivity}, {"sliceMinGap", s.sliceMinGap}, {"sliceReplace", s.sliceReplace}, {"sliceWhole", s.sliceWhole},
+               {"backupOn", s.backupOn}, {"backupMinutes", s.backupMinutes}, {"backupKeep", s.backupKeep}, {"rowWrap", s.rowWrap}, {"graphPullOut", s.graphPullOut}, {"graphGrid", s.graphGrid}, {"graphGridSize", s.graphGridSize}, {"graphGridMajor", s.graphGridMajor}, {"graphSnap", s.graphSnap}, {"wireStraight", s.wireStraight}, {"pvHideCc", s.pvHideCc}, {"threads", s.threads}, {"laneWrap", s.laneWrap}, {"sliceSensitivity", s.sliceSensitivity}, {"sliceMinGap", s.sliceMinGap}, {"sliceReplace", s.sliceReplace}, {"sliceWhole", s.sliceWhole},
                {"waveHideLoop", s.waveHideLoop}, {"waveHideSel", s.waveHideSel}, {"waveHideSus", s.waveHideSus}, {"hexMode", s.hexMode}, {"sampleAskMB", s.sampleAskMB}, {"recentFiles", s.recentFiles}};
   std::ofstream(path, std::ios::trunc) << data.dump(1) << "\n";
 }

@@ -318,16 +318,23 @@ bool drawParamPanel(ParamPanelState& state, Document& doc, const Engine& engine,
     if (c.to.rfind(prefix, 0) == 0) wired.insert(c.to.substr(prefix.size()));
   }
 
+  // a row shows unless it is the bypass switch, or Hide command parameters is on and a command writes it from a pattern
+  const auto shown = [&](const ParamSpec& spec) {
+    if (spec.name == "bypass") return false;
+    if (!settings().pvHideCc) return true;
+    for (const Command& c : instrument->commands) if (c.node == picked->id && c.param == spec.name) return false;
+    return true;
+  };
   const float total = ImGui::GetContentRegionAvail().x;
   float nameW = 0;   // as wide as the longest name (and its port dot), not a share of the panel
-  for (const ParamSpec& spec : type->params) if (spec.name != "bypass") nameW = std::max(nameW, ImGui::CalcTextSize(spec.name.c_str()).x);
+  for (const ParamSpec& spec : type->params) if (shown(spec)) nameW = std::max(nameW, ImGui::CalcTextSize(spec.name.c_str()).x);
   nameW = std::min(nameW + 14 * scale, total * 0.5f);
   int shownRows = 0;
-  for (const ParamSpec& spec : type->params) if (spec.name != "bypass") shownRows++;
+  for (const ParamSpec& spec : type->params) if (shown(spec)) shownRows++;
   const RowKeys keys = panelKeys(state.paramCursor, shownRows);
   int index = 0;
   for (const ParamSpec& spec : type->params) {
-    if (spec.name == "bypass") continue;
+    if (!shown(spec)) continue;
     const bool chosen = index++ == state.paramCursor;
     if (drawRow(state, doc, engine, instrument, instrumentId, picked, spec, spec.name, wired.count(spec.name) > 0, total, nameW, chosen ? &keys : nullptr, chosen)) changed = true;
   }

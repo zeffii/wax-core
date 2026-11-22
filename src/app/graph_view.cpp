@@ -12,6 +12,7 @@
 #include <memory>
 #include <set>
 
+#include "app/graph_toolbar.h"
 #include "app/node_look.h"
 #include "app/config.h"
 #include "app/theme.h"
@@ -28,7 +29,8 @@ constexpr float kPortReach = 9;       // how near the mouse must be to a port at
 constexpr float kDragReach = 30;      // while a wire is pulled: the nearest port of the side it can land on, this close, takes it
 constexpr float kNearRange = 64;      // ports swell as the mouse comes within this distance
 constexpr float kStripStep = 11, kStripGap = 7;   // parameter ports hang in a strip of dots under the tile
-constexpr float kGrid = 24, kGridMajor = 12;      // the dot grid, and the dots between the brighter ones
+// the dot grid's spacing (web pixels) is a setting
+float gridSize() { return static_cast<float>(settings().graphGridSize); }
 constexpr float kPlainRow = 16;      // port spacing on a node that draws its own face
 
 std::string nodeOfAddress(const std::string& address) { return address.substr(0, address.find('.')); }
@@ -81,8 +83,9 @@ ImVec2 portPos(const Tile& t, bool output, int index, float scale) {
   return ImVec2(x, y);
 }
 
-float wireArm(ImVec2 a, ImVec2 b, float scale) {   // wires between close nodes lose their S-curve (the web's default distance is 60)
-  const float straight = 60 * scale;
+float wireArm(ImVec2 a, ImVec2 b, float scale) {   // wires between close nodes lose their S-curve (the web's wireStraight; 0 keeps every wire curved)
+  const float straight = static_cast<float>(settings().wireStraight) * scale;
+  if (straight <= 0) return 50 * scale;
   return 50 * scale * std::clamp((std::hypot(b.x - a.x, b.y - a.y) - straight) / straight, 0.0f, 1.0f);
 }
 
@@ -223,7 +226,8 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
   ImGui::BeginChild("graph", ImVec2(0, height), false, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoNav);
   ImDrawList* dl = ImGui::GetWindowDrawList();
   const ImGuiIO& io = ImGui::GetIO();
-  const bool windowHovered = ImGui::IsWindowHovered() && !state.trail.over(ImGui::GetIO().MousePos) && !overTrail(ImGui::GetIO().MousePos, ImGui::GetWindowPos(), ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(), ImGui::GetWindowPos().y + ImGui::GetWindowHeight()), scale);
+  const ToolbarBox toolbarBox = graphToolbarBox(ImGui::GetWindowPos(), ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(), ImGui::GetWindowPos().y + ImGui::GetWindowHeight()), scale);
+  const bool windowHovered = ImGui::IsWindowHovered() && !toolbarBox.contains(ImGui::GetIO().MousePos) && !state.trail.over(ImGui::GetIO().MousePos) && !overTrail(ImGui::GetIO().MousePos, ImGui::GetWindowPos(), ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(), ImGui::GetWindowPos().y + ImGui::GetWindowHeight()), scale);
   if (windowHovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 0)) {   // the middle button pans the whole graph, as in the web app (the view moves, not the tiles)
     state.pan.x += io.MouseDelta.x;
     state.pan.y += io.MouseDelta.y;
@@ -235,13 +239,14 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
   auto textWidth = [&](float size, const char* s) { return font->CalcTextSizeA(size, FLT_MAX, 0, s).x; };
 
   // a very faint grid of dots, a brighter one every few
-  {
+  if (settings().graphGrid) {
     const ImVec2 lo = dl->GetClipRectMin(), hi = dl->GetClipRectMax();
-    const float step = kGrid * scale;
+    const float step = gridSize() * scale;
     const int i0 = static_cast<int>(std::floor((lo.x - origin.x) / step)), j0 = static_cast<int>(std::floor((lo.y - origin.y) / step));
     for (int j = j0; origin.y + j * step < hi.y; j++) {
       for (int i = i0; origin.x + i * step < hi.x; i++) {
-        const bool major = i % static_cast<int>(kGridMajor) == 0 && j % static_cast<int>(kGridMajor) == 0;
+        const int every = settings().graphGridMajor;
+        const bool major = every > 0 && i % every == 0 && j % every == 0;
         const ImVec2 p(std::round(origin.x + i * step), std::round(origin.y + j * step));
         const float r = (major ? 1.0f : 0.75f) * std::max(1.0f, scale * 0.9f);
         dl->AddRectFilled(ImVec2(p.x - r, p.y - r), ImVec2(p.x + r, p.y + r), textAlpha(major ? 76 : 28));
@@ -659,6 +664,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     std::string dragType;
     std::set<std::string> trailAvailable;
     for (const std::string& name : types.typeNames()) if (name != "out" && name != "tempo") trailAvailable.insert(name);
+    drawGraphToolbar(dl, areaMin, areaMax, scale, ImGui::IsWindowHovered() && !state.trail.over(io.MousePos));
     const TrailEvent event = drawNodeTrail(state.trail, dl, areaMin, ImVec2(areaMax.x, areaMax.y - state.bottomInset), scale, dragType, trailAvailable);
     if (event.kind != TrailEvent::Kind::None) {
       const ImVec2 where = event.kind == TrailEvent::Kind::Drop ? event.at : ImVec2((areaMin.x + areaMax.x) / 2, (areaMin.y + areaMax.y) / 2);
@@ -670,7 +676,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
         if (!taken) break;
         id = event.type + std::to_string(k);
       }
-      const float x = std::round(((where.x - origin.x) / scale - 12) / kGrid) * kGrid, y = std::round(((where.y - origin.y) / scale - 12) / kGrid) * kGrid;
+      const float x = std::round(((where.x - origin.x) / scale - 12) / gridSize()) * gridSize(), y = std::round(((where.y - origin.y) / scale - 12) / gridSize()) * gridSize();
       std::vector<std::unique_ptr<Edit>> follow;
       if (type && event.kind == TrailEvent::Kind::Drop && hoverWire && !type->inputs.empty() && !type->outputs.empty()) {   // into the wire it was let go on
         const GraphNode blank{};
@@ -848,7 +854,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       state.held.clear();
     } else {
       float nx = (io.MousePos.x - state.grabX - origin.x) / scale, ny = (io.MousePos.y - state.grabY - origin.y) / scale;
-      if (!io.KeyCtrl) { nx = std::round(nx / kGrid) * kGrid; ny = std::round(ny / kGrid) * kGrid; }
+      if (settings().graphSnap && !io.KeyCtrl) { nx = std::round(nx / gridSize()) * gridSize(); ny = std::round(ny / gridSize()) * gridSize(); }
       const GraphNode* held = nullptr;
       for (const GraphNode& n : graph.nodes) if (n.id == state.held) held = &n;
       if (held && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 3) && (std::fabs(nx - held->x) > 0.5 || std::fabs(ny - held->y) > 0.5 || !held->placed)) {
@@ -890,7 +896,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
         if (!taken) break;
         id = name + std::to_string(k);
       }
-      float x = std::round(state.addAt.x / kGrid) * kGrid, y = std::round(state.addAt.y / kGrid) * kGrid;
+      float x = std::round(state.addAt.x / gridSize()) * gridSize(), y = std::round(state.addAt.y / gridSize()) * gridSize();
       doc.apply(std::make_unique<AddNode>(instrumentId, name, id, std::max(0.0f, x), std::max(0.0f, y)));
       if (name == "msg") { state.noteEditing = id; state.noteBuffer[0] = 0; state.focusNote = id; }   // a new message: type at once
       picked = id;
@@ -916,7 +922,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
         id = name + std::to_string(k);
       }
       const NodeType* t = types.find(name);
-      const float x = std::round(state.addAt.x / kGrid) * kGrid, y = std::round(state.addAt.y / kGrid) * kGrid;
+      const float x = std::round(state.addAt.x / gridSize()) * gridSize(), y = std::round(state.addAt.y / gridSize()) * gridSize();
       std::vector<std::unique_ptr<Edit>> follow;
       follow.push_back(std::make_unique<InsertOnWire>(instrumentId, state.menuWireFrom, state.menuWireTo, id + "." + t->inputs.front(), id + "." + t->outputs.front()));
       tryApply(std::make_unique<FollowedEdit>(std::make_unique<AddNode>(instrumentId, name, id, std::max(0.0f, x), std::max(0.0f, y)), std::move(follow)));
