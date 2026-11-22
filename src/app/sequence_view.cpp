@@ -302,7 +302,12 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
     const auto yOf = [&](int tick) { return stripMin.y + inner + static_cast<float>(std::clamp(tick, 0, len)) / static_cast<float>(len) * height; };
     draw->PushClipRect(windowPos, ImVec2(windowPos.x + ImGui::GetWindowWidth(), windowPos.y + viewHeight), false);
     draw->AddRectFilled(stripMin, stripMax, lineAlpha(40));
-    if (loop.start < loop.end && loop.on) draw->AddRectFilled(ImVec2(stripMin.x, yOf(loop.start)), ImVec2(stripMax.x, yOf(loop.end)), withAlpha(kWarm, 40));
+    if (loop.start < loop.end && loop.on) {   // the loop: a clear tint over its span, a solid edge down the strip and a bright line at each end
+      draw->AddRectFilled(ImVec2(stripMin.x, yOf(loop.start)), ImVec2(stripMax.x, yOf(loop.end)), withAlpha(kWarm, 95));
+      draw->AddRectFilled(ImVec2(stripMin.x, yOf(loop.start)), ImVec2(stripMin.x + 2 * scale, yOf(loop.end)), kWarm);
+      draw->AddRectFilled(ImVec2(stripMin.x, yOf(loop.start) - scale), ImVec2(stripMax.x, yOf(loop.start) + scale), kWarm);
+      draw->AddRectFilled(ImVec2(stripMin.x, yOf(loop.end) - scale), ImVec2(stripMax.x, yOf(loop.end) + scale), kWarm);
+    }
     float x = stripMin.x + 4 * scale;
     for (const Lane& lane : project.lanes) {
       if (lane.placements.empty()) continue;
