@@ -25,6 +25,7 @@
 #include <string>
 #include <vector>
 
+#include "app/handoff.h"
 #include "app/sequence_view.h"
 #include "app/it_import.h"
 #include "app/xm_import.h"
@@ -113,6 +114,7 @@ struct Options {
   bool useNull = false;
   bool allLanes = false;   // --all-lanes: the Pattern screen shows every lane side by side
   bool splashForced = false;
+  bool noPlay = false;   // --no-play: a screenshot run does not start the song (the picture does not depend on the timing of the audio)
   bool splash = true;   // the Wax logo for a moment at start (not when taking a screenshot, unless --splash is given)
 };
 
@@ -166,8 +168,7 @@ struct Session {
   int backupRevision = 0;                // the revision of `doc` the last snapshot (or the opening) holds
   std::time_t backupAt = 0;              // when the last snapshot was made (or the song opened)
   int rowsRevision = -1;                 // the revision of `doc` that `rows` shows
-  bool scrollToCursor = false;
-  int revealFrom = -1, revealTo = -1;    // after Enter in the sequence: the pattern entered, to bring fully into view in the Pattern screen
+  app::Handoff handoff;                  // what the Song screen (and others) ask of the Pattern screen: lane tab, cursor, scroll
   std::string editStatus;
   app::ParamPanelState panel;
   app::MixerState mixer;
@@ -208,8 +209,6 @@ struct Session {
   bool showMixer = true;                 // the mixer under the Song, Pattern and Instrument screens (the status bar's toggle)
   Screen screen = Screen::Pattern;       // the screen shown (the rail at the left)
   std::string instrument;                // the instrument shown on the Instrument screen
-  std::string wantLane;                  // a lane the arrangement asked for; its tab opens next frame
-  int wantTick = -1;                     // and the cursor goes here
   app::SongEdit song;                    // the Song screen's keyboard state: the selected block, the copied block, the waypoint
   AudibleClock heard;                    // where the song is as it is heard (the display follows this, not the audio thread's tick)
   std::string path;                      // the file this song was opened from, where Ctrl+S saves it
@@ -454,6 +453,23 @@ std::string changeNoteColumns(Session* session, Document& doc, Player& player, c
   return problems.empty() ? machine->id + ": " + std::to_string(machine->noteColumns) + (machine->noteColumns == 1 ? " note column." : " note columns.") : problems.front();
 }
 
+// Who the computer keyboard goes to this frame, decided once from the screen and the editing state (Enter makes the caret active). The key
+// handlers below ask this, and do not work it out again each in their own way.
+struct KeyFocus {
+  bool sequenceCaret = false;   // the Song screen with its caret active: arrows, selection, block copy and the edits at the caret
+  bool gridCaret = false;       // the Pattern screen with its caret active (the Ctrl keys that copy and paste cells)
+  bool gridEditing = false;     // the same, and the envelope window is not taking the keys: typing and the Ctrl keys that edit
+  bool pianoKeys = false;       // letters play notes (the Sample screen plays the sample; the sequence caret takes the keys as commands)
+};
+KeyFocus keyFocusOf(const Session& session) {
+  KeyFocus focus;
+  focus.sequenceCaret = session.edit && session.screen == Screen::Song;
+  focus.gridCaret = session.edit && session.screen == Screen::Pattern;
+  focus.gridEditing = focus.gridCaret && !session.envelopes.wantsKeys();
+  focus.pianoKeys = session.screen != Screen::Sample && !focus.sequenceCaret;
+  return focus;
+}
+
 void drawFrame(Session* session, const Options& options, const std::string& status, float& meterL, float& meterR, std::map<ImGuiKey, int>& held,
                int& octave, std::string& selectedLane, bool& follow, int& playFromRequest) {
   ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -673,6 +689,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   // The computer keyboard plays notes unless a text box has it. With Enter pressed it also types into the cell under the cursor.
   ImGuiIO& io = ImGui::GetIO();
   bool edited = false;
+  const auto focusNow = [&] { return keyFocusOf(*session); };   // (asked at each key, as Enter and the arrow keys change it within the frame)
   const bool ctrl = io.KeyCtrl;
   const bool menuOpen = ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);   // a menu has the keys while it is open
   if (!io.WantTextInput && !menuOpen) {
@@ -687,7 +704,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (ImGui::IsKeyPressed(ImGuiKey_F7, false)) player.ring().push({LiveCommand::Row, editor.tick(), 1});   // the row under the cursor, once, all lanes together
     if (ImGui::IsKeyPressed(ImGuiKey_F8, false)) { player.ring().push({LiveCommand::Stop, 0, 1}); session->pausedAt = -1; }
     if (ImGui::IsKeyPressed(ImGuiKey_F9, false)) follow = !follow;
-    if (ImGui::IsKeyPressed(ImGuiKey_Space, false) && session->screen != Screen::Sample && session->screen != Screen::Song && !(session->edit && session->screen == Screen::Pattern)) {   // (on the Song screen Space places a pattern, editing or not, as the web; editing the Pattern screen it writes the live value)
+    if (ImGui::IsKeyPressed(ImGuiKey_Space, false) && session->screen != Screen::Sample && session->screen != Screen::Song && !focusNow().gridCaret) {   // (on the Song screen Space places a pattern, editing or not, as the web; editing the Pattern screen it writes the live value)
       if (playing) player.ring().push({LiveCommand::Stop, 0, 1});
       else player.ring().push({LiveCommand::Play, 0, 1});
     }
@@ -703,23 +720,22 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
             const int lo = at->start, hi = std::min(song.length, at->start + std::min(at->length, static_cast<int>(pattern->rows.size())));
             session->solo = {true, lo, hi, soloLane->id};
             editor.setSolo(lo, hi);
-            selectedLane = soloLane->id; session->wantLane = selectedLane; session->wantTick = std::clamp(editor.tick(), lo, hi - 1);
+            selectedLane = soloLane->id; session->handoff.openLane(selectedLane, std::clamp(editor.tick(), lo, hi - 1));
             session->screen = Screen::Pattern;
             session->edit = true;
             session->editStatus = "Solo-edit: only this pattern can be changed. Tab: whole song or just the pattern. Esc leaves.";
           }
         }
-      } else if (session->screen == Screen::Song && session->edit) {   // in the sequence, Enter goes into the pattern under the cursor (a new one where none is)
+      } else if (focusNow().sequenceCaret) {   // in the sequence, Enter goes into the pattern under the cursor (a new one where none is)
         if (!editor.patternHere()) edited |= editor.createPatternHere();
         if (editor.patternHere()) {
-          selectedLane = editor.lane(); session->wantLane = selectedLane; session->wantTick = editor.tick(); session->screen = Screen::Pattern;
-          session->revealFrom = session->revealTo = -1;
+          selectedLane = editor.lane(); session->handoff.openLane(selectedLane, editor.tick()); session->screen = Screen::Pattern;
+          session->handoff.forgetReveal();
           for (const Lane& lane : doc.project().lanes) {   // the pattern under the cursor: its rows are what the Pattern screen shows
             if (lane.id != editor.lane()) continue;
             if (const Placement* p = seq::placementAt(lane, editor.tick())) {
               const Pattern* pat = seq::patternOf(lane, p->pattern);
-              session->revealFrom = p->start;
-              session->revealTo = p->start + std::min(p->length, pat ? static_cast<int>(pat->rows.size()) : p->length);
+              session->handoff.revealRows(p->start, p->start + std::min(p->length, pat ? static_cast<int>(pat->rows.size()) : p->length));
             }
           }
         }
@@ -727,10 +743,10 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       } else session->edit = !session->edit;
     }
     if (session->solo.on && session->screen != Screen::Pattern) { session->solo = {}; editor.clearSolo(); }   // (leaving the Pattern screen ends solo-edit)
-    app::SongKeysEnv songEnv{doc, editor, player.engine(), selectedLane, session->editStatus, session->wantLane, session->wantTick, edited, session->edit};
+    app::SongKeysEnv songEnv{doc, editor, player.engine(), selectedLane, session->editStatus, session->handoff, edited, session->edit};
     if (session->screen == Screen::Song && !session->edit && !io.WantTextInput && !ctrl && !io.KeyAlt &&   // an arrow key in the sequence puts the caret in play, and moves it
         (ImGui::IsKeyPressed(ImGuiKey_UpArrow) || ImGui::IsKeyPressed(ImGuiKey_DownArrow) || ImGui::IsKeyPressed(ImGuiKey_LeftArrow) || ImGui::IsKeyPressed(ImGuiKey_RightArrow))) session->edit = true;
-    if (session->edit && session->screen == Screen::Song) app::songCursorKeys(session->song, songEnv);   // the Song screen cursor, selection and edits
+    if (focusNow().sequenceCaret) app::songCursorKeys(session->song, songEnv);   // the Song screen cursor, selection and edits
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Z)) { if (io.KeyShift) doc.redo(); else doc.undo(); edited = true; }
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Y)) { doc.redo(); edited = true; }
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_O, false)) gRequest = DialogRequest::Open;
@@ -774,7 +790,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         }
       }
     }
-    if (session->edit && session->screen == Screen::Song) app::songBlockKeys(session->song, songEnv);   // Ctrl+C, X, V, D on blocks of the sequence
+    if (focusNow().sequenceCaret) app::songBlockKeys(session->song, songEnv);   // Ctrl+C, X, V, D on blocks of the sequence
     if (ctrl && !io.KeyAlt && session->screen == Screen::Pattern && ImGui::IsKeyPressed(ImGuiKey_K, false)) {   // Ctrl+K: the next colour for the pattern under the cursor; Ctrl+Shift+K the previous one (as the web)
       const Lane* current = nullptr;
       for (const Lane& l : doc.project().lanes) if (l.id == selectedLane) current = &l;
@@ -796,7 +812,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         session->editStatus = "Cloned: this placement now has its own copy.";
       } else session->editStatus = "No pattern here.";
     }
-    if (ctrl && session->edit && session->screen == Screen::Pattern && !io.KeyAlt) {   // block editing: copy, cut, paste, select all
+    if (ctrl && focusNow().gridCaret && !io.KeyAlt) {   // block editing: copy, cut, paste, select all
       if (ImGui::IsKeyPressed(ImGuiKey_C, false)) ImGui::SetClipboardText(editor.copy().c_str());
       if (ImGui::IsKeyPressed(ImGuiKey_X, false)) { ImGui::SetClipboardText(editor.copy().c_str()); edited |= editor.cut(); }
       if (ImGui::IsKeyPressed(ImGuiKey_V, false)) {
@@ -805,12 +821,12 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       }
       if (ImGui::IsKeyPressed(ImGuiKey_A, false)) editor.selectAll();
     }
-    const bool typing = session->edit && !ctrl && !io.KeyAlt && !session->envelopes.wantsKeys() && session->screen == Screen::Pattern;   // (only the pattern editor types into the grid: on the Instrument, Info and Config screens the keys only play; the sequence has its own keys, above)
+    const bool typing = focusNow().gridEditing && !ctrl && !io.KeyAlt;   // (only the pattern editor types into the grid: on the Instrument, Info and Config screens the keys only play; the sequence has its own keys, above)
     if (!typing && session->screen == Screen::Pattern && !ctrl && ImGui::IsKeyPressed(ImGuiKey_Escape, false) && !editor.selection().active) {   // Esc with editing off: back to the sequence as well
       if (session->solo.on) { session->solo = {}; editor.clearSolo(); session->editStatus = "Solo-edit ended."; }
-      else { session->screen = Screen::Song; session->scrollToCursor = true; }
+      else { session->screen = Screen::Song; session->handoff.scrollToCursor(); }
     }
-    const bool editing = session->edit && !session->envelopes.wantsKeys() && session->screen == Screen::Pattern;   // (typing, and the Ctrl keys that edit)
+    const bool editing = focusNow().gridEditing;   // (typing, and the Ctrl keys that edit)
       editor.setWrapRows(app::settings().rowWrap);
       const auto step = [&](int rows, int cells) {
         if (io.KeyShift) { editor.extend(rows, cells); return; }
@@ -836,7 +852,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         if (cells < 0) editor.lastCharacter();
         if (cells > 0) editor.move(0, 1), editor.move(0, -1);   // (the first cell that is not a spacer)
         else editor.move(0, -1), editor.move(0, 1);              // (the last one)
-        session->wantLane = lane;
+        session->handoff.openLane(lane);
       };
     if (editing && ctrl) {   // the Ctrl keys of the pattern editor (the web's): by column, transposing, pulling rows up, pushing them down, rotating
       const int before = editor.tick() * 4096 + editor.cell();
@@ -856,7 +872,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         const int direction = ImGui::IsKeyPressed(ImGuiKey_UpArrow) ? 1 : ImGui::IsKeyPressed(ImGuiKey_DownArrow) ? -1 : 0;
         if (direction != 0) session->editStatus = changeNoteColumns(session, doc, player, laneMachine(doc, editor.lane()), direction);
       }
-      if (before != editor.tick() * 4096 + editor.cell() || edited) session->scrollToCursor = true;
+      if (before != editor.tick() * 4096 + editor.cell() || edited) session->handoff.scrollToCursor();
     }
     if (editing && io.KeyAlt && !ctrl && !io.WantTextInput) {   // Alt+Up/Down: transpose the notes under the cursor or in the selection by one (Alt+Shift: an octave)
       if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) edited |= editor.transpose(true, 1, io.KeyShift);
@@ -876,12 +892,12 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {   // Esc: drops a selection; then leaves solo-edit; then goes back to the sequence, as in the web
         if (editor.selection().active) editor.clearSelection();
         else if (session->solo.on) { session->solo = {}; editor.clearSolo(); session->editStatus = "Solo-edit ended."; }   // (the web: solo first, then back)
-        else if (session->screen == Screen::Pattern) { session->screen = Screen::Song; session->scrollToCursor = true; }
+        else if (session->screen == Screen::Pattern) { session->screen = Screen::Song; session->handoff.scrollToCursor(); }
       }
       if (session->solo.on && ImGui::IsKeyPressed(ImGuiKey_Tab, false)) {   // Tab: the pattern on its own, or the whole song with the rest locked
         app::settings().soloHatch = !app::settings().soloHatch;
         app::saveSettings();
-        session->scrollToCursor = true;
+        session->handoff.scrollToCursor();
         session->editStatus = app::settings().soloHatch ? "Solo-edit: the song, with the rest locked." : "Solo-edit: the pattern on its own.";
       }
       const int bar = std::max(1, song.ticksPerBeat) * std::max(1, song.beatsPerBar);
@@ -922,10 +938,10 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         }
         for (const char c : typed) edited |= editor.typeCharacter(c);
       }
-      if (before != editor.tick() * 4096 + editor.cell() || edited) session->scrollToCursor = true;
+      if (before != editor.tick() * 4096 + editor.cell() || edited) session->handoff.scrollToCursor();
     }
     const bool hexKeys = typing && (editor.onHexCell() || (editor.onNoteCell() && editor.character() >= 1));   // there the keys are characters, not piano keys
-    if (!hexKeys && session->screen != Screen::Sample && !(session->screen == Screen::Song && session->edit)) {   // (on the Sample screen the keys play the sample)
+    if (!hexKeys && focusNow().pianoKeys) {   // (on the Sample screen the keys play the sample)
       for (int i = 0; i < static_cast<int>(sizeof kPianoKeys / sizeof kPianoKeys[0]); i++) {
         const ImGuiKey key = kPianoKeys[i];
         if (ImGui::IsKeyPressed(key, false) && !io.KeyCtrl && !io.KeyAlt && !io.KeyShift) {   // (Shift+letter is a command, e.g. Shift+I: the machine menu)
@@ -1128,7 +1144,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         const std::string wanted = session->laneName;
         ImGui::AlignTextToFramePadding();
         if (app::textButton("Rename") && !wanted.empty() && wanted != curId && std::find(laneIds.begin(), laneIds.end(), wanted) == laneIds.end()) {
-          doc.apply(std::make_unique<RenameLane>(curId, wanted)); selectedLane = wanted; session->wantLane = wanted; session->laneNameFor = wanted; laneEdited = true;
+          doc.apply(std::make_unique<RenameLane>(curId, wanted)); selectedLane = wanted; session->handoff.openLane(wanted); session->laneNameFor = wanted; laneEdited = true;
         }
         if (fits("<")) ImGui::SameLine(0, 8 * scale);
         if (app::textButton("<")) { doc.apply(std::make_unique<MoveLane>(curId, -1)); }
@@ -1137,11 +1153,11 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         if (fits("Duplicate")) ImGui::SameLine(0, 8 * scale);
         if (app::textButton("Duplicate") && !laneEdited) {
           const std::string copy = app::uniqueName(curId, laneIds);
-          doc.apply(std::make_unique<DuplicateLane>(curId, copy)); selectedLane = copy; session->wantLane = copy; laneEdited = true;
+          doc.apply(std::make_unique<DuplicateLane>(curId, copy)); selectedLane = copy; session->handoff.openLane(copy); laneEdited = true;
         }
         int shares = 0;
         for (const Lane& l : doc.project().lanes) shares += l.instrument == curMachine;
-        if (app::textButton("Remove") && !laneEdited) { const std::string gone = curId; doc.apply(std::make_unique<RemoveLane>(gone, false)); session->wantLane.clear(); selectedLane.clear(); laneEdited = true; }
+        if (app::textButton("Remove") && !laneEdited) { const std::string gone = curId; doc.apply(std::make_unique<RemoveLane>(gone, false)); session->handoff.dropLaneRequest(); selectedLane.clear(); laneEdited = true; }
         if (shares == 1 && !laneEdited) {
           if (fits("Remove + machine")) ImGui::SameLine(0, 8 * scale);
           if (app::textButton("Remove + machine")) {
@@ -1149,7 +1165,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
             doc.apply(std::make_unique<RemoveLane>(gone, true));
             session->playable.erase(std::remove(session->playable.begin(), session->playable.end(), machine), session->playable.end());
             if (session->instrument == machine) session->instrument.clear();
-            session->wantLane.clear(); selectedLane.clear(); laneEdited = true;
+            session->handoff.dropLaneRequest(); selectedLane.clear(); laneEdited = true;
           }
         }
         if (!laneEdited) {   // a lane with its own copy of the machine, to go on changing one while the other keeps the sound
@@ -1162,7 +1178,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
             std::vector<std::string> problems = syncGraphs(doc, player.engine());   // the machine first, then its lane
             laneEdited = true;
             session->playable.push_back(machineCopy);
-            selectedLane = laneCopy; session->wantLane = laneCopy;
+            selectedLane = laneCopy; session->handoff.openLane(laneCopy);
             session->editStatus = problems.empty() ? std::string() : problems.front();
           }
           if (fits("patterns")) ImGui::SameLine(0, 8 * scale);
@@ -1210,7 +1226,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
             doc.apply(std::make_unique<AddLane>(machine, laneId));
             const std::vector<std::string> problems = syncLanes(doc, player.engine());
             session->editStatus = problems.empty() ? std::string() : problems.front();
-            session->wantLane = laneId;
+            session->handoff.openLane(laneId);
           }
           ImGui::SameLine(0, 8 * scale);
           ImGui::SetNextItemWidth(-1);
@@ -1442,7 +1458,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     }
     if (!hit.lane.empty()) {
       session->song.selecting = false;
-      session->wantLane = hit.lane; session->wantTick = hit.tick; selectedLane = hit.lane;
+      session->handoff.openLane(hit.lane, hit.tick); selectedLane = hit.lane;
       editor.setLane(hit.lane, player.engine().laneColumns(hit.lane));   // (the keys carry on from the click)
       editor.moveTo(hit.tick, 0);
       session->edit = true;   // a click puts the caret there, ready to move about
@@ -1496,14 +1512,13 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       cursor.tick = editor.tick();
       cursor.cell = editor.cell();
       cursor.character = editor.character();
-      cursor.scrollTo = session->scrollToCursor;
-      if (session->scrollToCursor) { cursor.revealFrom = session->revealFrom; cursor.revealTo = session->revealTo; session->revealFrom = session->revealTo = -1; }
+      const app::Handoff::Scroll scroll = session->handoff.takeScroll();
+      cursor.scrollTo = scroll.toCursor; cursor.revealFrom = scroll.revealFrom; cursor.revealTo = scroll.revealTo;
       const CellEditor::Selection sel = editor.selection();
       { const LoopRange lr = loopOf(song); cursor.loop = song.raw.is_object() && song.raw.contains("loop") && song.raw["loop"].is_object(); cursor.loopOn = lr.on; cursor.loopStart = lr.start; cursor.loopEnd = lr.end; }
       cursor.playFrac = playing ? session->heard.frac : 0.0f;
       cursor.info = app::describeColumn(doc.project(), cursorOwner, session->player->engine().laneColumns(cursorOwner.id), session->rows[cursorOwner.id], editor.tick(), editor.cell());
       cursor.selected = sel.active; cursor.tick0 = sel.tick0; cursor.tick1 = sel.tick1; cursor.cell0 = sel.cell0; cursor.cell1 = sel.cell1;
-      session->scrollToCursor = false;
       ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * app::settings().patternText);   // Text size
       const app::PatternViewResult result = app::drawPatternView(grids, song.ticksPerBeat, song.beatsPerBar, playing ? tick : -1, follow && playing && !session->edit, cursor);
       ImGui::PopFont();
@@ -1541,17 +1556,16 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         shown.push_back(&lane);
       }
       if (!shown.empty()) {
-        if (!session->wantLane.empty()) {   // a lane asked for (a click in the Song screen)
-          for (std::size_t i = 0; i < shown.size(); i++) if (shown[i]->id == session->wantLane) cursorLane = static_cast<int>(i);
+        if (session->handoff.laneRequested()) {   // a lane asked for (a click in the Song screen)
+          for (std::size_t i = 0; i < shown.size(); i++) if (session->handoff.isRequested(shown[i]->id)) cursorLane = static_cast<int>(i);
         }
         const Lane& owner = *shown[static_cast<std::size_t>(cursorLane)];
         selectedLane = owner.id;
         laneInstrument = owner.instrument;
         editor.setLane(owner.id, session->player->engine().laneColumns(owner.id));
-        if (!session->wantLane.empty()) {
-          if (session->wantTick >= 0) { editor.moveTo(session->wantTick, editor.cell()); session->scrollToCursor = true; }
-          session->wantLane.clear();
-          session->wantTick = -1;
+        if (session->handoff.laneRequested()) {
+          if (session->handoff.requestedTick() >= 0) { editor.moveTo(session->handoff.requestedTick(), editor.cell()); session->handoff.scrollToCursor(); }
+          session->handoff.landed();
         }
         drawGrid(shown, cursorLane);
       }
@@ -1561,7 +1575,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         const std::string label = lane.id + (lane.instrument == lane.id ? "" : "  " + lane.instrument);
         ImGuiTabItemFlags tabFlags = ImGuiTabItemFlags_None;
         if (!session->pickedTab && lane.id != kMaster) { tabFlags |= ImGuiTabItemFlags_SetSelected; session->pickedTab = true; }
-        if (lane.id == session->wantLane) tabFlags |= ImGuiTabItemFlags_SetSelected;
+        if (session->handoff.isRequested(lane.id)) tabFlags |= ImGuiTabItemFlags_SetSelected;
         ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 0.85f);   // lane names in a small face
         const bool tabOpen = ImGui::BeginTabItem(label.c_str(), nullptr, tabFlags);
         ImGui::PopFont();
@@ -1569,10 +1583,9 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
           selectedLane = lane.id;
           laneInstrument = lane.instrument;
           editor.setLane(lane.id, session->player->engine().laneColumns(lane.id));
-          if (lane.id == session->wantLane) {
-            if (session->wantTick >= 0) { editor.moveTo(session->wantTick, editor.cell()); session->scrollToCursor = true; }
-            session->wantLane.clear();
-            session->wantTick = -1;
+          if (session->handoff.isRequested(lane.id)) {
+            if (session->handoff.requestedTick() >= 0) { editor.moveTo(session->handoff.requestedTick(), editor.cell()); session->handoff.scrollToCursor(); }
+            session->handoff.landed();
           }
           drawGrid({&lane}, 0);
           ImGui::EndTabItem();
@@ -1819,7 +1832,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
       session->editStatus = problems.empty() ? "Added " + instrumentId + "." : problems.front();
       const Instrument& added = doc.project().instruments.back();
       if (added.id != kMaster && !added.isMeta) session->playable.push_back(added.id);
-      session->wantLane = laneId;
+      session->handoff.openLane(laneId);
       session->instrument = instrumentId;
     }
   }
@@ -2000,6 +2013,7 @@ bool parse(int argc, char** argv, Options& o) {
     else if (a == "--all-lanes") o.allLanes = true;
     else if (a == "--splash") { o.splash = true; o.splashForced = true; }
     else if (a == "--no-splash") o.splash = false;
+    else if (a == "--no-play") o.noPlay = true;
     else if (!a.empty() && a[0] != '-' && o.path.empty()) o.path = a;
     else return false;
   }
@@ -2087,7 +2101,8 @@ int main(int argc, char** argv) {
   std::string selectedLane;
   bool follow = app::settings().follow, running = true;
   bool showSplash = options.splash && (options.splashForced || (options.screenshot.empty() && !options.useNull));
-  if (session && !options.screenshot.empty() && options.playFrom >= 0)
+  if (options.noPlay) {}
+  else if (session && !options.screenshot.empty() && options.playFrom >= 0)
     session->player->ring().push({LiveCommand::Play, options.playFrom, 1});
   else if (session && !options.screenshot.empty())
     session->player->ring().push({LiveCommand::Play, 0, 1});

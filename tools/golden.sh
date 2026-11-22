@@ -10,7 +10,7 @@ while IFS='|' read -r screen keys; do
   n=$((n + 1))
   frames=$((2 * $(echo "$keys" | tr ',' '\n' | wc -l) + 30))
   target="$dir/$n.bmp"; [ "$mode" = check ] && target="$dir/now$n.bmp"
-  SDL_VIDEODRIVER=dummy SDL_RENDER_DRIVER=software ./build/wax-app --null --screen "$screen" --press "$keys" --screenshot "$target" --frames $frames "$song" >/dev/null 2>&1
+  SDL_VIDEODRIVER=dummy SDL_RENDER_DRIVER=software ./build/wax-app --null --no-play --screen "$screen" --press "$keys" --screenshot "$target" --frames $frames "$song" >/dev/null 2>&1
   [ "$mode" = check ] && python3 -I -W ignore -c "
 from PIL import Image, ImageChops
 a=Image.open('$dir/$n.bmp').convert('RGB'); b=Image.open('$dir/now$n.bmp').convert('RGB')

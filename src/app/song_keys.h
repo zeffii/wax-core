@@ -3,6 +3,7 @@
 // silence for the cursor lane. Each edit is one undo step. Called once a frame, while the Song screen is shown with editing on.
 #pragma once
 
+#include "app/handoff.h"
 #include <string>
 #include <vector>
 
@@ -33,8 +34,7 @@ struct SongKeysEnv {
   Engine& engine;
   std::string& selectedLane;     // the lane tab the cursor's lane selects
   std::string& status;           // the status line's message
-  std::string& wantLane;         // a lane (and tick) the Pattern screen is to show next frame
-  int& wantTick;
+  Handoff& handoff;              // the lane (and tick) the Pattern screen is to show next frame
   bool& edited;                  // set when the song changed (the engine is brought up to date afterwards)
   bool& editing;                 // the keyboard types into cells (Esc ends it)
 };

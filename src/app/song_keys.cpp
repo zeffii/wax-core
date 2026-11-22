@@ -55,9 +55,8 @@ void songCursorKeys(SongEdit& state, SongKeysEnv& env) {
   CellEditor& editor = env.editor;
   Engine& engine = env.engine;
   std::string& status = env.status;
-  std::string& wantLane = env.wantLane;
+  Handoff& handoff = env.handoff;
   std::string& selectedLane = env.selectedLane;
-  int& wantTick = env.wantTick;
   bool& edited = env.edited;
   bool& editing = env.editing;
   const Song& song = doc.project().song;
@@ -101,7 +100,7 @@ void songCursorKeys(SongEdit& state, SongKeysEnv& env) {
         selectedLane = lane;
         editor.setLane(lane, engine.laneColumns(lane));
         editor.moveTo(tick, 0);
-        wantLane = lane; wantTick = tick;
+        handoff.openLane(lane, tick);
       }
     }
     // the arrangement's edits at the cursor, each one undo step (the web's sequence keys); the letters are commands here, not notes
@@ -210,9 +209,8 @@ void songBlockKeys(SongEdit& state, SongKeysEnv& env) {
   CellEditor& editor = env.editor;
   Engine& engine = env.engine;
   std::string& status = env.status;
-  std::string& wantLane = env.wantLane;
+  Handoff& handoff = env.handoff;
   std::string& selectedLane = env.selectedLane;
-  int& wantTick = env.wantTick;
   bool& edited = env.edited;
   const Song& song = doc.project().song;
   const ImGuiIO& io = ImGui::GetIO();
@@ -247,7 +245,7 @@ void songBlockKeys(SongEdit& state, SongKeysEnv& env) {
       selectedLane = id;
       editor.setLane(id, engine.laneColumns(id));
       editor.moveTo(tick, 0);
-      wantLane = id; wantTick = tick;
+      handoff.openLane(id, tick);
     };
     // puts the clip down at a lane and tick and selects what was put down
     const auto place = [&](const seq::Clip& clip, int lane, int tick, const char* label) {
