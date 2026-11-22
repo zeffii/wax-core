@@ -1880,7 +1880,7 @@ void testSetParam() {
 // Runs one test and says which, so a crash shows where it was.
 #define RUN(call) do { std::printf("[%s]\n", #call); call; } while (0)
 
-int main(int argc, char** argv) {
+static int runTests(int argc, char** argv) {
   std::setvbuf(stdout, nullptr, _IONBF, 0);   // (a crash on a CI machine then still shows how far the run got)
   if (argc > 1 && std::string(argv[1]) == "--it") {   // just the IT channel and the IT import
     testRenderSong("itchan");
@@ -2079,4 +2079,13 @@ int main(int argc, char** argv) {
   if (failures) std::printf("%d check%s failed\n", failures, failures == 1 ? "" : "s");
   else std::printf("all tests passed\n");
   return failures;
+}
+
+int main(int argc, char** argv) {
+  try {
+    return runTests(argc, argv);
+  } catch (const std::exception& e) {   // (an exception nobody caught would end the run with no word on why)
+    std::printf("FAILED with an exception: %s\n", e.what());
+    return 1;
+  }
 }
