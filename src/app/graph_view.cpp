@@ -392,6 +392,27 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
     }
   }
   state.dropFrom.clear(); state.dropTo.clear(); state.dropPull = false;
+  {   // a tile dragged out of the trail: the audio wire within reach of the pointer lights, as for a node dragged onto a wire; let go, the node goes into it
+    if (!state.trail.dragging && state.message.rfind("Release to put", 0) == 0) state.message.clear();   // (let go somewhere else)
+    const NodeType* trailType = state.trail.dragging && !state.trail.pressed.empty() ? types.find(state.trail.pressed) : nullptr;
+    if (trailType && !trailType->inputs.empty() && !trailType->outputs.empty() && !state.trail.over(io.MousePos)) {
+      const GraphNode blank{};
+      const PortKind in = portKind(*trailType, blank, trailType->inputs.front()), out = portKind(*trailType, blank, trailType->outputs.front());
+      if ((in == PortKind::Audio || in == PortKind::Stereo) && (out == PortKind::Audio || out == PortKind::Stereo)) {
+        float best = 16 * scale;
+        for (const WireEnds& w : wires) {
+          if (w.kind != PortKind::Audio && w.kind != PortKind::Stereo) continue;
+          const float arm = wireArm(w.p0, w.p1, scale);
+          for (int k = 0; k <= 24; k++) {
+            const ImVec2 pt = bezierAt(w.p0, w.p1, arm, static_cast<float>(k) / 24);
+            const float d = std::hypot(io.MousePos.x - pt.x, io.MousePos.y - pt.y);
+            if (d < best) { best = d; state.dropFrom = w.c->from; state.dropTo = w.c->to; }
+          }
+        }
+        if (!state.dropFrom.empty()) state.message = "Release to put " + state.trail.pressed + " into this wire";
+      }
+    }
+  }
   if (dragTile && state.dragMoved && !state.dragFree && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
     const ImVec2 centre = centreOf(*dragTile);
     float best = 16 * scale;
@@ -678,13 +699,8 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       }
       const float x = std::round(((where.x - origin.x) / scale - 12) / gridSize()) * gridSize(), y = std::round(((where.y - origin.y) / scale - 12) / gridSize()) * gridSize();
       std::vector<std::unique_ptr<Edit>> follow;
-      if (type && event.kind == TrailEvent::Kind::Drop && hoverWire && !type->inputs.empty() && !type->outputs.empty()) {   // into the wire it was let go on
-        const GraphNode blank{};
-        const PortKind in = portKind(*type, blank, type->inputs.front()), out = portKind(*type, blank, type->outputs.front());
-        const bool audioWire = std::any_of(wires.begin(), wires.end(), [&](const WireEnds& w) { return w.c == hoverWire && (w.kind == PortKind::Audio || w.kind == PortKind::Stereo); });
-        if (audioWire && (in == PortKind::Audio || in == PortKind::Stereo) && (out == PortKind::Audio || out == PortKind::Stereo))
-          follow.push_back(std::make_unique<InsertOnWire>(instrumentId, hoverWire->from, hoverWire->to, id + "." + type->inputs.front(), id + "." + type->outputs.front()));
-      }
+      if (type && event.kind == TrailEvent::Kind::Drop && !state.dropFrom.empty() && !type->inputs.empty() && !type->outputs.empty())   // into the wire it was let go on (the one lit)
+        follow.push_back(std::make_unique<InsertOnWire>(instrumentId, state.dropFrom, state.dropTo, id + "." + type->inputs.front(), id + "." + type->outputs.front()));
       tryApply(std::make_unique<FollowedEdit>(std::make_unique<AddNode>(instrumentId, event.type, id, std::max(0.0f, x), std::max(0.0f, y)), std::move(follow)));
       if (state.message.empty()) picked = id;
     }

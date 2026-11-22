@@ -532,13 +532,15 @@ void feedClicks(const std::string& script, int frame) {
 }
 
 // "x1,y1;x2,y2" -> the mouse goes to the first place, presses, moves to the second over six frames and stays pressed (a screenshot then shows
-// a drag in progress).
+// a drag in progress; with ";release" added the button is let go after it).
 void feedDrag(const std::string& script, int frame) {
   float x1 = 0, y1 = 0, x2 = 0, y2 = 0;
   if (std::sscanf(script.c_str(), "%f,%f;%f,%f", &x1, &y1, &x2, &y2) != 4) return;
+  const bool release = script.find(";release") != std::string::npos;   // "x1,y1;x2,y2;release": let go at the end
   ImGuiIO& io = ImGui::GetIO();
   if (frame == 0) io.AddMousePosEvent(x1, y1);
   if (frame == 2) io.AddMouseButtonEvent(0, true);
+  if (release && frame == 14) io.AddMouseButtonEvent(0, false);
   if (frame >= 4 && frame <= 10) { const float t = std::min(1.0f, (frame - 4) / 6.0f); io.AddMousePosEvent(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t); }
 }
 
