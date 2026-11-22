@@ -29,6 +29,8 @@
 //
 // Monophonic like the other synths: the voices node gives each key its own copy. Port of webtracker src/audio/nodes/piano.js.
 #include <algorithm>
+#include <array>
+#include <map>
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -87,6 +89,24 @@ int smoothPulse(double* out, double length) {
   }
   return count;
 }   // the longest pulse kept, in samples
+struct PulseResult { int length; double seconds; };
+
+// The same notes come back again and again (a pattern repeats, six voices share a chord), and working out a note's pulses is the most
+// expensive thing a piano does, so what was found for a given set of numbers is kept (per thread, a few dozen at most) and reused. The result is
+// exactly what working it out again would give.
+struct PulseCache {
+  struct Smooth { std::vector<double> samples; };
+  struct Felt { double stiffness = 0; PulseResult now{}; std::vector<double> pulse; double refSum = 0; };
+  std::map<double, Smooth> smooth;                    // length in samples -> the band-limited half-sine
+  std::map<std::array<double, 5>, Felt> felt;         // (rate, midi, hardness, contact, velocity) -> the felt hammer's pulse
+};
+PulseCache& pulseCache() {
+  thread_local PulseCache cache;
+  if (cache.smooth.size() > 64) cache.smooth.clear();   // (a long automation sweep makes new numbers all the time: start over rather than grow)
+  if (cache.felt.size() > 64) cache.felt.clear();
+  return cache;
+}
+
 constexpr int kSubsteps = 8;      // the hammer is stepped this many times per sample, so the stiff felt stays stable
 constexpr double kHammerSpeed = 3;   // m/s at velocity 1
 constexpr int kBoardModes = 32;
@@ -102,8 +122,6 @@ double hammerMass(double midi) {
   }
   return table[4][1];
 }
-
-struct PulseResult { int length; double seconds; };
 
 // Run the hammer into the (rigid) string. `out` gets the force at each sample (N).
 PulseResult hammerPulse(double* out, double fs, double speed, double mass, double K, double p, int limit) {
@@ -334,11 +352,17 @@ private:
       // harder or softer blow, felt and string change it from there
       const double mass = hammerMass(midi), p = 2.5 + 0.8 * pf, vm1 = 1;
       auto tcAt = [&](double vel, double h) { return 0.0032 * js::pow(f0 / 65.4, -0.45) * (0.6 + 0.9 * (1 - h)) * (1.15 - 0.5 * vel); };
-      const double K = stiffnessFor(scratch_.data(), fs, 0.7 * kHammerSpeed, mass, p, 0.75 * tcAt(0.7, 0.5) * contact) * js::exp(3.66 * (hard - 0.5));
-      const PulseResult now = hammerPulse(pulse_.data(), fs, vm * kHammerSpeed, mass, K, p, kPulseMax);
-      const PulseResult ref = hammerPulse(scratch_.data(), fs, vm1 * kHammerSpeed, mass, K, p, kPulseMax);
-      double refSum = 0;
-      for (int i = 0; i < ref.length; i++) refSum += scratch_[static_cast<std::size_t>(i)];
+      PulseCache::Felt& found = pulseCache().felt[{fs, midi, hard, contact, vm}];
+      if (found.pulse.empty()) {
+        found.stiffness = stiffnessFor(scratch_.data(), fs, 0.7 * kHammerSpeed, mass, p, 0.75 * tcAt(0.7, 0.5) * contact) * js::exp(3.66 * (hard - 0.5));
+        found.pulse.assign(kPulseMax, 0.0);
+        found.now = hammerPulse(found.pulse.data(), fs, vm * kHammerSpeed, mass, found.stiffness, p, kPulseMax);
+        const PulseResult ref = hammerPulse(scratch_.data(), fs, vm1 * kHammerSpeed, mass, found.stiffness, p, kPulseMax);
+        for (int i = 0; i < ref.length; i++) found.refSum += scratch_[static_cast<std::size_t>(i)];
+      }
+      std::copy(found.pulse.begin(), found.pulse.end(), pulse_.begin());
+      const PulseResult now = found.now;
+      const double refSum = found.refSum;
       // the loudest blow is as loud as the plain pulse's loudest, so switching `felt` on changes the touch, not the level
       const double Lc1 = std::max(4.0, std::min(tcAt(1, hard) * fs, 0.5 * fs / f0));
       const double oldImpulse = std::min(1.0, fs / f0 / Lc1) * Lc1 * 2 / kPi;
@@ -354,7 +378,13 @@ private:
       ampR_ = g(kStrike) * std::min(1.0, std::max(0.0, (kStrikeNote - midi) / 48)) * 0.5 * amp_ * Lc_ / Lr_;
       strikeCoef_ = 1 - js::exp(-2 * kPi * std::min(12000.0, std::max(500.0, f0 * 8)) / fs); strikeLp_ = 0;
     }
-    plainLen_ = smoothPulse(plainPulse_.data(), Lc_); blowLen_ = ampR_ > 0 ? smoothPulse(blowPulse_.data(), Lr_) : 0;
+    const auto smoothed = [&](double* out, double length) {   // (kept: see PulseCache)
+      auto& entry = pulseCache().smooth[length];
+      if (entry.samples.empty()) { entry.samples.assign(kPulseMax + 1, 0.0); entry.samples[0] = smoothPulse(entry.samples.data() + 1, length); }
+      std::copy(entry.samples.begin() + 1, entry.samples.end(), out);
+      return static_cast<int>(entry.samples[0]);
+    };
+    plainLen_ = smoothed(plainPulse_.data(), Lc_); blowLen_ = ampR_ > 0 ? smoothed(blowPulse_.data(), Lr_) : 0;
     k_ = 0; strikeEnd_ = std::max({static_cast<double>(plainLen_), static_cast<double>(pulseLen_), static_cast<double>(blowLen_)}) + dpos_ + 1;
     for (BoardMode& m : board_) m.x1 = m.x2 = m.y1 = m.y2 = 0;
     knockEnv_ = 0; knockLp_ = 0; muffleEnv_ = 1; muffleState_ = 0; scatterLp_ = 0; scatterSeed_ = 0x1b873593u; muffleDecay_ = js::exp(-1 / (0.025 * fs));
