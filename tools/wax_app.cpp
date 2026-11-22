@@ -224,9 +224,9 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
 
   bool requestSave = false;   // the File menu or Ctrl+S
 
-  const HeaderState where = drawHeader(session, options, follow, requestSave, meterL, meterR, playFromRequest);
-  const bool playing = where.playing;
-  const int tick = where.tick, perBeat = where.perBeat, perBar = where.perBar;
+  const HeaderState headerState = drawHeader(session, follow, requestSave, meterL, meterR);
+  const bool playing = headerState.playing;
+  const int tick = headerState.tick, perBeat = headerState.perBeat, perBar = headerState.perBar;
 
   ImGuiIO& io = ImGui::GetIO();
   const bool ctrl = io.KeyCtrl;

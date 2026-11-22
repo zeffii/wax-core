@@ -154,7 +154,15 @@ struct Session {
   bool pickedTab = false;   // the first lane that is not the master is shown at first
   std::unique_ptr<Document> doc;         // the song as edited: every change goes through it, so it can be undone
   std::unique_ptr<CellEditor> editor;
-  struct SoloEdit { bool on = false; int lo = 0, hi = 0; std::string lane; } solo;   // Ctrl+Enter in the sequence: one pattern edited on its own
+  // Ctrl+Enter in the sequence: one pattern edited on its own (rows lo..hi-1 of one lane). The editor is told in the same call, so the two
+  // never disagree about whether solo-edit is on.
+  struct SoloEdit {
+    bool on = false;
+    int lo = 0, hi = 0;
+    std::string lane;
+    void begin(CellEditor& editor, const std::string& laneId, int firstRow, int endRow) { on = true; lo = firstRow; hi = endRow; lane = laneId; editor.setSolo(lo, hi); }
+    void end(CellEditor& editor) { on = false; lo = hi = 0; lane.clear(); editor.clearSolo(); }
+  } solo;
   bool edit = false;                     // Enter: the keyboard types into cells
   bool backupsOpen = false;              // the Backups list is showing
   int backupRevision = 0;                // the revision of `doc` the last snapshot (or the opening) holds
@@ -329,7 +337,7 @@ void drawPatternScreen(FrameContext& f);   // (pattern_screen.cpp)
 void drawInstrumentScreen(FrameContext& f);   // (instrument_screen.cpp)
 void drawInfoScreen(FrameContext& f);   // (info_screen.cpp)
 void drawConfigScreen(FrameContext& f);   // (config_screen.cpp)
-HeaderState drawHeader(Session* session, const Options& options, bool& follow, bool& requestSave, float& meterL, float& meterR, int& playFromRequest);   // (header.cpp)
+HeaderState drawHeader(Session* session, bool& follow, bool& requestSave, float& meterL, float& meterR);   // (header.cpp)
 void drawRail(Session* session, float scale, float below);   // (header.cpp)
 void drawBrowser(FrameContext& f, const Lane* listed, app::PatternListResult& listed2, float railGap, float below);   // (browser.cpp)
 

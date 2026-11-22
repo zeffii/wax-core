@@ -299,18 +299,16 @@ directory, since the Sample screen shows the folder).
 Where things are:
 - `tools/wax_app/app_state.h`: `Options`, `Session` (one song, loaded), `Screen`, `KeyFocus`, `KeyboardEnv`, `FrameContext`, the dialog globals, and
   declarations of what the parts call in each other.
-- `tools/wax_app.cpp`: the frame (`drawFrame`: header, transport, rail, status bar), the helpers (theme, export, splash, blank project) and the
+- `tools/wax_app.cpp`: the frame (`drawFrame`, which calls the parts), the helpers (theme, export, splash, blank project) and the
   main loop.
-- `keyboard.cpp` (`handleKeyboard`, `keyFocusOf`), `browser.cpp` (`drawBrowser`), and one file per screen: `song_screen.cpp`,
+- `header.cpp` (`drawHeader`, `drawRail`), `keyboard.cpp` (`handleKeyboard`, `keyFocusOf`), `browser.cpp` (`drawBrowser`), and one file per screen: `song_screen.cpp`,
   `pattern_screen.cpp`, `instrument_screen.cpp`, `info_screen.cpp`, `config_screen.cpp`. The Sample screen is one call into src/app.
 - `app::Handoff` (src/app/handoff.h): what the Song screen asks of the Pattern screen (lane tab, cursor tick, scroll, reveal of the pattern
   entered). One-shot messages with one entry point (`openLane`), taken once (`takeScroll`, `landed`).
 - `KeyFocus`: who the keyboard goes to (sequence caret, grid caret, grid editing, piano keys), asked at each key because Enter and the arrow
   keys change it within the frame.
+- `Session::SoloEdit` begins and ends solo-edit together with the editor (`begin`, `end`).
 
 Left:
-- The header, rail and status bar are still inline in `drawFrame` (about 400 lines); the header (File menu, transport, song settings) and the
-  rail each want a function and file.
-- Text-box focus (`infoFocused`, `nameFocused`, `renamingMachine`, `wantTree`) is still separate flags next to `io.WantTextInput`; they belong in
-  `KeyFocus`.
-- Solo-edit (`Session::SoloEdit` and the places that end it) wants one owner.
+- Nothing structural is open. (The text boxes' `infoFocused`, `nameFocused` and `renamingMachine` flags only stop a box's buffer being refilled
+  while it is being typed in; the keys themselves are routed by ImGui's `WantTextInput`, so they stay where they are.)

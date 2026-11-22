@@ -58,8 +58,7 @@ bool handleKeyboard(Session* session, KeyboardEnv& env) {
           if (!at || !pattern) session->editStatus = "No pattern here.";
           else {
             const int lo = at->start, hi = std::min(song.length, at->start + std::min(at->length, static_cast<int>(pattern->rows.size())));
-            session->solo = {true, lo, hi, soloLane->id};
-            editor.setSolo(lo, hi);
+            session->solo.begin(editor, soloLane->id, lo, hi);
             selectedLane = soloLane->id; session->handoff.openLane(selectedLane, std::clamp(editor.tick(), lo, hi - 1));
             session->screen = Screen::Pattern;
             session->edit = true;
@@ -82,7 +81,7 @@ bool handleKeyboard(Session* session, KeyboardEnv& env) {
         else session->editStatus = "No pattern here, and one cannot start here.";
       } else session->edit = !session->edit;
     }
-    if (session->solo.on && session->screen != Screen::Pattern) { session->solo = {}; editor.clearSolo(); }   // (leaving the Pattern screen ends solo-edit)
+    if (session->solo.on && session->screen != Screen::Pattern) { session->solo.end(editor); }   // (leaving the Pattern screen ends solo-edit)
     app::SongKeysEnv songEnv{doc, editor, player.engine(), selectedLane, session->editStatus, session->handoff, edited, session->edit};
     if (session->screen == Screen::Song && !session->edit && !io.WantTextInput && !ctrl && !io.KeyAlt &&   // an arrow key in the sequence puts the caret in play, and moves it
         (ImGui::IsKeyPressed(ImGuiKey_UpArrow) || ImGui::IsKeyPressed(ImGuiKey_DownArrow) || ImGui::IsKeyPressed(ImGuiKey_LeftArrow) || ImGui::IsKeyPressed(ImGuiKey_RightArrow))) session->edit = true;
@@ -163,7 +162,7 @@ bool handleKeyboard(Session* session, KeyboardEnv& env) {
     }
     const bool typing = focusNow().gridEditing && !ctrl && !io.KeyAlt;   // (only the pattern editor types into the grid: on the Instrument, Info and Config screens the keys only play; the sequence has its own keys, above)
     if (!typing && session->screen == Screen::Pattern && !ctrl && ImGui::IsKeyPressed(ImGuiKey_Escape, false) && !editor.selection().active) {   // Esc with editing off: back to the sequence as well
-      if (session->solo.on) { session->solo = {}; editor.clearSolo(); session->editStatus = "Solo-edit ended."; }
+      if (session->solo.on) { session->solo.end(editor); session->editStatus = "Solo-edit ended."; }
       else { session->screen = Screen::Song; session->handoff.scrollToCursor(); }
     }
     const bool editing = focusNow().gridEditing;   // (typing, and the Ctrl keys that edit)
@@ -231,7 +230,7 @@ bool handleKeyboard(Session* session, KeyboardEnv& env) {
       if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) sideways(1);
       if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {   // Esc: drops a selection; then leaves solo-edit; then goes back to the sequence, as in the web
         if (editor.selection().active) editor.clearSelection();
-        else if (session->solo.on) { session->solo = {}; editor.clearSolo(); session->editStatus = "Solo-edit ended."; }   // (the web: solo first, then back)
+        else if (session->solo.on) { session->solo.end(editor); session->editStatus = "Solo-edit ended."; }   // (the web: solo first, then back)
         else if (session->screen == Screen::Pattern) { session->screen = Screen::Song; session->handoff.scrollToCursor(); }
       }
       if (session->solo.on && ImGui::IsKeyPressed(ImGuiKey_Tab, false)) {   // Tab: the pattern on its own, or the whole song with the rest locked

@@ -5,10 +5,9 @@ namespace wax::tool {
 
 // The header: the File menu, the transport, the project name, the song settings and the meters, with the line under them. Returns where the
 // song is (the tick to show as the playhead, and the beat and bar lengths in ticks).
-HeaderState drawHeader(Session* session, const Options& options, bool& follow, bool& requestSave, float& meterL, float& meterR, int& playFromRequest) {
+HeaderState drawHeader(Session* session, bool& follow, bool& requestSave, float& meterL, float& meterR) {
   Player& player = *session->player;
   Document& doc = *session->doc;
-  CellEditor& editor = *session->editor;
   const Song& song = doc.project().song;
   {   // the File menu, then the transport, the project name and the song settings (the web app's header LCD) all on one line
     const float hs = ImGui::GetStyle().FontScaleDpi;
