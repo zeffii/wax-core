@@ -24,7 +24,7 @@ HeaderState drawHeader(Session* session, bool& follow, bool& requestSave, float&
     const float iconsY = lineY + ImGui::GetStyle().FramePadding.y;   // (a text button does not apply the baseline offset itself)
     ImGui::SetCursorPosY(iconsY);
     if (gIconCentre > 0) ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x, gIconCentre - ImGui::GetTextLineHeight() / 2));
-    if (app::textButton("File")) ImGui::OpenPopup("filemenu");
+    if (app::textButton("File", false, true)) ImGui::OpenPopup("filemenu");
     gFileX = ImGui::GetItemRectMin().x;
     ImGui::SameLine(0, 0); ImGui::SetCursorPosY(lineY);
     if (ImGui::BeginPopup("filemenu")) {

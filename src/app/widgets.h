@@ -35,7 +35,8 @@ std::string valueText(double value, bool isInt);
 void groupDivider(float height);
 
 // A word that acts as a button: dim, lit when hovered or `on`, no box. True when clicked.
-bool textButton(const char* label, bool on = false);
+// (`strongIdle`: the text colour when idle, like the transport icons, rather than the dim one.)
+bool textButton(const char* label, bool on = false, bool strongIdle = false);
 
 // A row of a menu: the words in the normal text colour (a dim row would look unavailable), lit when hovered, with the shortcut dim at the
 // right edge of a menu `width` wide. `arrow` marks a row that opens a submenu. True when clicked.

@@ -110,7 +110,7 @@ void groupDivider(float height) {
   ImGui::Dummy(ImVec2(12 * scale, height));
 }
 
-bool textButton(const char* label, bool on) {
+bool textButton(const char* label, bool on, bool strongIdle) {
   const ImVec2 at = ImGui::GetCursorScreenPos();
   const ImVec2 size = ImGui::CalcTextSize(label);
   ImGui::PushID(label);
@@ -118,7 +118,7 @@ bool textButton(const char* label, bool on) {
   ImGui::PopID();
   const bool hovered = ImGui::IsItemHovered();
   if (hovered) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-  ImGui::GetWindowDrawList()->AddText(at, on ? kAccent : hovered ? kText : kDimText, label);
+  ImGui::GetWindowDrawList()->AddText(at, on ? kAccent : hovered || strongIdle ? kText : kDimText, label);
   return ImGui::IsItemClicked();
 }
 
