@@ -1,5 +1,6 @@
 // The tests: one plain program with no framework. Each check prints a line when it fails; the exit code is the number of
 // failures, so `ctest` (and the GitHub build) goes red when anything is wrong.
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
@@ -1556,8 +1557,9 @@ void testOnsets() {   // the frames come from the web app's detectOnsets on the 
 
 void testBackups() {
   namespace fs = std::filesystem;
-  const fs::path folder = fs::temp_directory_path() / "wax-backup-test";
-  fs::remove_all(folder);
+  std::error_code ignored;   // (a folder another process still holds, as on Windows, is not a failure of the test)
+  const fs::path folder = fs::temp_directory_path() / ("wax-backup-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  fs::remove_all(folder, ignored);
   const std::time_t base = 1700000000;
   for (int i = 0; i < 5; i++) wax::writeBackup(folder, "My Song!", "{\"n\":" + std::to_string(i) + "}", 3, base + i * 200);
   wax::writeBackup(folder, "", "{}", 3, base + 5 * 200);
@@ -1566,15 +1568,18 @@ void testBackups() {
   if (list.size() != 3) {   // (say what is there, and do not index past it)
     std::printf("  found %zu snapshots in %s:\n", list.size(), folder.string().c_str());
     for (const auto& entry : fs::directory_iterator(folder)) std::printf("    %s\n", entry.path().filename().string().c_str());
-    fs::remove_all(folder);
+    fs::remove_all(folder, ignored);
     return;
   }
   check(list[0].name == "song" && list[1].name == "My_Song_" && list[0].time == base + 1000 && list[1].time == base + 800, "newest first, names made safe, times read back");
-  std::ifstream in(list[1].file);
-  std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  std::string text;
+  {
+    std::ifstream in(list[1].file);   // (closed before the folder is removed: Windows will not delete an open file)
+    text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+  }
   check(text == "{\"n\":4}", "a snapshot holds the song as it was written");
   check(wax::listBackups(folder / "nothing").empty(), "no folder, no snapshots");
-  fs::remove_all(folder);
+  fs::remove_all(folder, ignored);
 }
 
 void testSampleLoading() {
