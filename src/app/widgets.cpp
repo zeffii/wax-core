@@ -118,7 +118,9 @@ bool textButton(const char* label, bool on, bool strongIdle) {
   ImGui::PopID();
   const bool hovered = ImGui::IsItemHovered();
   if (hovered) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-  ImGui::GetWindowDrawList()->AddText(at, on ? kAccent : hovered || strongIdle ? kText : kDimText, label);
+  const ImU32 ink = on ? kAccent : hovered || strongIdle ? kText : kDimText;
+  ImGui::GetWindowDrawList()->AddText(at, ink, label);
+  if (strongIdle) ImGui::GetWindowDrawList()->AddText(ImVec2(at.x + 0.6f * ImGui::GetStyle().FontScaleDpi, at.y), ink, label);   // (a touch heavier: a thin face reads faint next to the filled transport icons)
   return ImGui::IsItemClicked();
 }
 
