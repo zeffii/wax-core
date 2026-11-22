@@ -61,6 +61,8 @@ public:
   Selection selection() const;
   void extend(int rows, int cells);   // moves the cursor and keeps (or starts) the selection
   void clearSelection() { selecting_ = false; }
+  // A drag with the mouse: the selection runs from where the cursor was (when none was on) to this cell.
+  void selectTo(int tick, int cell);
   void selectAll();                   // the whole lane
   // Copy: the cells of the selection (or the cursor's cell) as text, rows on lines and cells split by tabs; also kept for paste.
   std::string copy();

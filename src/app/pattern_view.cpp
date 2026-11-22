@@ -119,6 +119,9 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
 
   const int beat = std::max(1, ticksPerBeat), bar = beat * std::max(1, beatsPerBar);
   ImGuiListClipper clipper;
+  static bool pressedOnGrid = false;   // the left button went down on the grid and is still held
+  if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) pressedOnGrid = false;
+  const bool dragFromGrid = pressedOnGrid && ImGui::IsMouseDragging(ImGuiMouseButton_Left);
   float playY = -1;   // screen y of the playing row's top, when it was drawn
   float loopTopY = -1, loopBottomY = -1;   // screen y of the loop's first row's top and last row's bottom, when drawn
   const ImU32 loopYellow = IM_COL32(240, 200, 60, 255);
@@ -220,6 +223,7 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
           }
           ImGui::PushID(tick * 4096 + firstColumn[li] + c);   // (a cell is picked at the press, as the web does: rows that scroll under the mouse cannot lose the click)
           if (ImGui::Selectable(filled ? cells[static_cast<std::size_t>(c)].c_str() : "   ", false, ImGuiSelectableFlags_SelectOnClick)) { result.cellTick = tick; result.cell = c; result.lane = static_cast<int>(li); }
+          if (dragFromGrid && ImGui::IsMouseHoveringRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax())) { result.dragTick = tick; result.dragCell = c; result.dragLane = static_cast<int>(li); }   // (the held cell keeps the hover, so the rectangle is asked)
           if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) { result.menuTick = tick; result.menuCell = c; result.menuLane = static_cast<int>(li); }
           ImGui::PopID();
           if (dimmed) ImGui::PopStyleColor();
@@ -230,7 +234,8 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
   if (lastTick > firstTick) measuredPitch = (lastY - firstY) / static_cast<float>(lastTick - firstTick);
   {   // a press anywhere on the grid is reported at once: a cell is only picked on release, and while the rows scroll under the mouse the release may miss it
     const ImVec2 corner = ImGui::GetWindowPos(), extent = ImGui::GetWindowSize();
-    result.pressed = ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImGui::IsMouseHoveringRect(ImVec2(corner.x, corner.y + rowHeight * 1.5f), ImVec2(corner.x + extent.x, corner.y + extent.y));
+    result.pressed = ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImGui::IsMouseHoveringRect(ImVec2(corner.x, corner.y + rowHeight * 1.5f), ImVec2(corner.x + extent.x, corner.y + extent.y), false);
+    if (result.pressed) pressedOnGrid = true;
   }
   if (playY >= 0) {   // the playhead: a thin red line across the table, moving down through the row as the song plays
     // Where the pattern is moving past it the playhead stands still: it is held at its resting place, not worked out again from the rows

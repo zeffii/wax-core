@@ -156,23 +156,25 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
   ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
   ImGui::InvisibleButton("##sheet", ImVec2(totalWidth, headHeight + rowHeight * static_cast<float>(rows)));
   ImGui::PopItemFlag();
+  // The lane and row under the mouse (false over the tick column, the gutter or past the last lane).
+  const auto laneRowAt = [&](const ImVec2& mouse, std::string& laneId, int& rowTick) {
+    const float y = mouse.y - origin.y - headHeight;
+    float x = mouse.x - origin.x - gutter;
+    if (y < 0) return false;
+    for (const Lane& lane : project.lanes) {
+      const float w = laneWidth(lane, scale);
+      if (x >= 0 && x < w) { laneId = lane.id; rowTick = std::clamp(static_cast<int>(y / rowHeight), 0, rows - 1) * cell; return true; }
+      x -= w;
+    }
+    return false;
+  };
   if (ImGui::IsItemClicked() && !overStrip && !curves.claimsPointer()) {
     const ImVec2 mouse = ImGui::GetIO().MousePos;
     const float y = mouse.y - origin.y - headHeight;
-    float x = mouse.x - origin.x - gutter;
-    if (y >= 0 && x < 0) result.playFrom = std::clamp(static_cast<int>(y / rowHeight), 0, rows - 1) * cell;   // the tick column: play from there
-    else if (y >= 0) {
-      for (const Lane& lane : project.lanes) {
-        const float w = laneWidth(lane, scale);
-        if (x >= 0 && x < w) {
-          result.lane = lane.id;
-          result.doubleClicked = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
-          result.tick = std::clamp(static_cast<int>(y / rowHeight), 0, rows - 1) * cell;
-          break;
-        }
-        x -= w;
-      }
-    }
+    if (y >= 0 && mouse.x - origin.x - gutter < 0) result.playFrom = std::clamp(static_cast<int>(y / rowHeight), 0, rows - 1) * cell;   // the tick column: play from there
+    else if (laneRowAt(mouse, result.lane, result.tick)) result.doubleClicked = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
+  } else if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left) && !overStrip && !curves.claimsPointer()) {   // dragging from a click: the block grows to the pointer
+    laneRowAt(ImGui::GetIO().MousePos, result.dragLane, result.dragTick);
   }
 
   const int first = std::max(0, static_cast<int>((scrollY - headHeight) / rowHeight));

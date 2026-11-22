@@ -325,3 +325,8 @@ Gaps against the web's graph rail:
   ported.
 - Hide command parameters hides the rows a command in the instrument's table writes; the web also hides the sampler's own command parameters
   when the instrument has no table, and has a `cc` button in the parameter panel's title that does the same.
+
+## Mouse selection (drag)
+- Pattern screen: a drag from a cell selects a rectangle within that cell's lane; Song screen: a drag from a tile selects a block (lanes x rows), as Shift+arrows do.
+- Gap: no auto-scroll while a drag is held at the edge of the view.
+- Gap (parity): typing a note where no pattern plays makes a pattern here (`CellEditor::setCell`); the web says "No pattern here. Press Enter to insert one." Check which is wanted.

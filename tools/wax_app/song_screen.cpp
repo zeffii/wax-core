@@ -63,6 +63,13 @@ void drawSongScreen(FrameContext& f) {
     session->edit = true;   // a click puts the caret there, ready to move about
     if (hit.doubleClicked && enterPatternUnderCaret(session, selectedLane)) { const std::vector<std::string> problems = syncLanes(doc, player.engine()); session->editStatus = problems.empty() ? std::string() : problems.front(); }   // (a double-click is Enter on that pattern)
   }
+  if (!hit.dragLane.empty() && (hit.dragLane != editor.lane() || hit.dragTick != editor.tick() || session->song.selecting)) {   // a drag from the click selects a block, as Shift+arrows do
+    if (!session->song.selecting) { session->song.selecting = true; session->song.anchorLane = editor.lane(); session->song.anchorTick = editor.tick(); }
+    if (hit.dragLane != editor.lane()) editor.setLane(hit.dragLane, player.engine().laneColumns(hit.dragLane));
+    editor.moveTo(hit.dragTick, 0);
+    selectedLane = hit.dragLane;
+    session->edit = true;
+  }
   ImGui::EndChild();
   if (session->showKeys) { ImGui::SameLine(0, 8 * scale); app::drawShortcutSheet("songkeys", app::songShortcuts(), 0, 0); }
 }

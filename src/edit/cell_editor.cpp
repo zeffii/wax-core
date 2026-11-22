@@ -492,6 +492,14 @@ void CellEditor::extend(int rows, int cells) {
   if (!was) { anchorTick_ = fromTick; anchorCell_ = fromCell; }
 }
 
+void CellEditor::selectTo(int tick, int cell) {
+  const bool was = selecting_;
+  const int fromTick = tick_, fromCell = cell_;
+  moveTo(tick, cell);
+  selecting_ = true;
+  if (!was) { anchorTick_ = fromTick; anchorCell_ = fromCell; }
+}
+
 void CellEditor::selectAll() {
   anchorTick_ = firstTick(); anchorCell_ = 0;
   tick_ = lastTick();

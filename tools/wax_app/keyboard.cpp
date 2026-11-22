@@ -161,6 +161,20 @@ bool handleKeyboard(Session* session, KeyboardEnv& env) {
         session->editStatus = "Cloned: this placement now has its own copy.";
       } else session->editStatus = "No pattern here.";
     }
+    bool gluedHere = false;   // (G was this command: it is not also the piano key)
+    if (!ctrl && !io.KeyAlt && !io.KeyShift && session->screen == Screen::Pattern && focusNow().gridEditing && !session->solo.on && !editor.patternHere() && ImGui::IsKeyPressed(ImGuiKey_G, false)) {
+      // G where no pattern plays (as in the sequence): the selected rows become a new pattern there; with nothing selected, a new pattern of the usual length as Enter makes one
+      gluedHere = true;
+      const CellEditor::Selection range = editor.selection();
+      if (!range.active) edited |= editor.createPatternHere();
+      else {
+        app::SequenceBlock block;
+        for (std::size_t i = 0; i < doc.project().lanes.size(); i++) if (doc.project().lanes[i].id == editor.lane()) block.first = block.last = static_cast<int>(i);
+        block.from = range.tick0; block.to = range.tick1 + 1;
+        if (block.first >= 0 && app::glueBlock(doc, player.engine(), block, true) > 0) { edited = true; editor.clearSelection(); }
+      }
+      session->editStatus = editor.patternHere() ? "New pattern here." : "No pattern here, and one cannot start here.";
+    }
     if (ctrl && focusNow().gridCaret && !io.KeyAlt) {   // block editing: copy, cut, paste, select all
       if (ImGui::IsKeyPressed(ImGuiKey_C, false)) ImGui::SetClipboardText(editor.copy().c_str());
       if (ImGui::IsKeyPressed(ImGuiKey_X, false)) { ImGui::SetClipboardText(editor.copy().c_str()); edited |= editor.cut(); }
@@ -293,7 +307,7 @@ bool handleKeyboard(Session* session, KeyboardEnv& env) {
     if (!hexKeys && focusNow().pianoKeys) {   // (on the Sample screen the keys play the sample)
       for (int i = 0; i < static_cast<int>(sizeof kPianoKeys / sizeof kPianoKeys[0]); i++) {
         const ImGuiKey key = kPianoKeys[i];
-        if (ImGui::IsKeyPressed(key, false) && !io.KeyCtrl && !io.KeyAlt && !io.KeyShift) {   // (Shift+letter is a command, e.g. Shift+I: the machine menu)
+        if (ImGui::IsKeyPressed(key, false) && !io.KeyCtrl && !io.KeyAlt && !io.KeyShift && !(gluedHere && key == ImGuiKey_G)) {   // (Shift+letter is a command, e.g. Shift+I: the machine menu)
           const int note = 12 * (octave + 1) + i;
           if (note > 127) { session->editStatus = "Note out of range."; continue; }   // (as the web: nothing is entered)
           const bool entering = typing && editor.onNoteCell();   // the key puts a note in the grid

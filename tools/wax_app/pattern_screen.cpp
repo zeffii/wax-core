@@ -89,6 +89,11 @@ void drawPatternScreen(FrameContext& f) {
       editor.moveTo(result.cellTick, result.cell);
       session->edit = true;   // a click puts the caret there, ready to type
     }
+    if (result.dragCell >= 0 && result.dragLane >= 0 && !(result.dragTick == editor.tick() && result.dragCell == editor.cell() && !editor.selection().active) &&
+        shown[static_cast<std::size_t>(result.dragLane)]->id == editor.lane()) {   // a drag from a click selects a rectangle (within the lane the click was in)
+      editor.selectTo(result.dragTick, result.dragCell);
+      session->edit = true;
+    }
     if (result.menuCell >= 0 && result.menuLane >= 0) {   // right-click: the caret goes to the cell (a selection the click is inside stays), and a menu offers the usual things
       const Lane& clicked = *shown[static_cast<std::size_t>(result.menuLane)];
       if (!(session->solo.on && clicked.id != editor.lane())) {

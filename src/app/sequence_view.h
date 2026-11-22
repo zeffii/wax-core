@@ -17,6 +17,8 @@ struct SequenceClick {
   std::string lane;   // the lane clicked ("" when none)
   int tick = -1;      // the tick at the start of the row clicked
   bool doubleClicked = false;   // the click was the second of a double-click (the cell: like Enter on it)
+  std::string dragLane;   // the mouse is held down and dragged: the lane and row under it (a block is selected from the click to here)
+  int dragTick = -1;
   int playFrom = -1;  // a click in the tick column: play from this tick
   CurveEditRequest curve;   // a change to a lane's curves asked for (see curve_view.h)
 };

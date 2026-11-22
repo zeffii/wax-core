@@ -49,6 +49,7 @@ struct PatternViewResult {
   int cellTick = -1, cell = -1;   // a cell was clicked
   int lane = -1;                  // ...in this one of the lanes shown
   int menuTick = -1, menuCell = -1, menuLane = -1;   // a cell was right-clicked (the context menu)
+  int dragTick = -1, dragCell = -1, dragLane = -1;   // the mouse is held and dragged from a cell: the cell under it (a selection runs from the click to here)
   bool pressed = false;           // the mouse went down over the grid (before any release picks a cell: the rows may be moving under it)
 };
 
