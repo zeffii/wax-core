@@ -42,7 +42,7 @@
 namespace wax {
 namespace {
 
-enum Param { kDecay = 0, kPrompt, kHard, kPos, kBright, kInharm, kDetune, kBody, kThump, kWidth, kPedal, kRelease, kTune, kVel, kLevel, kFelt, kBoard, kKnock, kMuffle, kScatter, kQuality, kContact, kStrike };
+enum Param { kDecay = 0, kPrompt, kHard, kPos, kBright, kInharm, kDetune, kBody, kThump, kWidth, kPedal, kRelease, kTune, kVel, kLevel, kFelt, kBoard, kKnock, kMuffle, kScatter, kQuality, kContact, kStrike, kRealism };
 
 constexpr int kSize = 1 << 14, kMask = kSize - 1, kSections = 3, kMaxStr = 3;
 
@@ -183,7 +183,7 @@ public:
   }
 
   void note(const NoteEvent& event) override {
-    if (event.type == NoteType::On) { note_ = event.note; velocity_ = event.vel; pending_ = true; active_ = true; keyUp_ = false; }
+    if (event.type == NoteType::On) { ringing_ = active_ && event.note == note_; note_ = event.note; velocity_ = event.vel; pending_ = true; active_ = true; keyUp_ = false; }
     else if (event.type == NoteType::Off || event.type == NoteType::AllOff) keyUp_ = true;
     else if (event.type == NoteType::Cut) { active_ = false; keyUp_ = false; ns_ = 0; for (auto& b : buf_) std::fill(b.begin(), b.end(), 0.0); }
   }
@@ -193,7 +193,7 @@ public:
     float* outR = outputs[1];
     if (!active_) { std::fill(outL, outL + n, 0.0f); std::fill(outR, outR + n, 0.0f); return; }
     auto g = [&](int i) -> double { return params[slots[i]]; };
-    if (pending_) { pending_ = false; strike(g, pitchOn_ ? inputs[0][0] : 0.0); }
+    if (pending_) { pending_ = false; strike(g, pitchOn_ ? inputs[0][0] : 0.0, ringing_ && g(kRealism) >= 0.5); }
     if (keyUp_ && !damped_ && g(kPedal) < 0.5) { damped_ = true; knockEnv_ = 1; }   // the damper falls, or the pedal comes up
     const double level = g(kLevel) * 2, body = g(kBody);
     const double muffle = g(kMuffle), scatter = g(kScatter), boardAmount = g(kBoard);
@@ -286,7 +286,8 @@ private:
 
   // Set the strings up for a note with the current parameters.
   template <typename G>
-  void strike(G& g, double pitchOct) {
+  // `again`: the same key hit while its strings still ring (realism). The strings keep what they are doing and the hammer hits them anew.
+  void strike(G& g, double pitchOct, bool again) {
     const double fs = fs_;
     const double midi = note_ + g(kTune) + pitchOct * 12;
     const double f0 = 440 * js::pow(2, (midi - 69) / 12);
@@ -307,8 +308,10 @@ private:
     const double spread3[3] = {-1, 0, 1}, spread2[2] = {-1, 1}, spread1[1] = {0};
     const double* spread = ns_ == 1 ? spread1 : ns_ == 2 ? spread2 : spread3;
     const double prompt = g(kPrompt);
-    for (int s = 0; s < kMaxStr; s++) { std::fill(buf_[static_cast<std::size_t>(s)].begin(), buf_[static_cast<std::size_t>(s)].end(), 0.0); ix_[s] = iy_[s] = lp_[s] = 0; }
-    std::fill(std::begin(dx_), std::end(dx_), 0.0); std::fill(std::begin(dy_), std::end(dy_), 0.0);
+    if (!again) {
+      for (int s = 0; s < kMaxStr; s++) { std::fill(buf_[static_cast<std::size_t>(s)].begin(), buf_[static_cast<std::size_t>(s)].end(), 0.0); ix_[s] = iy_[s] = lp_[s] = 0; }
+      std::fill(std::begin(dx_), std::end(dx_), 0.0); std::fill(std::begin(dy_), std::end(dy_), 0.0);
+    }
     for (int s = 0; s < ns_; s++) {
       const double f = f0 * js::pow(2, spread[s] * g(kDetune) / 1200), wf = 2 * kPi * f / fs;
       const double T = fs / f;
@@ -407,6 +410,7 @@ private:
   double dispA_ = 0;
   int note_ = 60;
   double velocity_ = 1;
+  bool ringing_ = false;   // the note on that is waiting was for the key already sounding
   bool active_ = false, keyUp_ = false, damped_ = false, pending_ = false;
   double k_ = 0, Lc_ = 100, dpos_ = 10, amp_ = 0, strikeEnd_ = 0;
   double thumpEnv_ = 0, thumpDecay_ = 0, thumpAmp_ = 0, thumpLp_ = 0;
@@ -458,7 +462,9 @@ void registerPiano(NodeRegistry& registry) {
     {"quality", 0, 1, 0, true},    // 0 standard, 1 eco
     {"contact", 0.25, 4, 1},       // how long the hammer stays on the string, times the natural length
     {"strike", 0, 1, 0},           // the treble's hammer blow layered under the lower notes
+    {"realism", 0, 1, 0, true},    // 0: every note gets a voice; 1: a key struck again while it rings hits the same strings (one string, one voice)
   };
+  type.restrikeParam = "realism";
   type.create = [](const NodeContext& context) { return std::make_unique<Piano>(context); };
   registry.add(std::move(type));
 }

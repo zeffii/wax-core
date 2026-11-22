@@ -170,6 +170,8 @@ struct NodeType {
   bool master = false;       // the output node: a graph has exactly one
   bool shared = false;       // never copied per voice: one copy runs for the whole instrument
   bool isEffect = false;     // effects get a hard "bypass" switch as their last parameter (added by the registry)
+  // Names a parameter that, when it is 1, keeps a note that is struck again on the voice that still holds that note (one string, one voice).
+  std::string restrikeParam;
   bool columnVoice = false;  // keeps a note column on one voice, so a note can slide into the next
   bool noteFilter = false;   // takes the instrument's notes first (see Node::noteInput)
 

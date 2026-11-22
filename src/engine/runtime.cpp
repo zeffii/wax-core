@@ -112,6 +112,7 @@ struct GraphRuntime::Instrument {
   bool dyingNow = false;               // its kill fade has just finished
   std::int64_t block = -1;             // the last block it ran in
   bool columnVoice = false;
+  int restrikeSlot = -1;   // the slot of the parameter that makes a note struck again go to the voice already holding it (NodeType::restrikeParam)
 
   struct Kill {
     int left;
@@ -258,6 +259,10 @@ void GraphRuntime::load(const CompiledGraph& source) {
   inst->lead = compiled.lead;
   inst->latency = compiled.latency;
   if (id != "master") inst->sleep = makeSleepState(compiled);   // the master has no voices to wake it: it always runs
+  for (const CompiledNode& n : compiled.nodes) {
+    const int at = n.def->restrikeParam.empty() ? -1 : n.def->paramIndex(n.def->restrikeParam);
+    if (at >= 0) inst->restrikeSlot = n.slots[static_cast<std::size_t>(at)];
+  }
   inst->columnVoice = std::any_of(compiled.nodes.begin(), compiled.nodes.end(), [](const CompiledNode& n) { return n.def->columnVoice; });
   inst->buffers.reserve(static_cast<std::size_t>(V));   // so the voices' buffers never move once nodes point at them
   inst->buffers.push_back(fresh());
@@ -467,7 +472,7 @@ void GraphRuntime::note(const std::string& instrument, const NoteEvent& event) {
   deliver(instrument, event);
 }
 
-// The notes as the voices get them. With several voices, a note on takes a silent voice, else the one that was released
+// The notes as the voices get them. With several voices, a note on takes (when the instrument asks for it) the voice still holding that note, else a silent voice, else the one that was released
 // longest ago, else the oldest; a note off releases the newest voice playing that note; all-off releases them all; a cut
 // stops them.
 void GraphRuntime::deliver(const std::string& instrument, const NoteEvent& event) {
@@ -486,6 +491,9 @@ void GraphRuntime::deliver(const std::string& instrument, const NoteEvent& event
     VoiceSet* pick = nullptr;
     if (inst->columnVoice && event.from >= 0 && event.column >= 0) {
       for (VoiceSet& s : inst->sets) if (s.active && s.column == event.column) { pick = &s; break; }
+    }
+    if (!pick && inst->restrikeSlot >= 0 && params_[inst->restrikeSlot] >= 0.5f) {   // a string that still rings is struck again, not given a second voice
+      for (VoiceSet& s : inst->sets) if (s.active && s.note == event.note && (!pick || s.stamp > pick->stamp)) pick = &s;
     }
     if (!pick) for (VoiceSet& s : inst->sets) if (!s.active) { pick = &s; break; }
     if (!pick) {
