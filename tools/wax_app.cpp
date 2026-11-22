@@ -765,6 +765,467 @@ bool handleKeyboard(Session* session, KeyboardEnv& env) {
   return edited;
 }
 
+// What the screens share while one frame is drawn.
+struct FrameContext {
+  Session* session;
+  const Options& options;
+  Player& player;
+  Document& doc;
+  CellEditor& editor;
+  const Song& song;
+  std::string& selectedLane;   // the lane whose tab is shown
+  std::string& laneInstrument;   // the machine of that lane
+  bool playing;
+  int tick;   // the tick to show as the playhead
+  bool& follow;
+  int& playFromRequest;
+  std::map<ImGuiKey, int>& held;   // the piano keys held down
+  int& octave;
+  int perBeat, perBar;
+  float scale;
+  float statusH;
+  bool mixerShown;
+};
+
+// The Song screen: the arrangement as lanes of placed patterns, curves over them, and the caret in the sequence.
+void drawSongScreen(FrameContext& f) {
+  [[maybe_unused]] Session* session = f.session;
+  [[maybe_unused]] Player& player = f.player;
+  [[maybe_unused]] Document& doc = f.doc;
+  [[maybe_unused]] CellEditor& editor = f.editor;
+  [[maybe_unused]] const Song& song = f.song;
+  [[maybe_unused]] std::string& selectedLane = f.selectedLane;
+  [[maybe_unused]] std::string& laneInstrument = f.laneInstrument;
+  [[maybe_unused]] const bool playing = f.playing;
+  [[maybe_unused]] const int tick = f.tick;
+  [[maybe_unused]] bool& follow = f.follow;
+  [[maybe_unused]] int& playFromRequest = f.playFromRequest;
+  [[maybe_unused]] const float scale = f.scale;
+  [[maybe_unused]] const Options& options = f.options;
+  [[maybe_unused]] std::map<ImGuiKey, int>& held = f.held;
+  [[maybe_unused]] int& octave = f.octave;
+  [[maybe_unused]] const int perBeat = f.perBeat;
+  [[maybe_unused]] const int perBar = f.perBar;
+  [[maybe_unused]] const float statusH = f.statusH;
+  [[maybe_unused]] const bool mixerShown = f.mixerShown;
+  if (!selectedLane.empty() && editor.lane() != selectedLane) editor.setLane(selectedLane, player.engine().laneColumns(selectedLane));   // (one cell is always active: the cursor is in the lane shown)
+  const float songSheetW = session->showKeys ? 270 * scale : 0;
+  ImGui::BeginChild("seqmain", ImVec2(-songSheetW, 0), false, ImGuiWindowFlags_NoNav);
+  const app::CurveView::Targets curveTargetsOf = [&](const Lane& lane) { return curveTargets(player.engine().laneColumns(lane.id), lane.instrument, player.engine().registry()); };
+  std::map<std::string, app::MinimapLane> minimapLanes;   // what the pictures of the patterns read (only when they are on)
+  if (app::settings().minimapOn)
+    for (const Lane& lane : doc.project().lanes) minimapLanes[lane.id] = {&session->player->engine().laneColumns(lane.id), &session->rows[lane.id]};
+  const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, selectedLane.empty() ? -1 : editor.tick(), editor.tick(), follow && playing && !session->edit, session->curveView, curveTargetsOf, session->edit ? app::selectedBlock(doc.project(), session->song, editor.lane(), editor.tick(), app::sequenceRowTicks(doc.project().song)) : app::SequenceBlock(), &minimapLanes, playing ? session->heard.frac : 0.0f);
+  if (hit.curve.any) {   // a curve edited: one undo step per gesture, the lane rebuilt in the engine
+    doc.apply(std::make_unique<SetCurves>(hit.curve.lane, hit.curve.curves, hit.curve.label), hit.curve.fold);
+    const std::vector<std::string> problems = syncLanes(doc, player.engine());
+    session->editStatus = problems.empty() ? std::string() : problems.front();
+  }
+  if (hit.playFrom >= 0) { playFromRequest = hit.playFrom; session->pausedAt = -1; }   // a tick number clicked: play from there
+  if (session->song.glueAsk) { ImGui::OpenPopup("glue"); session->song.glueAsk = false; }
+  if (ImGui::BeginPopup("glue")) {   // G over several lanes with some empty there
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Some of these lanes play nothing there.");
+    const auto glue = [&](bool fill) {
+      const int n = app::glueBlock(doc, player.engine(), session->song.glueBlock, fill);
+      if (n) { const std::vector<std::string> problems = syncLanes(doc, player.engine()); (void)problems; }
+      session->editStatus = n == 0 ? "Nothing to merge there." : n == 1 ? "Merged into one new pattern." : "Merged into " + std::to_string(n) + " new patterns, one per lane.";
+      session->song.selecting = false;
+      ImGui::CloseCurrentPopup();
+    };
+    if (app::textButton("Empty patterns too")) glue(true);
+    ImGui::SameLine();
+    if (app::textButton("Only where there is something")) glue(false);
+    ImGui::SameLine();
+    if (app::textButton("Cancel")) ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
+  }
+  if (!hit.lane.empty()) {
+    session->song.selecting = false;
+    session->handoff.openLane(hit.lane, hit.tick); selectedLane = hit.lane;
+    editor.setLane(hit.lane, player.engine().laneColumns(hit.lane));   // (the keys carry on from the click)
+    editor.moveTo(hit.tick, 0);
+    session->edit = true;   // a click puts the caret there, ready to move about
+  }
+  ImGui::EndChild();
+  if (session->showKeys) { ImGui::SameLine(0, 8 * scale); app::drawShortcutSheet("songkeys", app::songShortcuts(), 0, 0); }
+}
+
+// The Pattern screen: the lanes as tables of rows the caret moves in, and the lane tabs.
+void drawPatternScreen(FrameContext& f) {
+  [[maybe_unused]] Session* session = f.session;
+  [[maybe_unused]] Player& player = f.player;
+  [[maybe_unused]] Document& doc = f.doc;
+  [[maybe_unused]] CellEditor& editor = f.editor;
+  [[maybe_unused]] const Song& song = f.song;
+  [[maybe_unused]] std::string& selectedLane = f.selectedLane;
+  [[maybe_unused]] std::string& laneInstrument = f.laneInstrument;
+  [[maybe_unused]] const bool playing = f.playing;
+  [[maybe_unused]] const int tick = f.tick;
+  [[maybe_unused]] bool& follow = f.follow;
+  [[maybe_unused]] int& playFromRequest = f.playFromRequest;
+  [[maybe_unused]] const float scale = f.scale;
+  [[maybe_unused]] const Options& options = f.options;
+  [[maybe_unused]] std::map<ImGuiKey, int>& held = f.held;
+  [[maybe_unused]] int& octave = f.octave;
+  [[maybe_unused]] const int perBeat = f.perBeat;
+  [[maybe_unused]] const int perBar = f.perBar;
+  [[maybe_unused]] const float statusH = f.statusH;
+  [[maybe_unused]] const bool mixerShown = f.mixerShown;
+  const float sheetW = session->showKeys ? 270 * scale : 0;
+  ImGui::BeginChild("patmain", ImVec2(-sheetW, 0), false, ImGuiWindowFlags_NoNav);
+  // the grid of the lanes shown (one, picked by its tab, or all of them side by side), the cursor in lane `cursorLane` of them
+  const auto drawGrid = [&](const std::vector<const Lane*>& shown, int cursorLane) {
+    std::vector<app::PatternLane> grids;
+    for (const Lane* shownLane : shown) {
+      app::PatternLane grid;
+      grid.id = shownLane->id;
+      grid.rows = &session->rows[shownLane->id];
+      grid.labels = &session->player->engine().columnLabels(shownLane->id);
+      if (app::settings().tintPatterns) {   // each pattern's rows in the pattern's colour, faintly
+        grid.tint.assign(static_cast<std::size_t>(song.length), 0);
+        for (const Placement& placement : shownLane->placements)
+          for (const Pattern& pat : shownLane->patterns) {
+            if (pat.id != placement.pattern) continue;
+            const ImU32 colour = app::patternColour(pat, 34);
+            const int end = std::min({song.length, placement.start + placement.length, placement.start + static_cast<int>(pat.rows.size())});
+            for (int t = std::max(0, placement.start); t < end; t++) grid.tint[static_cast<std::size_t>(t)] = colour;
+          }
+      }
+      {   // where each pattern starts and ends; on the cursor's lane the patterns other than the one under the cursor are dimmed
+        grid.marks.assign(static_cast<std::size_t>(song.length), 0);
+        grid.edge.assign(static_cast<std::size_t>(song.length), 0);
+        const Placement* under = shownLane->id == editor.lane() ? seq::placementAt(*shownLane, editor.tick()) : nullptr;
+        for (int t = 0; t < song.length; t++) {
+          const Placement* owner = seq::placementAt(*shownLane, t);
+          if (!owner) continue;
+          const Pattern* pat = seq::patternOf(*shownLane, owner->pattern);
+          unsigned char& mark = grid.marks[static_cast<std::size_t>(t)];
+          if (t == owner->start) { mark |= app::PatternLane::kStart; if (pat) grid.edge[static_cast<std::size_t>(t)] = app::patternColour(*pat, 95); }
+          if (under && owner != under) mark |= app::PatternLane::kDim;
+        }
+        if (session->solo.on && app::settings().soloHatch)   // solo-edit with the song shown: everything but the pattern is out of reach
+          for (int t = 0; t < song.length; t++) if (shownLane->id != session->solo.lane || t < session->solo.lo || t >= session->solo.hi) grid.marks[static_cast<std::size_t>(t)] |= app::PatternLane::kLocked;
+      }
+      grids.push_back(std::move(grid));
+    }
+    const Lane& cursorOwner = *shown[static_cast<std::size_t>(cursorLane)];
+    app::CursorView cursor;
+    cursor.lane = cursorLane;
+    cursor.show = session->edit;
+    cursor.hideEmpty = app::settings().hideEmpty;
+    if (session->solo.on && !app::settings().soloHatch) { cursor.rowFirst = session->solo.lo; cursor.rowEnd = session->solo.hi; }   // the pattern on its own
+    cursor.tick = editor.tick();
+    cursor.cell = editor.cell();
+    cursor.character = editor.character();
+    const app::Handoff::Scroll scroll = session->handoff.takeScroll();
+    cursor.scrollTo = scroll.toCursor; cursor.revealFrom = scroll.revealFrom; cursor.revealTo = scroll.revealTo;
+    const CellEditor::Selection sel = editor.selection();
+    { const LoopRange lr = loopOf(song); cursor.loop = song.raw.is_object() && song.raw.contains("loop") && song.raw["loop"].is_object(); cursor.loopOn = lr.on; cursor.loopStart = lr.start; cursor.loopEnd = lr.end; }
+    cursor.playFrac = playing ? session->heard.frac : 0.0f;
+    cursor.info = app::describeColumn(doc.project(), cursorOwner, session->player->engine().laneColumns(cursorOwner.id), session->rows[cursorOwner.id], editor.tick(), editor.cell());
+    cursor.selected = sel.active; cursor.tick0 = sel.tick0; cursor.tick1 = sel.tick1; cursor.cell0 = sel.cell0; cursor.cell1 = sel.cell1;
+    ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * app::settings().patternText);   // Text size
+    const app::PatternViewResult result = app::drawPatternView(grids, song.ticksPerBeat, song.beatsPerBar, playing ? tick : -1, follow && playing && !session->edit, cursor);
+    ImGui::PopFont();
+    if (result.clickedTick >= 0) playFromRequest = result.clickedTick;
+    if (result.pressed && follow && playing) { follow = false; session->editStatus = "Follow off while you edit: F9 follows again."; }   // (at the press, so the rows stop moving before the click lands)
+    if (result.cell >= 0 && result.lane >= 0) {
+      const Lane& clicked = *shown[static_cast<std::size_t>(result.lane)];
+      if (session->solo.on && clicked.id != editor.lane()) return;   // (solo-edit keeps to its lane)
+      if (clicked.id != editor.lane()) { selectedLane = clicked.id; editor.setLane(clicked.id, session->player->engine().laneColumns(clicked.id)); }
+      editor.moveTo(result.cellTick, result.cell);
+      session->edit = true;   // a click puts the caret there, ready to type
+    }
+    if (result.menuCell >= 0 && result.menuLane >= 0) {   // right-click: the caret goes to the cell (a selection the click is inside stays), and a menu offers the usual things
+      const Lane& clicked = *shown[static_cast<std::size_t>(result.menuLane)];
+      if (!(session->solo.on && clicked.id != editor.lane())) {
+        const CellEditor::Selection block = editor.selection();
+        const bool inside = block.active && clicked.id == editor.lane() && result.menuTick >= std::min(block.tick0, block.tick1) && result.menuTick <= std::max(block.tick0, block.tick1) &&
+                            result.menuCell >= std::min(block.cell0, block.cell1) && result.menuCell <= std::max(block.cell0, block.cell1);
+        if (!inside) {
+          if (clicked.id != editor.lane()) { selectedLane = clicked.id; editor.setLane(clicked.id, session->player->engine().laneColumns(clicked.id)); }
+          editor.moveTo(result.menuTick, result.menuCell);
+        }
+        session->edit = true;
+        ImGui::OpenPopup("patternmenu");
+      }
+    }
+    drawPatternMenu(session, doc, player);
+  };
+  if (app::settings().patternAll) {
+    std::vector<const Lane*> shown;
+    int cursorLane = 0;
+    for (const Lane& lane : doc.project().lanes) {
+      if (session->solo.on && !app::settings().soloHatch && lane.id != session->solo.lane) continue;   // (the pattern on its own: one lane)
+      if (lane.id == selectedLane) cursorLane = static_cast<int>(shown.size());
+      shown.push_back(&lane);
+    }
+    if (!shown.empty()) {
+      if (session->handoff.laneRequested()) {   // a lane asked for (a click in the Song screen)
+        for (std::size_t i = 0; i < shown.size(); i++) if (session->handoff.isRequested(shown[i]->id)) cursorLane = static_cast<int>(i);
+      }
+      const Lane& owner = *shown[static_cast<std::size_t>(cursorLane)];
+      selectedLane = owner.id;
+      laneInstrument = owner.instrument;
+      editor.setLane(owner.id, session->player->engine().laneColumns(owner.id));
+      if (session->handoff.laneRequested()) {
+        if (session->handoff.requestedTick() >= 0) { editor.moveTo(session->handoff.requestedTick(), editor.cell()); session->handoff.scrollToCursor(); }
+        session->handoff.landed();
+      }
+      drawGrid(shown, cursorLane);
+    }
+  } else if (ImGui::BeginTabBar("lanes")) {
+    for (const Lane& lane : doc.project().lanes) {
+      if (session->solo.on && lane.id != session->solo.lane) continue;   // (solo-edit: its lane only)
+      const std::string label = lane.id + (lane.instrument == lane.id ? "" : "  " + lane.instrument);
+      ImGuiTabItemFlags tabFlags = ImGuiTabItemFlags_None;
+      if (!session->pickedTab && lane.id != kMaster) { tabFlags |= ImGuiTabItemFlags_SetSelected; session->pickedTab = true; }
+      if (session->handoff.isRequested(lane.id)) tabFlags |= ImGuiTabItemFlags_SetSelected;
+      ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 0.85f);   // lane names in a small face
+      const bool tabOpen = ImGui::BeginTabItem(label.c_str(), nullptr, tabFlags);
+      ImGui::PopFont();
+      if (tabOpen) {
+        selectedLane = lane.id;
+        laneInstrument = lane.instrument;
+        editor.setLane(lane.id, session->player->engine().laneColumns(lane.id));
+        if (session->handoff.isRequested(lane.id)) {
+          if (session->handoff.requestedTick() >= 0) { editor.moveTo(session->handoff.requestedTick(), editor.cell()); session->handoff.scrollToCursor(); }
+          session->handoff.landed();
+        }
+        drawGrid({&lane}, 0);
+        ImGui::EndTabItem();
+      }
+    }
+    ImGui::EndTabBar();
+  }
+  ImGui::EndChild();
+  if (session->showKeys) { ImGui::SameLine(0, 8 * scale); app::drawShortcutSheet("patkeys", app::patternShortcuts(), 0, 0); }
+}
+
+// The Instrument screen: the graph of the machine picked, its node strip and the parameter dock.
+void drawInstrumentScreen(FrameContext& f) {
+  [[maybe_unused]] Session* session = f.session;
+  [[maybe_unused]] Player& player = f.player;
+  [[maybe_unused]] Document& doc = f.doc;
+  [[maybe_unused]] CellEditor& editor = f.editor;
+  [[maybe_unused]] const Song& song = f.song;
+  [[maybe_unused]] std::string& selectedLane = f.selectedLane;
+  [[maybe_unused]] std::string& laneInstrument = f.laneInstrument;
+  [[maybe_unused]] const bool playing = f.playing;
+  [[maybe_unused]] const int tick = f.tick;
+  [[maybe_unused]] bool& follow = f.follow;
+  [[maybe_unused]] int& playFromRequest = f.playFromRequest;
+  [[maybe_unused]] const float scale = f.scale;
+  [[maybe_unused]] const Options& options = f.options;
+  [[maybe_unused]] std::map<ImGuiKey, int>& held = f.held;
+  [[maybe_unused]] int& octave = f.octave;
+  [[maybe_unused]] const int perBeat = f.perBeat;
+  [[maybe_unused]] const int perBar = f.perBar;
+  [[maybe_unused]] const float statusH = f.statusH;
+  [[maybe_unused]] const bool mixerShown = f.mixerShown;
+  // the instruments as flat text on the left, the graph in the middle, the parameter dock at the right
+  if (session->instrument.empty()) session->instrument = !laneInstrument.empty() ? laneInstrument : session->playable.empty() ? std::string(kMaster) : session->playable.front();
+  laneInstrument = session->instrument;
+  ImGui::BeginChild("instmain", ImVec2(0, 0), false);
+  if (session->panel.instrument != laneInstrument) { session->panel.instrument = laneInstrument; session->panel.node.clear(); }
+  session->graphView.bottomInset = app::nodeStripHeight(doc, laneInstrument, ImGui::GetContentRegionAvail().y);
+  session->graphView.dockMin = session->panel.dock.min; session->graphView.dockMax = session->panel.dock.max;
+  session->graphView.probeOf = [&](const std::string& instrument, const std::string& node) { return session->player->engine().runtime().probe(instrument, node); };
+  app::drawGraphView(session->graphView, doc, laneInstrument, session->panel.node, 0);
+  if (session->graphView.tileDoubleClicked) session->panel.open = true;   // a double-click on a node shows its parameters (a single click only selects it)
+  if (!session->graphView.openDrawings.empty()) session->panel.drawNode = std::exchange(session->graphView.openDrawings, std::string());
+  const ImVec2 graphMin = ImGui::GetWindowPos();
+  ImVec2 graphMax(graphMin.x + ImGui::GetWindowWidth(), graphMin.y + ImGui::GetWindowHeight());
+  const app::NodeTrailState& trail = session->graphView.trail;
+  if (trail.bankOpen) graphMax.x -= trail.bankMax.x - trail.bankMin.x;   // the parameters sit left of the open bank
+  ImGui::EndChild();
+  const bool panelChanged = app::drawParamPanel(session->panel, doc, player.engine(), laneInstrument, graphMin, graphMax);   // the parameters float over the graph
+  const bool dockChanged = app::drawExposedDock(session->panel, doc, player.engine(), laneInstrument, graphMin, graphMax);   // the exposed ones at its left
+  const app::NodeStripResult stripResult = app::drawNodeStrip(session->strip, session->panel, doc, player.engine(), laneInstrument, graphMin, graphMax, session->graphView.probeOf);   // the node UIs along its bottom
+  if (stripResult.dataChanged) syncData(doc, player.engine());
+  const bool pictureChanged = std::exchange(session->graphView.paramEdited, false);   // a dot dragged in a response picture
+  if (panelChanged || dockChanged || pictureChanged || stripResult.paramsChanged) {
+    syncParams(doc, player.engine());
+    const std::vector<std::string> graphProblems = syncGraphs(doc, player.engine()), laneProblems = syncLanes(doc, player.engine());
+    session->editStatus = !graphProblems.empty() ? graphProblems.front() : !laneProblems.empty() ? laneProblems.front() : std::string();
+  }
+}
+
+// The Info screen: plain text saved with the project.
+void drawInfoScreen(FrameContext& f) {
+  [[maybe_unused]] Session* session = f.session;
+  [[maybe_unused]] Player& player = f.player;
+  [[maybe_unused]] Document& doc = f.doc;
+  [[maybe_unused]] CellEditor& editor = f.editor;
+  [[maybe_unused]] const Song& song = f.song;
+  [[maybe_unused]] std::string& selectedLane = f.selectedLane;
+  [[maybe_unused]] std::string& laneInstrument = f.laneInstrument;
+  [[maybe_unused]] const bool playing = f.playing;
+  [[maybe_unused]] const int tick = f.tick;
+  [[maybe_unused]] bool& follow = f.follow;
+  [[maybe_unused]] int& playFromRequest = f.playFromRequest;
+  [[maybe_unused]] const float scale = f.scale;
+  [[maybe_unused]] const Options& options = f.options;
+  [[maybe_unused]] std::map<ImGuiKey, int>& held = f.held;
+  [[maybe_unused]] int& octave = f.octave;
+  [[maybe_unused]] const int perBeat = f.perBeat;
+  [[maybe_unused]] const int perBar = f.perBar;
+  [[maybe_unused]] const float statusH = f.statusH;
+  [[maybe_unused]] const bool mixerShown = f.mixerShown;
+  // Song info: plain text saved with the project (notes, credits, greetings). One undo step each time the box is left.
+  ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Song info: notes, credits, greetings. Plain text, saved with the project.");
+  const std::string stored = song.raw.is_object() && song.raw.contains("info") && song.raw["info"].is_string() ? song.raw["info"].get<std::string>() : std::string();
+  if (!session->infoFocused) std::snprintf(session->infoText.data(), session->infoText.size(), "%s", stored.c_str());
+  ImGui::InputTextMultiline("##info", session->infoText.data(), session->infoText.size(), ImVec2(-1, -1));
+  session->infoFocused = ImGui::IsItemActive();
+  if (ImGui::IsItemDeactivatedAfterEdit() && std::string(session->infoText.data()) != stored) doc.apply(std::make_unique<SetSongInfo>(session->infoText.data()));
+}
+
+// The Config screen: the settings, in groups as in the web app.
+void drawConfigScreen(FrameContext& f) {
+  [[maybe_unused]] Session* session = f.session;
+  [[maybe_unused]] Player& player = f.player;
+  [[maybe_unused]] Document& doc = f.doc;
+  [[maybe_unused]] CellEditor& editor = f.editor;
+  [[maybe_unused]] const Song& song = f.song;
+  [[maybe_unused]] std::string& selectedLane = f.selectedLane;
+  [[maybe_unused]] std::string& laneInstrument = f.laneInstrument;
+  [[maybe_unused]] const bool playing = f.playing;
+  [[maybe_unused]] const int tick = f.tick;
+  [[maybe_unused]] bool& follow = f.follow;
+  [[maybe_unused]] int& playFromRequest = f.playFromRequest;
+  [[maybe_unused]] const float scale = f.scale;
+  [[maybe_unused]] const Options& options = f.options;
+  [[maybe_unused]] std::map<ImGuiKey, int>& held = f.held;
+  [[maybe_unused]] int& octave = f.octave;
+  [[maybe_unused]] const int perBeat = f.perBeat;
+  [[maybe_unused]] const int perBar = f.perBar;
+  [[maybe_unused]] const float statusH = f.statusH;
+  [[maybe_unused]] const bool mixerShown = f.mixerShown;
+  // Config: the settings, in groups as in the web app; each change is kept at once.
+  ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Settings are kept on this computer (config.json in the preferences folder).");
+  app::Settings& cfg = app::settings();
+  bool changed = false;
+  const auto group = [&](const char* title, const char* blurb) {
+    ImGui::Spacing();
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kAccent), "%s", title);
+    ImGui::SameLine(0, 12 * scale);
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "%s", blurb);
+  };
+  const auto colour = [&](const char* label, ImU32& value) {
+    float rgb[3] = {(value & 255) / 255.0f, ((value >> 8) & 255) / 255.0f, ((value >> 16) & 255) / 255.0f};
+    ImGui::PushID(label);
+    if (ImGui::ColorEdit3("##c", rgb, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
+      value = IM_COL32(static_cast<int>(rgb[0] * 255 + 0.5f), static_cast<int>(rgb[1] * 255 + 0.5f), static_cast<int>(rgb[2] * 255 + 0.5f), 255);
+      changed = true;
+    }
+    ImGui::PopID();
+    ImGui::SameLine();
+    ImGui::TextUnformatted(label);
+  };
+  group("Look", "Colours. Applied at once.");
+  ImGui::SetNextItemWidth(180 * scale);
+  if (ImGui::BeginCombo("Colour theme", app::themeName(app::themeIndex()), ImGuiComboFlags_HeightLarge)) {
+    for (int i = 0; i < app::themeCount(); i++) if (ImGui::Selectable(app::themeName(i), i == app::themeIndex())) { app::setTheme(i); saveTheme(); }
+    ImGui::EndCombo();
+  }
+  group("Audio", "The sound card's buffer: smaller is quicker to respond, larger is safer against crackle.");
+  if (session->audio) {
+    static const int sizes[] = {0, 64, 128, 256, 512, 1024, 2048, 4096};
+    const int now = session->audio->bufferFrames();
+    char label[64];
+    std::snprintf(label, sizeof label, "buffer %d (%.1f ms)", now, 1000.0 * now / session->audio->sampleRate());
+    ImGui::SetNextItemWidth(260 * scale);
+    if (ImGui::BeginCombo("Audio buffer", label)) {
+      for (const int size : sizes) {
+        char item[32];
+        if (size == 0) std::snprintf(item, sizeof item, "card's own");
+        else std::snprintf(item, sizeof item, "%d (%.1f ms)", size, 1000.0 * size / session->audio->sampleRate());
+        if (ImGui::Selectable(item, size == now)) {
+          try { session->openAudio(options, size); }
+          catch (const std::exception& e) { session->audioName = std::string("no sound: ") + e.what(); }
+        }
+      }
+      ImGui::EndCombo();
+    }
+  }
+  group("Engine", "How many cores render the sound. The sound is the same on any number.");
+  if (session->audio) {
+    const int available = std::max(1u, std::thread::hardware_concurrency());
+    const int inUse = session->player->engine().runtime().threads();
+    const ImVec4 dim = ImGui::ColorConvertU32ToFloat4(app::kDimText);
+    ImGui::TextColored(dim, "cores available: %d   in use: %d", available, inUse);
+    ImGui::SetNextItemWidth(220 * scale);
+    ImGui::SliderInt("Render threads", &cfg.threads, 1, available);
+    if (ImGui::IsItemDeactivatedAfterEdit()) {   // (applied when let go: it restarts the sound for a moment)
+      changed = true;
+      if (cfg.threads != inUse) session->setThreads(options, cfg.threads);
+    }
+    ImGui::TextColored(dim, "it may not be in your best interest to use all cores");
+  }
+  group("Playing", "How the screens behave while the song runs.");
+  if (app::checkbox("Follow mode (the grids scroll with the playing row)", &follow)) { cfg.follow = follow; changed = true; }
+  group("Graph", "Wire colours by kind of signal, and dashed control wires.");
+  colour("Wire colour: audio", cfg.wireAudio);
+  colour("Wire colour: control", cfg.wireControl);
+  colour("Wire colour: stereo", cfg.wireStereo);
+  colour("Wire colour: parameter", cfg.wireParam);
+  if (app::checkbox("Control wires are dashed", &cfg.wireDashed)) changed = true;
+  group("Song screen", "The sequence editor.");
+  if (app::checkbox("Song overview (a strip at the right showing the whole song scaled to fit: click or drag to scroll)", &cfg.seqOverview)) changed = true;
+  if (app::checkbox("Pattern minimaps (each cell shows a small picture of its pattern)", &cfg.minimapOn)) changed = true;
+  ImGui::BeginDisabled(!cfg.minimapOn);
+  ImGui::Indent(16 * scale);
+  if (app::checkbox("Note lengths (a thin line from each note to the next)", &cfg.minimapLengths)) changed = true;
+  if (app::checkbox("Note off and kill (cyan for ===, magenta for ^^^)", &cfg.minimapCaps)) changed = true;
+  if (app::checkbox("Parameters (a narrow column each at the right edge)", &cfg.minimapParams)) changed = true;
+  ImGui::Unindent(16 * scale);
+  ImGui::EndDisabled();
+  group("Editing", "How the cursor moves.");
+  if (app::checkbox("Sequence editor: show pattern names (off: just the two-digit number; H toggles)", &cfg.seqNames)) changed = true;
+  if (app::checkbox("Up and Down wrap round the first and last row", &cfg.rowWrap)) changed = true;
+  if (app::checkbox("Graph: dragging a node far out of its chain takes it out", &cfg.graphPullOut)) changed = true;
+  if (app::checkbox("Left and Right wrap round the first and last lane (All lanes view)", &cfg.laneWrap)) changed = true;
+  if (app::fileAssociationSupported()) {
+    group("Files", "Double-clicking a .wax file in the file manager.");
+    static std::string associationNote;   // what the last press of the button did
+    if (app::isOpenerOfWaxFiles()) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), ".wax files open in this Wax when double-clicked.");
+    else if (app::textButton("Open .wax files with this Wax")) associationNote = app::registerAsOpenerOfWaxFiles();
+    if (!associationNote.empty()) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "%s", associationNote.c_str());
+  }
+  group("Backup", "Snapshots of the song in the preferences folder; File > Backups opens one.");
+  if (app::checkbox("Automatic backups", &cfg.backupOn)) changed = true;
+  ImGui::SetNextItemWidth(220 * scale);
+  if (ImGui::SliderInt("Back up every (minutes)", &cfg.backupMinutes, 1, 60)) changed = true;
+  ImGui::SetNextItemWidth(220 * scale);
+  if (ImGui::SliderInt("Snapshots kept", &cfg.backupKeep, 5, 200)) changed = true;
+  group("Sample", "The Sample screen.");
+  ImGui::SetNextItemWidth(220 * scale);
+  if (ImGui::SliderInt("Auto-slice: sensitivity (%)", &cfg.sliceSensitivity, 0, 100)) changed = true;
+  ImGui::SetNextItemWidth(220 * scale);
+  if (ImGui::SliderInt("Auto-slice: shortest gap (ms)", &cfg.sliceMinGap, 5, 500)) changed = true;
+  if (app::checkbox("Auto-slice: replace the markers in range", &cfg.sliceReplace)) changed = true;
+  if (app::checkbox("Auto-slice: operate on the whole sample", &cfg.sliceWhole)) changed = true;
+  if (app::checkbox("Waveform: hide the loop region", &cfg.waveHideLoop)) changed = true;
+  if (app::checkbox("Waveform: hide the selection", &cfg.waveHideSel)) changed = true;
+  if (app::checkbox("Waveform: hide the sustain loop region", &cfg.waveHideSus)) changed = true;
+  {
+    static const struct { const char* id; const char* label; } modes[] = {{"both", "both (relative and absolute)"}, {"relative", "relative: 0000 to FFFF through the sample"}, {"absolute", "absolute: the frame number"}};
+    const char* shown = modes[0].label;
+    for (const auto& mode : modes) if (cfg.hexMode == mode.id) shown = mode.label;
+    ImGui::SetNextItemWidth(330 * scale);
+    if (ImGui::BeginCombo("Slice markers: hex value", shown)) {
+      for (const auto& mode : modes) if (ImGui::Selectable(mode.label, cfg.hexMode == mode.id)) { cfg.hexMode = mode.id; changed = true; }
+      ImGui::EndCombo();
+    }
+  }
+  ImGui::SetNextItemWidth(220 * scale);
+  if (ImGui::SliderInt("Sample browser: ask before reading files over (MB)", &cfg.sampleAskMB, 1, 2000)) changed = true;
+  ImGui::Spacing();
+  if (app::textButton("Reset to defaults")) { app::resetSettings(); follow = cfg.follow; changed = true; }
+  if (changed) app::saveSettings();
+}
+
 void drawFrame(Session* session, const Options& options, const std::string& status, float& meterL, float& meterR, std::map<ImGuiKey, int>& held,
                int& octave, std::string& selectedLane, bool& follow, int& playFromRequest) {
   ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -1454,337 +1915,14 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   ImGui::BeginChild("screen", ImVec2(0, below), false);
   std::string laneInstrument;
   for (const Lane& lane : doc.project().lanes) if (lane.id == selectedLane) laneInstrument = lane.instrument;
-  if (session->screen == Screen::Song) {
-    if (!selectedLane.empty() && editor.lane() != selectedLane) editor.setLane(selectedLane, player.engine().laneColumns(selectedLane));   // (one cell is always active: the cursor is in the lane shown)
-    const float songSheetW = session->showKeys ? 270 * scale : 0;
-    ImGui::BeginChild("seqmain", ImVec2(-songSheetW, 0), false, ImGuiWindowFlags_NoNav);
-    const app::CurveView::Targets curveTargetsOf = [&](const Lane& lane) { return curveTargets(player.engine().laneColumns(lane.id), lane.instrument, player.engine().registry()); };
-    std::map<std::string, app::MinimapLane> minimapLanes;   // what the pictures of the patterns read (only when they are on)
-    if (app::settings().minimapOn)
-      for (const Lane& lane : doc.project().lanes) minimapLanes[lane.id] = {&session->player->engine().laneColumns(lane.id), &session->rows[lane.id]};
-    const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, selectedLane.empty() ? -1 : editor.tick(), editor.tick(), follow && playing && !session->edit, session->curveView, curveTargetsOf, session->edit ? app::selectedBlock(doc.project(), session->song, editor.lane(), editor.tick(), app::sequenceRowTicks(doc.project().song)) : app::SequenceBlock(), &minimapLanes, playing ? session->heard.frac : 0.0f);
-    if (hit.curve.any) {   // a curve edited: one undo step per gesture, the lane rebuilt in the engine
-      doc.apply(std::make_unique<SetCurves>(hit.curve.lane, hit.curve.curves, hit.curve.label), hit.curve.fold);
-      const std::vector<std::string> problems = syncLanes(doc, player.engine());
-      session->editStatus = problems.empty() ? std::string() : problems.front();
-    }
-    if (hit.playFrom >= 0) { playFromRequest = hit.playFrom; session->pausedAt = -1; }   // a tick number clicked: play from there
-    if (session->song.glueAsk) { ImGui::OpenPopup("glue"); session->song.glueAsk = false; }
-    if (ImGui::BeginPopup("glue")) {   // G over several lanes with some empty there
-      ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Some of these lanes play nothing there.");
-      const auto glue = [&](bool fill) {
-        const int n = app::glueBlock(doc, player.engine(), session->song.glueBlock, fill);
-        if (n) { const std::vector<std::string> problems = syncLanes(doc, player.engine()); (void)problems; }
-        session->editStatus = n == 0 ? "Nothing to merge there." : n == 1 ? "Merged into one new pattern." : "Merged into " + std::to_string(n) + " new patterns, one per lane.";
-        session->song.selecting = false;
-        ImGui::CloseCurrentPopup();
-      };
-      if (app::textButton("Empty patterns too")) glue(true);
-      ImGui::SameLine();
-      if (app::textButton("Only where there is something")) glue(false);
-      ImGui::SameLine();
-      if (app::textButton("Cancel")) ImGui::CloseCurrentPopup();
-      ImGui::EndPopup();
-    }
-    if (!hit.lane.empty()) {
-      session->song.selecting = false;
-      session->handoff.openLane(hit.lane, hit.tick); selectedLane = hit.lane;
-      editor.setLane(hit.lane, player.engine().laneColumns(hit.lane));   // (the keys carry on from the click)
-      editor.moveTo(hit.tick, 0);
-      session->edit = true;   // a click puts the caret there, ready to move about
-    }
-    ImGui::EndChild();
-    if (session->showKeys) { ImGui::SameLine(0, 8 * scale); app::drawShortcutSheet("songkeys", app::songShortcuts(), 0, 0); }
-  } else if (session->screen == Screen::Pattern) {
-    const float sheetW = session->showKeys ? 270 * scale : 0;
-    ImGui::BeginChild("patmain", ImVec2(-sheetW, 0), false, ImGuiWindowFlags_NoNav);
-    // the grid of the lanes shown (one, picked by its tab, or all of them side by side), the cursor in lane `cursorLane` of them
-    const auto drawGrid = [&](const std::vector<const Lane*>& shown, int cursorLane) {
-      std::vector<app::PatternLane> grids;
-      for (const Lane* shownLane : shown) {
-        app::PatternLane grid;
-        grid.id = shownLane->id;
-        grid.rows = &session->rows[shownLane->id];
-        grid.labels = &session->player->engine().columnLabels(shownLane->id);
-        if (app::settings().tintPatterns) {   // each pattern's rows in the pattern's colour, faintly
-          grid.tint.assign(static_cast<std::size_t>(song.length), 0);
-          for (const Placement& placement : shownLane->placements)
-            for (const Pattern& pat : shownLane->patterns) {
-              if (pat.id != placement.pattern) continue;
-              const ImU32 colour = app::patternColour(pat, 34);
-              const int end = std::min({song.length, placement.start + placement.length, placement.start + static_cast<int>(pat.rows.size())});
-              for (int t = std::max(0, placement.start); t < end; t++) grid.tint[static_cast<std::size_t>(t)] = colour;
-            }
-        }
-        {   // where each pattern starts and ends; on the cursor's lane the patterns other than the one under the cursor are dimmed
-          grid.marks.assign(static_cast<std::size_t>(song.length), 0);
-          grid.edge.assign(static_cast<std::size_t>(song.length), 0);
-          const Placement* under = shownLane->id == editor.lane() ? seq::placementAt(*shownLane, editor.tick()) : nullptr;
-          for (int t = 0; t < song.length; t++) {
-            const Placement* owner = seq::placementAt(*shownLane, t);
-            if (!owner) continue;
-            const Pattern* pat = seq::patternOf(*shownLane, owner->pattern);
-            unsigned char& mark = grid.marks[static_cast<std::size_t>(t)];
-            if (t == owner->start) { mark |= app::PatternLane::kStart; if (pat) grid.edge[static_cast<std::size_t>(t)] = app::patternColour(*pat, 95); }
-            if (under && owner != under) mark |= app::PatternLane::kDim;
-          }
-          if (session->solo.on && app::settings().soloHatch)   // solo-edit with the song shown: everything but the pattern is out of reach
-            for (int t = 0; t < song.length; t++) if (shownLane->id != session->solo.lane || t < session->solo.lo || t >= session->solo.hi) grid.marks[static_cast<std::size_t>(t)] |= app::PatternLane::kLocked;
-        }
-        grids.push_back(std::move(grid));
-      }
-      const Lane& cursorOwner = *shown[static_cast<std::size_t>(cursorLane)];
-      app::CursorView cursor;
-      cursor.lane = cursorLane;
-      cursor.show = session->edit;
-      cursor.hideEmpty = app::settings().hideEmpty;
-      if (session->solo.on && !app::settings().soloHatch) { cursor.rowFirst = session->solo.lo; cursor.rowEnd = session->solo.hi; }   // the pattern on its own
-      cursor.tick = editor.tick();
-      cursor.cell = editor.cell();
-      cursor.character = editor.character();
-      const app::Handoff::Scroll scroll = session->handoff.takeScroll();
-      cursor.scrollTo = scroll.toCursor; cursor.revealFrom = scroll.revealFrom; cursor.revealTo = scroll.revealTo;
-      const CellEditor::Selection sel = editor.selection();
-      { const LoopRange lr = loopOf(song); cursor.loop = song.raw.is_object() && song.raw.contains("loop") && song.raw["loop"].is_object(); cursor.loopOn = lr.on; cursor.loopStart = lr.start; cursor.loopEnd = lr.end; }
-      cursor.playFrac = playing ? session->heard.frac : 0.0f;
-      cursor.info = app::describeColumn(doc.project(), cursorOwner, session->player->engine().laneColumns(cursorOwner.id), session->rows[cursorOwner.id], editor.tick(), editor.cell());
-      cursor.selected = sel.active; cursor.tick0 = sel.tick0; cursor.tick1 = sel.tick1; cursor.cell0 = sel.cell0; cursor.cell1 = sel.cell1;
-      ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * app::settings().patternText);   // Text size
-      const app::PatternViewResult result = app::drawPatternView(grids, song.ticksPerBeat, song.beatsPerBar, playing ? tick : -1, follow && playing && !session->edit, cursor);
-      ImGui::PopFont();
-      if (result.clickedTick >= 0) playFromRequest = result.clickedTick;
-      if (result.pressed && follow && playing) { follow = false; session->editStatus = "Follow off while you edit: F9 follows again."; }   // (at the press, so the rows stop moving before the click lands)
-      if (result.cell >= 0 && result.lane >= 0) {
-        const Lane& clicked = *shown[static_cast<std::size_t>(result.lane)];
-        if (session->solo.on && clicked.id != editor.lane()) return;   // (solo-edit keeps to its lane)
-        if (clicked.id != editor.lane()) { selectedLane = clicked.id; editor.setLane(clicked.id, session->player->engine().laneColumns(clicked.id)); }
-        editor.moveTo(result.cellTick, result.cell);
-        session->edit = true;   // a click puts the caret there, ready to type
-      }
-      if (result.menuCell >= 0 && result.menuLane >= 0) {   // right-click: the caret goes to the cell (a selection the click is inside stays), and a menu offers the usual things
-        const Lane& clicked = *shown[static_cast<std::size_t>(result.menuLane)];
-        if (!(session->solo.on && clicked.id != editor.lane())) {
-          const CellEditor::Selection block = editor.selection();
-          const bool inside = block.active && clicked.id == editor.lane() && result.menuTick >= std::min(block.tick0, block.tick1) && result.menuTick <= std::max(block.tick0, block.tick1) &&
-                              result.menuCell >= std::min(block.cell0, block.cell1) && result.menuCell <= std::max(block.cell0, block.cell1);
-          if (!inside) {
-            if (clicked.id != editor.lane()) { selectedLane = clicked.id; editor.setLane(clicked.id, session->player->engine().laneColumns(clicked.id)); }
-            editor.moveTo(result.menuTick, result.menuCell);
-          }
-          session->edit = true;
-          ImGui::OpenPopup("patternmenu");
-        }
-      }
-      drawPatternMenu(session, doc, player);
-    };
-    if (app::settings().patternAll) {
-      std::vector<const Lane*> shown;
-      int cursorLane = 0;
-      for (const Lane& lane : doc.project().lanes) {
-        if (session->solo.on && !app::settings().soloHatch && lane.id != session->solo.lane) continue;   // (the pattern on its own: one lane)
-        if (lane.id == selectedLane) cursorLane = static_cast<int>(shown.size());
-        shown.push_back(&lane);
-      }
-      if (!shown.empty()) {
-        if (session->handoff.laneRequested()) {   // a lane asked for (a click in the Song screen)
-          for (std::size_t i = 0; i < shown.size(); i++) if (session->handoff.isRequested(shown[i]->id)) cursorLane = static_cast<int>(i);
-        }
-        const Lane& owner = *shown[static_cast<std::size_t>(cursorLane)];
-        selectedLane = owner.id;
-        laneInstrument = owner.instrument;
-        editor.setLane(owner.id, session->player->engine().laneColumns(owner.id));
-        if (session->handoff.laneRequested()) {
-          if (session->handoff.requestedTick() >= 0) { editor.moveTo(session->handoff.requestedTick(), editor.cell()); session->handoff.scrollToCursor(); }
-          session->handoff.landed();
-        }
-        drawGrid(shown, cursorLane);
-      }
-    } else if (ImGui::BeginTabBar("lanes")) {
-      for (const Lane& lane : doc.project().lanes) {
-        if (session->solo.on && lane.id != session->solo.lane) continue;   // (solo-edit: its lane only)
-        const std::string label = lane.id + (lane.instrument == lane.id ? "" : "  " + lane.instrument);
-        ImGuiTabItemFlags tabFlags = ImGuiTabItemFlags_None;
-        if (!session->pickedTab && lane.id != kMaster) { tabFlags |= ImGuiTabItemFlags_SetSelected; session->pickedTab = true; }
-        if (session->handoff.isRequested(lane.id)) tabFlags |= ImGuiTabItemFlags_SetSelected;
-        ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 0.85f);   // lane names in a small face
-        const bool tabOpen = ImGui::BeginTabItem(label.c_str(), nullptr, tabFlags);
-        ImGui::PopFont();
-        if (tabOpen) {
-          selectedLane = lane.id;
-          laneInstrument = lane.instrument;
-          editor.setLane(lane.id, session->player->engine().laneColumns(lane.id));
-          if (session->handoff.isRequested(lane.id)) {
-            if (session->handoff.requestedTick() >= 0) { editor.moveTo(session->handoff.requestedTick(), editor.cell()); session->handoff.scrollToCursor(); }
-            session->handoff.landed();
-          }
-          drawGrid({&lane}, 0);
-          ImGui::EndTabItem();
-        }
-      }
-      ImGui::EndTabBar();
-    }
-    ImGui::EndChild();
-    if (session->showKeys) { ImGui::SameLine(0, 8 * scale); app::drawShortcutSheet("patkeys", app::patternShortcuts(), 0, 0); }
-  } else if (session->screen == Screen::Instrument) {
-    // the instruments as flat text on the left, the graph in the middle, the parameter dock at the right
-    if (session->instrument.empty()) session->instrument = !laneInstrument.empty() ? laneInstrument : session->playable.empty() ? std::string(kMaster) : session->playable.front();
-    laneInstrument = session->instrument;
-    ImGui::BeginChild("instmain", ImVec2(0, 0), false);
-    if (session->panel.instrument != laneInstrument) { session->panel.instrument = laneInstrument; session->panel.node.clear(); }
-    session->graphView.bottomInset = app::nodeStripHeight(doc, laneInstrument, ImGui::GetContentRegionAvail().y);
-    session->graphView.dockMin = session->panel.dock.min; session->graphView.dockMax = session->panel.dock.max;
-    session->graphView.probeOf = [&](const std::string& instrument, const std::string& node) { return session->player->engine().runtime().probe(instrument, node); };
-    app::drawGraphView(session->graphView, doc, laneInstrument, session->panel.node, 0);
-    if (session->graphView.tileDoubleClicked) session->panel.open = true;   // a double-click on a node shows its parameters (a single click only selects it)
-    if (!session->graphView.openDrawings.empty()) session->panel.drawNode = std::exchange(session->graphView.openDrawings, std::string());
-    const ImVec2 graphMin = ImGui::GetWindowPos();
-    ImVec2 graphMax(graphMin.x + ImGui::GetWindowWidth(), graphMin.y + ImGui::GetWindowHeight());
-    const app::NodeTrailState& trail = session->graphView.trail;
-    if (trail.bankOpen) graphMax.x -= trail.bankMax.x - trail.bankMin.x;   // the parameters sit left of the open bank
-    ImGui::EndChild();
-    const bool panelChanged = app::drawParamPanel(session->panel, doc, player.engine(), laneInstrument, graphMin, graphMax);   // the parameters float over the graph
-    const bool dockChanged = app::drawExposedDock(session->panel, doc, player.engine(), laneInstrument, graphMin, graphMax);   // the exposed ones at its left
-    const app::NodeStripResult stripResult = app::drawNodeStrip(session->strip, session->panel, doc, player.engine(), laneInstrument, graphMin, graphMax, session->graphView.probeOf);   // the node UIs along its bottom
-    if (stripResult.dataChanged) syncData(doc, player.engine());
-    const bool pictureChanged = std::exchange(session->graphView.paramEdited, false);   // a dot dragged in a response picture
-    if (panelChanged || dockChanged || pictureChanged || stripResult.paramsChanged) {
-      syncParams(doc, player.engine());
-      const std::vector<std::string> graphProblems = syncGraphs(doc, player.engine()), laneProblems = syncLanes(doc, player.engine());
-      session->editStatus = !graphProblems.empty() ? graphProblems.front() : !laneProblems.empty() ? laneProblems.front() : std::string();
-    }
-  } else if (session->screen == Screen::Sample) {
-    app::drawSampleScreen(session->sampleView, doc, player.preview(), scale);
-  } else if (session->screen == Screen::Info) {
-    // Song info: plain text saved with the project (notes, credits, greetings). One undo step each time the box is left.
-    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Song info: notes, credits, greetings. Plain text, saved with the project.");
-    const std::string stored = song.raw.is_object() && song.raw.contains("info") && song.raw["info"].is_string() ? song.raw["info"].get<std::string>() : std::string();
-    if (!session->infoFocused) std::snprintf(session->infoText.data(), session->infoText.size(), "%s", stored.c_str());
-    ImGui::InputTextMultiline("##info", session->infoText.data(), session->infoText.size(), ImVec2(-1, -1));
-    session->infoFocused = ImGui::IsItemActive();
-    if (ImGui::IsItemDeactivatedAfterEdit() && std::string(session->infoText.data()) != stored) doc.apply(std::make_unique<SetSongInfo>(session->infoText.data()));
-  } else {
-    // Config: the settings, in groups as in the web app; each change is kept at once.
-    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Settings are kept on this computer (config.json in the preferences folder).");
-    app::Settings& cfg = app::settings();
-    bool changed = false;
-    const auto group = [&](const char* title, const char* blurb) {
-      ImGui::Spacing();
-      ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kAccent), "%s", title);
-      ImGui::SameLine(0, 12 * scale);
-      ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "%s", blurb);
-    };
-    const auto colour = [&](const char* label, ImU32& value) {
-      float rgb[3] = {(value & 255) / 255.0f, ((value >> 8) & 255) / 255.0f, ((value >> 16) & 255) / 255.0f};
-      ImGui::PushID(label);
-      if (ImGui::ColorEdit3("##c", rgb, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
-        value = IM_COL32(static_cast<int>(rgb[0] * 255 + 0.5f), static_cast<int>(rgb[1] * 255 + 0.5f), static_cast<int>(rgb[2] * 255 + 0.5f), 255);
-        changed = true;
-      }
-      ImGui::PopID();
-      ImGui::SameLine();
-      ImGui::TextUnformatted(label);
-    };
-    group("Look", "Colours. Applied at once.");
-    ImGui::SetNextItemWidth(180 * scale);
-    if (ImGui::BeginCombo("Colour theme", app::themeName(app::themeIndex()), ImGuiComboFlags_HeightLarge)) {
-      for (int i = 0; i < app::themeCount(); i++) if (ImGui::Selectable(app::themeName(i), i == app::themeIndex())) { app::setTheme(i); saveTheme(); }
-      ImGui::EndCombo();
-    }
-    group("Audio", "The sound card's buffer: smaller is quicker to respond, larger is safer against crackle.");
-  if (session->audio) {
-    static const int sizes[] = {0, 64, 128, 256, 512, 1024, 2048, 4096};
-    const int now = session->audio->bufferFrames();
-    char label[64];
-    std::snprintf(label, sizeof label, "buffer %d (%.1f ms)", now, 1000.0 * now / session->audio->sampleRate());
-    ImGui::SetNextItemWidth(260 * scale);
-    if (ImGui::BeginCombo("Audio buffer", label)) {
-      for (const int size : sizes) {
-        char item[32];
-        if (size == 0) std::snprintf(item, sizeof item, "card's own");
-        else std::snprintf(item, sizeof item, "%d (%.1f ms)", size, 1000.0 * size / session->audio->sampleRate());
-        if (ImGui::Selectable(item, size == now)) {
-          try { session->openAudio(options, size); }
-          catch (const std::exception& e) { session->audioName = std::string("no sound: ") + e.what(); }
-        }
-      }
-      ImGui::EndCombo();
-    }
-  }
-    group("Engine", "How many cores render the sound. The sound is the same on any number.");
-  if (session->audio) {
-    const int available = std::max(1u, std::thread::hardware_concurrency());
-    const int inUse = session->player->engine().runtime().threads();
-    const ImVec4 dim = ImGui::ColorConvertU32ToFloat4(app::kDimText);
-    ImGui::TextColored(dim, "cores available: %d   in use: %d", available, inUse);
-    ImGui::SetNextItemWidth(220 * scale);
-    ImGui::SliderInt("Render threads", &cfg.threads, 1, available);
-    if (ImGui::IsItemDeactivatedAfterEdit()) {   // (applied when let go: it restarts the sound for a moment)
-      changed = true;
-      if (cfg.threads != inUse) session->setThreads(options, cfg.threads);
-    }
-    ImGui::TextColored(dim, "it may not be in your best interest to use all cores");
-  }
-    group("Playing", "How the screens behave while the song runs.");
-    if (app::checkbox("Follow mode (the grids scroll with the playing row)", &follow)) { cfg.follow = follow; changed = true; }
-    group("Graph", "Wire colours by kind of signal, and dashed control wires.");
-    colour("Wire colour: audio", cfg.wireAudio);
-    colour("Wire colour: control", cfg.wireControl);
-    colour("Wire colour: stereo", cfg.wireStereo);
-    colour("Wire colour: parameter", cfg.wireParam);
-    if (app::checkbox("Control wires are dashed", &cfg.wireDashed)) changed = true;
-    group("Song screen", "The sequence editor.");
-    if (app::checkbox("Song overview (a strip at the right showing the whole song scaled to fit: click or drag to scroll)", &cfg.seqOverview)) changed = true;
-    if (app::checkbox("Pattern minimaps (each cell shows a small picture of its pattern)", &cfg.minimapOn)) changed = true;
-    ImGui::BeginDisabled(!cfg.minimapOn);
-    ImGui::Indent(16 * scale);
-    if (app::checkbox("Note lengths (a thin line from each note to the next)", &cfg.minimapLengths)) changed = true;
-    if (app::checkbox("Note off and kill (cyan for ===, magenta for ^^^)", &cfg.minimapCaps)) changed = true;
-    if (app::checkbox("Parameters (a narrow column each at the right edge)", &cfg.minimapParams)) changed = true;
-    ImGui::Unindent(16 * scale);
-    ImGui::EndDisabled();
-    group("Editing", "How the cursor moves.");
-    if (app::checkbox("Sequence editor: show pattern names (off: just the two-digit number; H toggles)", &cfg.seqNames)) changed = true;
-    if (app::checkbox("Up and Down wrap round the first and last row", &cfg.rowWrap)) changed = true;
-    if (app::checkbox("Graph: dragging a node far out of its chain takes it out", &cfg.graphPullOut)) changed = true;
-    if (app::checkbox("Left and Right wrap round the first and last lane (All lanes view)", &cfg.laneWrap)) changed = true;
-    if (app::fileAssociationSupported()) {
-      group("Files", "Double-clicking a .wax file in the file manager.");
-      static std::string associationNote;   // what the last press of the button did
-      if (app::isOpenerOfWaxFiles()) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), ".wax files open in this Wax when double-clicked.");
-      else if (app::textButton("Open .wax files with this Wax")) associationNote = app::registerAsOpenerOfWaxFiles();
-      if (!associationNote.empty()) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "%s", associationNote.c_str());
-    }
-    group("Backup", "Snapshots of the song in the preferences folder; File > Backups opens one.");
-    if (app::checkbox("Automatic backups", &cfg.backupOn)) changed = true;
-    ImGui::SetNextItemWidth(220 * scale);
-    if (ImGui::SliderInt("Back up every (minutes)", &cfg.backupMinutes, 1, 60)) changed = true;
-    ImGui::SetNextItemWidth(220 * scale);
-    if (ImGui::SliderInt("Snapshots kept", &cfg.backupKeep, 5, 200)) changed = true;
-    group("Sample", "The Sample screen.");
-    ImGui::SetNextItemWidth(220 * scale);
-    if (ImGui::SliderInt("Auto-slice: sensitivity (%)", &cfg.sliceSensitivity, 0, 100)) changed = true;
-    ImGui::SetNextItemWidth(220 * scale);
-    if (ImGui::SliderInt("Auto-slice: shortest gap (ms)", &cfg.sliceMinGap, 5, 500)) changed = true;
-    if (app::checkbox("Auto-slice: replace the markers in range", &cfg.sliceReplace)) changed = true;
-    if (app::checkbox("Auto-slice: operate on the whole sample", &cfg.sliceWhole)) changed = true;
-    if (app::checkbox("Waveform: hide the loop region", &cfg.waveHideLoop)) changed = true;
-    if (app::checkbox("Waveform: hide the selection", &cfg.waveHideSel)) changed = true;
-    if (app::checkbox("Waveform: hide the sustain loop region", &cfg.waveHideSus)) changed = true;
-    {
-      static const struct { const char* id; const char* label; } modes[] = {{"both", "both (relative and absolute)"}, {"relative", "relative: 0000 to FFFF through the sample"}, {"absolute", "absolute: the frame number"}};
-      const char* shown = modes[0].label;
-      for (const auto& mode : modes) if (cfg.hexMode == mode.id) shown = mode.label;
-      ImGui::SetNextItemWidth(330 * scale);
-      if (ImGui::BeginCombo("Slice markers: hex value", shown)) {
-        for (const auto& mode : modes) if (ImGui::Selectable(mode.label, cfg.hexMode == mode.id)) { cfg.hexMode = mode.id; changed = true; }
-        ImGui::EndCombo();
-      }
-    }
-    ImGui::SetNextItemWidth(220 * scale);
-    if (ImGui::SliderInt("Sample browser: ask before reading files over (MB)", &cfg.sampleAskMB, 1, 2000)) changed = true;
-    ImGui::Spacing();
-    if (app::textButton("Reset to defaults")) { app::resetSettings(); follow = cfg.follow; changed = true; }
-    if (changed) app::saveSettings();
+  FrameContext frame{session, options, player, doc, editor, song, selectedLane, laneInstrument, playing, tick, follow, playFromRequest, held, octave, perBeat, perBar, scale, statusH, mixerShown};
+  switch (session->screen) {
+    case Screen::Song: drawSongScreen(frame); break;
+    case Screen::Pattern: drawPatternScreen(frame); break;
+    case Screen::Instrument: drawInstrumentScreen(frame); break;
+    case Screen::Sample: app::drawSampleScreen(session->sampleView, doc, player.preview(), scale); break;
+    case Screen::Info: drawInfoScreen(frame); break;
+    case Screen::Config: drawConfigScreen(frame); break;
   }
   ImGui::EndChild();
   // The keys play the machine being worked on: the lane's machine, or the one picked in the browser.

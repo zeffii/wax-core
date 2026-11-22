@@ -27,6 +27,9 @@ song|down,down,enter,tab
 song|down,enter,f3
 song|down,enter,f3,f2
 song|enter,down
+instrument|f1
+config|f1
+info|f1
 pattern|down,down,down
 pattern|enter,down,down,right
 pattern|enter,escape,down
