@@ -1,5 +1,7 @@
 #include "app/node_trail.h"
 
+#include <cstdlib>
+
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -66,10 +68,13 @@ void drawTile(ImDrawList* dl, ImVec2 lo, float size, const std::string& type, fl
   dl->PushClipRect(lo, hi, true);   // (a wide glyph stays inside its tile)
   drawGlyph(dl, look.glyph, TileShape::Box, ImVec2(lo.x + size / 2, lo.y + size * 0.37f), scale * 0.7f, ink);
   dl->PopClipRect();
-  const float fontSize = ImGui::GetFontSize() * 0.72f;
+  // The name is sized so four characters span the tile's width.
+  ImFont* font = ImGui::GetFont();
+  const float fourChars = font->CalcTextSizeA(ImGui::GetFontSize(), FLT_MAX, 0, "0000").x;
+  const float fontSize = ImGui::GetFontSize() * (size - 4 * scale) / fourChars;
   const std::string name = shortName(type);
-  const float width = ImGui::GetFont()->CalcTextSizeA(fontSize, FLT_MAX, 0, name.c_str()).x;
-  dl->AddText(ImGui::GetFont(), fontSize, ImVec2(lo.x + (size - width) / 2, hi.y - fontSize - 2 * scale), ink, name.c_str());
+  const float width = font->CalcTextSizeA(fontSize, FLT_MAX, 0, name.c_str()).x;
+  dl->AddText(font, fontSize, ImVec2(lo.x + (size - width) / 2, hi.y - fontSize - 1.5f * scale), ink, name.c_str());
 }
 
 // The mouse going down on a tile starts a press; returns true while the mouse is over the tile.
