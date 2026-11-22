@@ -80,7 +80,6 @@ void registerRingMod(NodeRegistry& registry) {
   type.outputs = {"out"};
   type.kinds = {{"in", PortKind::Stereo}, {"out", PortKind::Stereo}};
   type.isEffect = true;
-  type.dryAtZero = "mix";
   type.params = {
     {"freq", 0.1, 5000, 220},
     {"track", 0, 1, 1, true},

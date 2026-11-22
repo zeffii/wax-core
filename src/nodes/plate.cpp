@@ -215,7 +215,6 @@ void registerPlate(NodeRegistry& registry) {
   type.outputs = {"out"};
   type.kinds = {{"in", PortKind::Stereo}, {"out", PortKind::Stereo}};
   type.isEffect = true;
-  type.dryAtZero = "mix";
   type.params = {
     {"predelay", 0, 200, 0},        // ms
     {"bandwidth", 0, 1, 0.8},       // brightness of what goes in

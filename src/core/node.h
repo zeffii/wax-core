@@ -170,10 +170,6 @@ struct NodeType {
   bool master = false;       // the output node: a graph has exactly one
   bool shared = false;       // never copied per voice: one copy runs for the whole instrument
   bool isEffect = false;     // effects get a hard "bypass" switch as their last parameter (added by the registry)
-  // An effect whose sound is exactly its input while this parameter is 0 (its dry/wet mix): the engine then skips running it and passes the input
-  // on. Its inner state (delay lines, LFOs) stands still meanwhile, so raising the mix again starts the effect from where it was left.
-  // The test suite checks that every node that names a parameter here really passes the signal through bit for bit.
-  std::string dryAtZero;
   bool columnVoice = false;  // keeps a note column on one voice, so a note can slide into the next
   bool noteFilter = false;   // takes the instrument's notes first (see Node::noteInput)
 

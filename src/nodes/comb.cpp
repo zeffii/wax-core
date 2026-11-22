@@ -83,7 +83,6 @@ void registerComb(NodeRegistry& registry) {
   type.outputs = {"out"};
   type.kinds = {{"in", PortKind::Stereo}, {"out", PortKind::Stereo}};
   type.isEffect = true;
-  type.dryAtZero = "mix";
   type.params = {
     {"freq", kMinHz, 8000, 220},
     {"feedback", -0.995, 0.995, 0.85},

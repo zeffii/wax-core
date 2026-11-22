@@ -111,7 +111,6 @@ void registerShimmer(NodeRegistry& registry) {
   type.inputs = {"in"};
   type.outputs = {"out"};
   type.isEffect = true;
-  type.dryAtZero = "mix";
   type.kinds = {{"in", PortKind::Stereo}, {"out", PortKind::Stereo}};
   type.params = {
     {"size", 0.5, 2, 1.2},

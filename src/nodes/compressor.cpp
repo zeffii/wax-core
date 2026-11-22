@@ -55,7 +55,6 @@ void registerCompressor(NodeRegistry& registry) {
   type.outputs = {"out"};
   type.kinds = {{"in", PortKind::Stereo}, {"out", PortKind::Stereo}};
   type.isEffect = true;
-  type.dryAtZero = "mix";
   type.params = {
     {"threshold", -60, 0, -18},   // dB
     {"ratio", 1, 20, 4},

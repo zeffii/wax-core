@@ -101,7 +101,6 @@ void registerChorus(NodeRegistry& registry) {
   type.outputs = {"out"};
   type.kinds = {{"in", PortKind::Stereo}, {"out", PortKind::Stereo}};
   type.isEffect = true;
-  type.dryAtZero = "mix";
   type.params = {
     {"rate", 0.05, 8, 0.6},          // Hz
     {"depth", 0, 15, 4},             // ms

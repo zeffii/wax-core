@@ -99,7 +99,6 @@ void registerReflect(NodeRegistry& registry) {
   type.outputs = {"out"};
   type.kinds = {{"in", PortKind::Stereo}, {"out", PortKind::Stereo}};
   type.isEffect = true;
-  type.dryAtZero = "mix";
   type.params = {
     {"width", 2, 60, 8}, {"depth", 2, 60, 11}, {"height", 2, 20, 4}, {"srcx", 0, 1, 0.3}, {"srcy", 0, 1, 0.75},
     {"lisx", 0, 1, 0.55}, {"lisy", 0, 1, 0.2}, {"absorb", 0, 0.95, 0.3}, {"taps", 1, kMaxTaps, 16, true},

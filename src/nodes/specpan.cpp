@@ -154,7 +154,6 @@ void registerSpecPan(NodeRegistry& registry) {
   type.inputs = {"in"};
   type.outputs = {"out"};
   type.isEffect = true;
-  type.dryAtZero = "mix";
   type.kinds = {{"in", PortKind::Stereo}, {"out", PortKind::Stereo}};
   type.params = {
     {"shape", 0, 3, 0, true},

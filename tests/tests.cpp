@@ -124,56 +124,6 @@ void testGain() {
   std::printf("ok: gain node\n");
 }
 
-// An effect that names its dry/wet parameter (NodeType::dryAtZero) is skipped by the engine when that parameter is 0, so at 0 it must really
-// pass its input through bit for bit, whatever its other settings are, tail and latency included.
-void testDryAtZero() {
-  int checked = 0;
-  for (const std::string& name : wax::builtinNodes().typeNames()) {
-    const wax::NodeType* type = wax::builtinNodes().find(name);
-    if (!type || type->dryAtZero.empty()) continue;
-    const int mixAt = type->paramIndex(type->dryAtZero);
-    double worst = mixAt < 0 ? 1 : 0;
-    for (int trial = 0; trial < 6 && mixAt >= 0; trial++) {
-      wax::NodeContext context;
-      context.connected.assign(type->inputs.size(), true);
-      const std::unique_ptr<wax::Node> node = type->create(context);
-      const int count = static_cast<int>(type->params.size());
-      std::vector<float> params(static_cast<std::size_t>(count));
-      std::vector<int> slots(static_cast<std::size_t>(count));
-      std::mt19937 dice(static_cast<unsigned>(trial * 31 + 7));
-      for (int i = 0; i < count; i++) {
-        const wax::ParamSpec& spec = type->params[static_cast<std::size_t>(i)];
-        double value = trial == 0 ? spec.def : std::uniform_real_distribution<double>(spec.min, spec.max)(dice);
-        if (spec.isInt) value = std::round(value);
-        params[static_cast<std::size_t>(i)] = spec.name == "bypass" ? 0.0f : static_cast<float>(value);
-        slots[static_cast<std::size_t>(i)] = i;
-      }
-      params[static_cast<std::size_t>(mixAt)] = 0;
-      const auto channels = [&](const std::vector<std::string>& ports) {
-        int total = 0;
-        for (const std::string& port : ports) { const auto kind = type->kinds.find(port); total += kind != type->kinds.end() && kind->second == wax::PortKind::Stereo ? 2 : 1; }
-        return total;
-      };
-      const int inCount = channels(type->inputs), outCount = channels(type->outputs), n = 512;
-      std::vector<std::vector<float>> in(static_cast<std::size_t>(inCount), std::vector<float>(static_cast<std::size_t>(n))), out(static_cast<std::size_t>(outCount), std::vector<float>(static_cast<std::size_t>(n)));
-      std::vector<const float*> inPtr;
-      std::vector<float*> outPtr;
-      for (auto& v : in) inPtr.push_back(v.data());
-      for (auto& v : out) outPtr.push_back(v.data());
-      std::uniform_real_distribution<float> noise(-0.5f, 0.5f);
-      for (int block = 0; block < 100; block++) {   // 80 blocks of sound, then silence for the tails
-        for (auto& v : in) for (float& x : v) x = block < 80 ? noise(dice) : 0.0f;
-        node->process(inPtr.data(), outPtr.data(), n, params.data(), slots.data());
-        for (int c = 0; c < std::min(inCount, outCount); c++)
-          for (int i = 0; i < n; i++) worst = std::max(worst, static_cast<double>(std::fabs(out[static_cast<std::size_t>(c)][static_cast<std::size_t>(i)] - in[static_cast<std::size_t>(c)][static_cast<std::size_t>(i)])));
-      }
-    }
-    check(worst == 0, name + " at " + type->dryAtZero + " 0 passes its input through exactly");
-    checked++;
-  }
-  check(checked > 0, "some effects skip themselves when turned down to nothing");
-}
-
 void testWav() {
   wax::StereoAudio audio;
   audio.sampleRate = 44100;
@@ -1974,7 +1924,6 @@ static int runTests(int argc, char** argv) {
     testOnsets();
     testSampleEdit();
     testLiveSampler();
-    testDryAtZero();
     if (failures) std::printf("%d check%s failed\n", failures, failures == 1 ? "" : "s");
     else std::printf("sample tests passed\n");
     return failures;

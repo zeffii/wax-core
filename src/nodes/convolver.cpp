@@ -375,7 +375,6 @@ void registerConvolver(NodeRegistry& registry) {
   type.outputs = {"out"};
   type.kinds = {{"in", PortKind::Stereo}, {"out", PortKind::Stereo}};
   type.isEffect = true;
-  type.dryAtZero = "mix";
   type.params = {
     {"sample", 0, 255, 0, true}, {"size", 0.25, 2, 1}, {"decay", 0.05, 10, 10}, {"predelay", 0, 500, 0}, {"lowcut", 20, 2000, 20}, {"highcut", 1000, 20000, 20000},
     {"width", 0, 1.5, 1}, {"level", -24, 12, 0}, {"mix", 0, 1, 0.3},

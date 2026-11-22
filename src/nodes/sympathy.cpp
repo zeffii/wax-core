@@ -234,7 +234,6 @@ void registerSympathy(NodeRegistry& registry) {
   type.outputs = {"out"};
   type.kinds = {{"in", PortKind::Stereo}, {"out", PortKind::Stereo}};
   type.isEffect = true;
-  type.dryAtZero = "mix";
   type.params = {
     {"root", 24, 84, 48, true},       // MIDI note
     {"chord", 0, 7, 1, true},
