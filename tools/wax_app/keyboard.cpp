@@ -89,6 +89,10 @@ bool handleKeyboard(Session* session, KeyboardEnv& env) {
         }
       } else if (focusNow().sequenceCaret) {   // in the sequence, Enter goes into the pattern under the cursor (a new one where none is)
         edited |= enterPatternUnderCaret(session, selectedLane);
+      } else if (session->screen == Screen::Pattern && !session->solo.on && !editor.patternHere()) {   // Enter on the Pattern screen where no pattern plays: a new one (as the web), at the caret's block of 16 rows or the nearest free one
+        edited |= editor.createPatternHere();
+        session->edit = true;
+        session->editStatus = editor.patternHere() ? "New pattern here." : "No pattern here, and one cannot start here.";
       } else session->edit = !session->edit;
     }
     if (session->solo.on && session->screen != Screen::Pattern) { session->solo.end(editor); }   // (leaving the Pattern screen ends solo-edit)

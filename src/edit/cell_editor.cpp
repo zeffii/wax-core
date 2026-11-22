@@ -145,12 +145,25 @@ bool CellEditor::createPatternHere() {
   const Lane* lane = nullptr;
   for (const Lane& l : project.lanes) if (l.id == lane_) lane = &l;
   if (!lane || columns_.empty()) return false;
-  const int start = tick_ / kNewPatternRows * kNewPatternRows;
-  const int length = std::min(kNewPatternRows, project.song.length - start);
-  if (length < 1) return false;
-  for (const Placement& p : lane->placements) if (p.start == start) return false;   // one already starts there
+  // The new pattern starts on a multiple of its length, never in the middle of one: at the caret's own block when it is free, otherwise at the
+  // nearest block that is (the caret goes to its first row then).
   const std::vector<RowOwner> owners = rowOwners(*lane, project.song.length);
-  if (owners[static_cast<std::size_t>(start)].pattern >= 0) return false;            // one plays there
+  const auto free = [&](int at) {
+    if (at < 0 || at >= project.song.length) return false;
+    for (const Placement& p : lane->placements) if (p.start == at) return false;   // one already starts there
+    return owners[static_cast<std::size_t>(at)].pattern < 0;                         // none plays there
+  };
+  const int home = tick_ / kNewPatternRows * kNewPatternRows;
+  int start = -1;
+  for (int step = 0; start < 0 && (home - step * kNewPatternRows >= 0 || home + step * kNewPatternRows < project.song.length); step++) {
+    const int below = home - step * kNewPatternRows, above = home + step * kNewPatternRows;
+    const bool belowFree = free(below), aboveFree = free(above);
+    if (belowFree && aboveFree) start = (tick_ - below <= above - tick_) ? below : above;
+    else if (belowFree) start = below;
+    else if (aboveFree) start = above;
+  }
+  if (start < 0) return false;
+  const int length = std::min(kNewPatternRows, project.song.length - start);
   std::set<int> used;
   for (const Pattern& p : lane->patterns) used.insert(p.index);
   int index = 0;
@@ -169,6 +182,7 @@ bool CellEditor::createPatternHere() {
   placement.start = start;
   placement.length = length;
   document_.apply(std::make_unique<AddPattern>(lane_, pattern, placement));
+  if (tick_ < start || tick_ >= start + length) tick_ = start;   // (the caret was not inside the new pattern)
   return true;
 }
 
