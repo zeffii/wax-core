@@ -25,7 +25,7 @@ struct MinimapOptions {
 struct MinimapLane {
   const std::vector<Column>* columns = nullptr;
   const std::vector<std::vector<std::string>>* rows = nullptr;
-  int revision = 0;   // changes whenever the rows or columns do (the document's revision): pictures drawn for an older one are made again
+  int revision = 0;   // changes whenever this lane's rows do: pictures painted for an older one are painted again
 };
 
 // What a row holds, read once per frame.
@@ -35,20 +35,19 @@ struct MinimapRow { std::vector<MinimapEvent> notes; std::vector<float> params; 
 // One rectangle of a picture, relative to the cell's top left.
 struct MinimapShape { float x, y, w, h; ImU32 colour; };
 
-// What the pictures keep between frames: the readings of the rows (the look-back for notes still sounding reads the same rows again and
-// again) and, for every cell, the rectangles it is made of, so a frame that changes nothing only has to draw them. A lane's entries are
-// dropped when its revision changes. Held by the session, so a song that is opened starts with none.
+// What the pictures keep between frames. The pictures are painted once into textures, many cells (a "page" of rows of one lane) to a
+// texture, and a frame only places them: a cell is one image, however many notes it holds. A page is painted again when what it shows or
+// how it looks changes (its lane's rows, the cell's size, the theme, the switches). The readings of the rows are kept for painting.
+// Held by the session, so a song that is opened starts with none.
 struct MinimapCache {
-  struct Cell {
-    int t0 = -1, ticks = 0, revision = -1, columns = 0;
-    float width = 0, height = 0;
-    int options = 0;
+  struct Stamp {
+    int revision = -1, ticks = 0, width = 0, height = 0, options = 0, columns = 0;
     ImU32 ink = 0;
-    std::vector<MinimapShape> shapes;
+    bool operator==(const Stamp& other) const { return revision == other.revision && ticks == other.ticks && width == other.width && height == other.height && options == other.options && columns == other.columns && ink == other.ink; }
   };
   std::map<std::string, std::unordered_map<int, MinimapRow>> rows;
-  std::map<std::string, std::map<int, Cell>> cells;   // lane id -> first tick of the cell -> its picture
-  std::map<std::string, int> revisions;               // lane id -> the revision the entries above were made for
+  std::map<std::string, int> revisions;     // lane id -> the revision the readings above were made for
+  std::map<std::string, Stamp> pages;       // "lane#page" -> what the texture of that page shows
 };
 
 // Draws the picture of ticks t0..t0+ticks-1 of one lane into the cell at `topLeft` (the left four characters are left alone: the pattern's

@@ -218,7 +218,11 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   CellEditor& editor = *session->editor;
   const Song& song = doc.project().song;
   if (session->rowsRevision != doc.revision()) {   // the table shows the song as it is edited
-    for (const Lane& lane : doc.project().lanes) session->rows[lane.id] = app::flattenLane(lane, song.length);
+    for (const Lane& lane : doc.project().lanes) {
+      std::vector<std::vector<std::string>> fresh = app::flattenLane(lane, song.length);
+      std::vector<std::vector<std::string>>& kept = session->rows[lane.id];
+      if (fresh != kept) { kept = std::move(fresh); session->rowsVersion[lane.id]++; }   // (only a lane whose rows really changed)
+    }
     session->rowsRevision = doc.revision();
   }
 

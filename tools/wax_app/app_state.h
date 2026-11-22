@@ -174,6 +174,7 @@ struct Session {
   int backupRevision = 0;                // the revision of `doc` the last snapshot (or the opening) holds
   std::time_t backupAt = 0;              // when the last snapshot was made (or the song opened)
   app::MinimapCache minimapCache;        // the Song screen's pattern pictures, kept between frames
+  std::map<std::string, int> rowsVersion;   // lane id -> counts the times its rows changed (the pattern pictures are painted again when it moves)
   int rowsRevision = -1;                 // the revision of `doc` that `rows` shows
   app::Handoff handoff;                  // what the Song screen (and others) ask of the Pattern screen: lane tab, cursor, scroll
   std::string editStatus;

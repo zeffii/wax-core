@@ -1,4 +1,5 @@
 #include "app/minimap.h"
+#include "app/icons.h"
 
 #include <algorithm>
 #include <cctype>
@@ -160,17 +161,60 @@ std::vector<MinimapShape> shapesOf(const std::string& laneId, const MinimapLane&
 
 }  // namespace
 
+namespace {
+
+constexpr int kPageRows = 32;   // cells (rows of the sequence) painted into one texture
+
+// Paints the shapes into RGBA pixels (straight alpha, "over" blending, a pixel is in when its centre is: as a graphics card would fill them).
+void paint(std::vector<unsigned char>& pixels, int stride, int originY, int width, int height, const std::vector<MinimapShape>& shapes) {
+  for (const MinimapShape& r : shapes) {
+    int x0 = static_cast<int>(std::ceil(r.x - 0.5f)), x1 = static_cast<int>(std::ceil(r.x + r.w - 0.5f));
+    int y0 = static_cast<int>(std::ceil(r.y - 0.5f)), y1 = static_cast<int>(std::ceil(r.y + r.h - 0.5f));
+    if (x1 <= x0) { x0 = static_cast<int>(std::floor(r.x + r.w / 2)); x1 = x0 + 1; }   // (a hairline is never lost between two pixel centres)
+    if (y1 <= y0) { y0 = static_cast<int>(std::floor(r.y + r.h / 2)); y1 = y0 + 1; }
+    x0 = std::max(0, x0); x1 = std::min(width, x1); y0 = std::max(0, y0); y1 = std::min(height, y1);
+    const float sa = static_cast<float>((r.colour >> IM_COL32_A_SHIFT) & 255) / 255.0f;
+    const float sr = static_cast<float>((r.colour >> IM_COL32_R_SHIFT) & 255), sg = static_cast<float>((r.colour >> IM_COL32_G_SHIFT) & 255), sb = static_cast<float>((r.colour >> IM_COL32_B_SHIFT) & 255);
+    for (int y = y0; y < y1; y++)
+      for (int x = x0; x < x1; x++) {
+        unsigned char* px = &pixels[(static_cast<std::size_t>(originY + y) * static_cast<std::size_t>(stride) + static_cast<std::size_t>(x)) * 4];
+        const float da = px[3] / 255.0f, oa = sa + da * (1 - sa);
+        if (oa <= 0) continue;
+        px[0] = static_cast<unsigned char>((sr * sa + px[0] * da * (1 - sa)) / oa + 0.5f);
+        px[1] = static_cast<unsigned char>((sg * sa + px[1] * da * (1 - sa)) / oa + 0.5f);
+        px[2] = static_cast<unsigned char>((sb * sa + px[2] * da * (1 - sa)) / oa + 0.5f);
+        px[3] = static_cast<unsigned char>(oa * 255 + 0.5f);
+      }
+  }
+}
+
+}  // namespace
+
 void drawMinimap(ImDrawList* draw, const std::string& laneId, const MinimapLane& lane, MinimapCache& cache, int t0, int ticks, ImVec2 topLeft, float width, float height, const MinimapOptions& options) {
   if (!lane.columns || !lane.rows || ticks < 1) return;
   int& seen = cache.revisions[laneId];
-  if (seen != lane.revision) { seen = lane.revision; cache.rows[laneId].clear(); cache.cells[laneId].clear(); }
-  MinimapCache::Cell& cell = cache.cells[laneId][t0];
-  const int bits = (options.lengths ? 1 : 0) | (options.caps ? 2 : 0) | (options.params ? 4 : 0), columns = static_cast<int>(lane.columns->size());
-  if (cell.t0 != t0 || cell.ticks != ticks || cell.revision != lane.revision || cell.columns != columns || cell.width != width || cell.height != height || cell.options != bits || cell.ink != kText) {   // (anything that changes what it looks like: made again)
-    cell.shapes = shapesOf(laneId, lane, cache, t0, ticks, width, height, options);
-    cell.t0 = t0; cell.ticks = ticks; cell.revision = lane.revision; cell.columns = columns; cell.width = width; cell.height = height; cell.options = bits; cell.ink = kText;
+  if (seen != lane.revision) { seen = lane.revision; cache.rows[laneId].clear(); }
+  const int cellW = std::max(1, static_cast<int>(std::lround(width))), cellH = std::max(1, static_cast<int>(std::lround(height)));
+  const int index = t0 / ticks, page = index / kPageRows, row = index % kPageRows, imageH = cellH * kPageRows;
+  const std::string key = "minimap:" + laneId + "#" + std::to_string(page);
+  MinimapCache::Stamp want;
+  want.revision = lane.revision; want.ticks = ticks; want.width = cellW; want.height = cellH;
+  want.options = (options.lengths ? 1 : 0) | (options.caps ? 2 : 0) | (options.params ? 4 : 0); want.columns = static_cast<int>(lane.columns->size()); want.ink = kText;
+  MinimapCache::Stamp& have = cache.pages[key];
+  ImTextureID texture = have == want ? pixelTexture(key, nullptr, cellW, imageH) : 0;
+  if (!texture) {   // paint the page: its cells one under another
+    std::vector<unsigned char> pixels(static_cast<std::size_t>(cellW) * static_cast<std::size_t>(imageH) * 4, 0);
+    for (int k = 0; k < kPageRows; k++) {
+      const int first = (page * kPageRows + k) * ticks;
+      if (first >= static_cast<int>(lane.rows->size())) break;
+      paint(pixels, cellW, k * cellH, cellW, cellH, shapesOf(laneId, lane, cache, first, ticks, static_cast<float>(cellW), static_cast<float>(cellH), options));
+    }
+    texture = pixelTexture(key, pixels.data(), cellW, imageH);
+    have = want;
   }
-  for (const MinimapShape& r : cell.shapes) draw->AddRectFilled(ImVec2(topLeft.x + r.x, topLeft.y + r.y), ImVec2(topLeft.x + r.x + r.w, topLeft.y + r.y + r.h), r.colour);
+  if (!texture) return;
+  const ImVec2 at(std::round(topLeft.x), std::round(topLeft.y));
+  draw->AddImage(texture, at, ImVec2(at.x + static_cast<float>(cellW), at.y + static_cast<float>(cellH)), ImVec2(0, static_cast<float>(row * cellH) / static_cast<float>(imageH)), ImVec2(1, static_cast<float>((row + 1) * cellH) / static_cast<float>(imageH)));
 }
 
 }  // namespace wax::app

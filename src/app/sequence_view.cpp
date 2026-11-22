@@ -207,10 +207,16 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
   const bool pictures = minimap && minimapCache && settings().minimapOn;
 
   // the lanes
+  // Three layers when pictures are on: fills, the pictures, the rest. A layer is submitted as one run, so the pictures (a texture of their own) cost a few draw
+  // commands instead of one between every cell's fill and label.
+  enum Layer { kFills = 0, kPictures = 1, kTop = 2 };
+  if (pictures) draw->ChannelsSplit(3);
+  const auto layer = [&](Layer l) { if (pictures) draw->ChannelsSetCurrent(l); };
   float left = origin.x + gutter;
   int laneIndex = -1;
   for (const Lane& lane : project.lanes) {
     laneIndex++;
+    layer(kTop);
     const float w = laneWidth(lane, scale);
     const bool selected = lane.id == selectedLane;
     const ImU32 blockFill = dimAlpha(50);   // (every lane alike: the picked lane is shown by its head, the picked pattern by its rectangle)
@@ -227,14 +233,16 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
       if (!shown) continue;
       const Pattern* shownPattern = patternOf(lane, shown->pattern);
       const ImU32 fill = shownPattern ? patternColour(*shownPattern, 50) : blockFill;   // the pattern's own colour
+      layer(kFills);
       draw->AddRectFilled(ImVec2(left + 2 * scale, y), ImVec2(left + w - 2 * scale, y + rowHeight), fill);
       draw->AddLine(ImVec2(left + 2 * scale, y), ImVec2(left + 2 * scale, y + rowHeight), blockEdge);
+      layer(kTop);
       if (pictures) {
         const auto source = minimap->find(lane.id);
         if (source != minimap->end()) {
-          draw->PushClipRect(ImVec2(left + 2 * scale, y), ImVec2(left + w - 2 * scale, y + rowHeight), true);
+          layer(kPictures);
           drawMinimap(draw, lane.id, source->second, *minimapCache, t0, cell, ImVec2(left + 2 * scale, y), w - 4 * scale, rowHeight, minimapOptions);
-          draw->PopClipRect();
+          layer(kTop);
         }
       }
       if (starts) {
@@ -268,6 +276,7 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
     }
     left += w;
   }
+  if (pictures) draw->ChannelsMerge();
 
   if (!overStrip) result.curve = curves.interact(targets);
 
