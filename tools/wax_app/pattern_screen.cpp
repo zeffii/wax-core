@@ -26,6 +26,11 @@ void drawPatternScreen(FrameContext& f) {
   [[maybe_unused]] const bool mixerShown = f.mixerShown;
   const float sheetW = session->showKeys ? 270 * scale : 0;
   ImGui::BeginChild("patmain", ImVec2(-sheetW, 0), false, ImGuiWindowFlags_NoNav);
+  {   // the toolbar along the top of the window; the grid starts below it
+    const ImVec2 areaMin = ImGui::GetWindowPos();
+    const float taken = app::drawPatternToolbar(ImGui::GetWindowDrawList(), areaMin, ImVec2(areaMin.x + ImGui::GetWindowWidth(), areaMin.y + ImGui::GetWindowHeight()), scale, follow);
+    ImGui::Dummy(ImVec2(0, taken));
+  }
   // the grid of the lanes shown (one, picked by its tab, or all of them side by side), the cursor in lane `cursorLane` of them
   const auto drawGrid = [&](const std::vector<const Lane*>& shown, int cursorLane) {
     std::vector<app::PatternLane> grids;

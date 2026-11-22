@@ -37,12 +37,13 @@ void drawInstrumentScreen(FrameContext& f) {
   if (!session->graphView.openDrawings.empty()) session->panel.drawNode = std::exchange(session->graphView.openDrawings, std::string());
   const ImVec2 graphMin = ImGui::GetWindowPos();
   ImVec2 graphMax(graphMin.x + ImGui::GetWindowWidth(), graphMin.y + ImGui::GetWindowHeight());
+  const ImVec2 fullMax = graphMax;   // (the node strip spans the whole window: the node bank above it never takes its width)
   const app::NodeTrailState& trail = session->graphView.trail;
   if (trail.bankOpen) graphMax.x -= trail.bankMax.x - trail.bankMin.x;   // the parameters sit left of the open bank
   ImGui::EndChild();
   const bool panelChanged = app::drawParamPanel(session->panel, doc, player.engine(), laneInstrument, graphMin, graphMax);   // the parameters float over the graph
   const bool dockChanged = app::drawExposedDock(session->panel, doc, player.engine(), laneInstrument, graphMin, graphMax);   // the exposed ones at its left
-  const app::NodeStripResult stripResult = app::drawNodeStrip(session->strip, session->panel, doc, player.engine(), laneInstrument, graphMin, graphMax, session->graphView.probeOf);   // the node UIs along its bottom
+  const app::NodeStripResult stripResult = app::drawNodeStrip(session->strip, session->panel, doc, player.engine(), laneInstrument, graphMin, fullMax, session->graphView.probeOf);   // the node UIs along its bottom
   if (stripResult.dataChanged) syncData(doc, player.engine());
   const bool pictureChanged = std::exchange(session->graphView.paramEdited, false);   // a dot dragged in a response picture
   if (panelChanged || dockChanged || pictureChanged || stripResult.paramsChanged) {

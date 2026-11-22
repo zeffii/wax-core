@@ -24,6 +24,7 @@
 #include <string>
 #include <vector>
 
+#include "app/pattern_toolbar.h"
 #include "app/handoff.h"
 #include "app/sequence_view.h"
 #include "app/it_import.h"

@@ -331,3 +331,7 @@ Gaps against the web's graph rail:
 - Gap: no auto-scroll while a drag is held at the edge of the view.
 - Gap (parity): typing a note where no pattern plays makes a pattern here (`CellEditor::setCell`); the web says "No pattern here. Press Enter to insert one." Check which is wanted.
 - Divergence by request: a new pattern (Enter on the Pattern screen or in the sequence, G on the Pattern screen) starts on a multiple of 16, at the caret's block, or at the nearest free block when that one is taken (the web says "A pattern is already here.").
+
+## Pattern toolbar
+- The pattern editor has a toolbar like the graph's (toolbar.{h,cpp} draws both): all lanes, tint, hear notes, hide empty columns, solo-edit shows the song, follow. The same settings are still in the browser's "Pattern view" group; more switches to come.
+- The node bank on the Instrument screen stops above the node strip (it scrolls), and the strip spans the whole window.

@@ -10,7 +10,6 @@ namespace wax::app {
 
 namespace {
 
-constexpr float kButton = 22, kGap = 4, kPad = 4, kTop = 4;   // web pixels
 constexpr int kSwitches = 6;
 
 enum class Kind { Grid, Snap, Dashed, Straight, Pull, HideCc };
@@ -90,38 +89,22 @@ void drawIcon(ImDrawList* dl, Kind kind, ImVec2 lo, float u, ImU32 ink) {   // u
   }
 }
 
-float width(float scale) { return (kPad * 2 + kSwitches * kButton + (kSwitches - 1) * kGap) * scale; }
+const std::vector<ToolbarSwitch>& switches() {
+  static std::vector<ToolbarSwitch> list;
+  if (list.empty())
+    for (const Switch& sw : kList) {
+      const Kind kind = sw.kind;
+      list.push_back({sw.name, sw.what, [kind] { return isOn(kind); }, [kind] { flip(kind); }, [kind](ImDrawList* dl, ImVec2 lo, float u, ImU32 ink) { drawIcon(dl, kind, lo, u, ink); }});
+    }
+  return list;
+}
 
 }  // namespace
 
-ToolbarBox graphToolbarBox(ImVec2 areaMin, ImVec2 areaMax, float scale) {
-  ToolbarBox box;
-  const float w = width(scale), h = (kButton + kPad * 2) * scale;
-  if (areaMax.x - areaMin.x < w + 2 * kTop * scale) return box;   // no room: no toolbar
-  box.min = ImVec2(std::round((areaMin.x + areaMax.x - w) / 2), areaMin.y + kTop * scale);
-  box.max = ImVec2(box.min.x + w, box.min.y + h);
-  return box;
-}
+ToolbarBox graphToolbarBox(ImVec2 areaMin, ImVec2 areaMax, float scale) { return toolbarBox(areaMin, areaMax, scale, kSwitches); }
 
 void drawGraphToolbar(ImDrawList* dl, ImVec2 areaMin, ImVec2 areaMax, float scale, bool active) {
-  const ToolbarBox box = graphToolbarBox(areaMin, areaMax, scale);
-  if (box.max.x <= box.min.x) return;
-  const ImVec2 mouse = ImGui::GetIO().MousePos;
-  dl->AddRectFilled(box.min, box.max, IM_COL32(24, 32, 36, 215), 5 * scale);
-  dl->AddRect(box.min, box.max, lineAlpha(160), 5 * scale);
-  for (int i = 0; i < kSwitches; i++) {
-    const Switch& sw = kList[i];
-    const ImVec2 lo(box.min.x + (kPad + i * (kButton + kGap)) * scale, box.min.y + kPad * scale), hi(lo.x + kButton * scale, lo.y + kButton * scale);
-    const bool on = isOn(sw.kind), over = active && mouse.x >= lo.x && mouse.x <= hi.x && mouse.y >= lo.y && mouse.y <= hi.y;
-    if (on) dl->AddRectFilled(lo, hi, accentAlpha(48), 3 * scale);
-    if (over) dl->AddRect(lo, hi, accentAlpha(160), 3 * scale);
-    const float unit = kButton * scale * 0.6f / 16;   // the icon fills about 60% of the button
-    drawIcon(dl, sw.kind, ImVec2(lo.x + (kButton * scale - 16 * unit) / 2, lo.y + (kButton * scale - 16 * unit) / 2), unit, on ? kAccent : kDimText);
-    if (over) {
-      ImGui::SetTooltip("%s · %s · %s", sw.name, on ? "on" : "off", sw.what);
-      if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) flip(sw.kind);
-    }
-  }
+  drawToolbar(dl, graphToolbarBox(areaMin, areaMax, scale), switches(), scale, active);
 }
 
 }  // namespace wax::app
