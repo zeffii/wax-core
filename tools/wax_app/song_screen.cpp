@@ -61,6 +61,7 @@ void drawSongScreen(FrameContext& f) {
     editor.setLane(hit.lane, player.engine().laneColumns(hit.lane));   // (the keys carry on from the click)
     editor.moveTo(hit.tick, 0);
     session->edit = true;   // a click puts the caret there, ready to move about
+    if (hit.doubleClicked && enterPatternUnderCaret(session, selectedLane)) { const std::vector<std::string> problems = syncLanes(doc, player.engine()); session->editStatus = problems.empty() ? std::string() : problems.front(); }   // (a double-click is Enter on that pattern)
   }
   ImGui::EndChild();
   if (session->showKeys) { ImGui::SameLine(0, 8 * scale); app::drawShortcutSheet("songkeys", app::songShortcuts(), 0, 0); }

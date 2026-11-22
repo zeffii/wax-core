@@ -621,6 +621,7 @@ int main(int argc, char** argv) {
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
+  if (!options.screenshot.empty()) ImGui::GetIO().MouseDoubleClickTime = 5.0f;   // (the headless harness clicks slowly: two of its clicks still make a double-click)
   ImGui::GetIO().IniFilename = nullptr;
   float scale = SDL_GetWindowDisplayScale(window);
   if (scale <= 0) scale = 1;

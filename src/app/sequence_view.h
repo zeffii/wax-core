@@ -16,6 +16,7 @@ namespace wax::app {
 struct SequenceClick {
   std::string lane;   // the lane clicked ("" when none)
   int tick = -1;      // the tick at the start of the row clicked
+  bool doubleClicked = false;   // the click was the second of a double-click (the cell: like Enter on it)
   int playFrom = -1;  // a click in the tick column: play from this tick
   CurveEditRequest curve;   // a change to a lane's curves asked for (see curve_view.h)
 };

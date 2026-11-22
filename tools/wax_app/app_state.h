@@ -331,6 +331,7 @@ void drawPatternMenu(Session* session, Document& doc, Player& player);
 std::string laneMachine(const Document& doc, const std::string& laneId);
 std::string changeNoteColumns(Session* session, Document& doc, Player& player, const std::string& machineId, int direction);
 KeyFocus keyFocusOf(const Session& session);
+bool enterPatternUnderCaret(Session* session, std::string& selectedLane);   // (keyboard.cpp) Enter, or a double-click, on a pattern in the sequence
 bool handleKeyboard(Session* session, KeyboardEnv& env);   // (keyboard.cpp)
 void drawSongScreen(FrameContext& f);   // (song_screen.cpp)
 void drawPatternScreen(FrameContext& f);   // (pattern_screen.cpp)

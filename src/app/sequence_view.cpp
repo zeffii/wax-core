@@ -166,6 +166,7 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
         const float w = laneWidth(lane, scale);
         if (x >= 0 && x < w) {
           result.lane = lane.id;
+          result.doubleClicked = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
           result.tick = std::clamp(static_cast<int>(y / rowHeight), 0, rows - 1) * cell;
           break;
         }

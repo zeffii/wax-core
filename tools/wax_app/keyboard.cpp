@@ -12,6 +12,28 @@ KeyFocus keyFocusOf(const Session& session) {
   return focus;
 }
 
+// Enter on the Song screen (and a double-click on a pattern there): into the pattern under the caret, a new one where none is. The Pattern
+// screen then shows that pattern whole. Returns true when a pattern was made (the song changed).
+bool enterPatternUnderCaret(Session* session, std::string& selectedLane) {
+  Document& doc = *session->doc;
+  CellEditor& editor = *session->editor;
+  bool edited = false;
+  if (!editor.patternHere()) edited |= editor.createPatternHere();
+  if (!editor.patternHere()) { session->editStatus = "No pattern here, and one cannot start here."; return edited; }
+  selectedLane = editor.lane();
+  session->handoff.openLane(selectedLane, editor.tick());
+  session->screen = Screen::Pattern;
+  session->handoff.forgetReveal();
+  for (const Lane& lane : doc.project().lanes) {   // the pattern under the cursor: its rows are what the Pattern screen shows
+    if (lane.id != editor.lane()) continue;
+    if (const Placement* p = seq::placementAt(lane, editor.tick())) {
+      const Pattern* pat = seq::patternOf(lane, p->pattern);
+      session->handoff.revealRows(p->start, p->start + std::min(p->length, pat ? static_cast<int>(pat->rows.size()) : p->length));
+    }
+  }
+  return edited;
+}
+
 // The computer keyboard: the transport keys, Enter and the caret, the editing keys of the Song and Pattern screens, and the piano keys.
 // Returns true when the song was changed (the engine is brought up to date afterwards).
 bool handleKeyboard(Session* session, KeyboardEnv& env) {
@@ -66,19 +88,7 @@ bool handleKeyboard(Session* session, KeyboardEnv& env) {
           }
         }
       } else if (focusNow().sequenceCaret) {   // in the sequence, Enter goes into the pattern under the cursor (a new one where none is)
-        if (!editor.patternHere()) edited |= editor.createPatternHere();
-        if (editor.patternHere()) {
-          selectedLane = editor.lane(); session->handoff.openLane(selectedLane, editor.tick()); session->screen = Screen::Pattern;
-          session->handoff.forgetReveal();
-          for (const Lane& lane : doc.project().lanes) {   // the pattern under the cursor: its rows are what the Pattern screen shows
-            if (lane.id != editor.lane()) continue;
-            if (const Placement* p = seq::placementAt(lane, editor.tick())) {
-              const Pattern* pat = seq::patternOf(lane, p->pattern);
-              session->handoff.revealRows(p->start, p->start + std::min(p->length, pat ? static_cast<int>(pat->rows.size()) : p->length));
-            }
-          }
-        }
-        else session->editStatus = "No pattern here, and one cannot start here.";
+        edited |= enterPatternUnderCaret(session, selectedLane);
       } else session->edit = !session->edit;
     }
     if (session->solo.on && session->screen != Screen::Pattern) { session->solo.end(editor); }   // (leaving the Pattern screen ends solo-edit)
