@@ -92,6 +92,8 @@ static PatternViewResult drawPatternGrid(const std::vector<PatternLane>& lanes, 
       float right = at.x;   // the lane's last shown column ends where its name must stop
       for (int c = 0; c < static_cast<int>(lanes[li].labels->size()); c++)
         if (ImGui::TableGetColumnFlags(firstColumn[li] + c) & ImGuiTableColumnFlags_IsEnabled) right = std::max(right, ImGui::TableGetCellBgRect(table, firstColumn[li] + c).Max.x);
+      if (cursor.scrollTo && static_cast<int>(li) == cursor.lane)   // sideways: the cursor's lane comes in at the left, just right of the row numbers (a column out of sight has no position until asked here, in the name row)
+        ImGui::SetScrollX(std::max(0.0f, ImGui::GetScrollX() + at.x - frozenEdge - charWidth / 2));
       ImDrawList* draw = ImGui::GetWindowDrawList();
       draw->PushClipRect(ImVec2(frozenEdge, at.y), ImVec2(std::min(right, window->InnerClipRect.Max.x), at.y + ImGui::GetTextLineHeight()), false);
       draw->AddText(at, static_cast<int>(li) == cursor.lane ? kAccent : kDimText, lanes[li].id.c_str());
