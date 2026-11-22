@@ -538,6 +538,7 @@ void feedDrag(const std::string& script, int frame) {
   if (std::sscanf(script.c_str(), "%f,%f;%f,%f", &x1, &y1, &x2, &y2) != 4) return;
   const bool release = script.find(";release") != std::string::npos;   // "x1,y1;x2,y2;release": let go at the end
   ImGuiIO& io = ImGui::GetIO();
+  if (script.find(";shift") != std::string::npos) io.AddKeyEvent(ImGuiMod_Shift, true);   // (";shift": Shift is held throughout)
   if (frame == 0) io.AddMousePosEvent(x1, y1);
   if (frame == 2) io.AddMouseButtonEvent(0, true);
   if (release && frame == 14) io.AddMouseButtonEvent(0, false);

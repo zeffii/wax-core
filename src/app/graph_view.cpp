@@ -413,7 +413,7 @@ bool drawGraphView(GraphViewState& state, Document& doc, const std::string& inst
       }
     }
   }
-  if (dragTile && state.dragMoved && !state.dragFree && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+  if (dragTile && state.dragMoved && !state.dragFree && (ImGui::IsMouseDown(ImGuiMouseButton_Left) || ImGui::IsMouseReleased(ImGuiMouseButton_Left))) {   // (the frame of the release too: what the drop does is decided here)
     const ImVec2 centre = centreOf(*dragTile);
     float best = 16 * scale;
     for (const WireEnds& w : wires) {
