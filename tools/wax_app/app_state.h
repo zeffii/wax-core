@@ -24,6 +24,7 @@
 #include <string>
 #include <vector>
 
+#include "app/minimap.h"
 #include "app/pattern_toolbar.h"
 #include "app/sequence_toolbar.h"
 #include "app/handoff.h"
@@ -172,6 +173,7 @@ struct Session {
   bool backupsOpen = false;              // the Backups list is showing
   int backupRevision = 0;                // the revision of `doc` the last snapshot (or the opening) holds
   std::time_t backupAt = 0;              // when the last snapshot was made (or the song opened)
+  app::MinimapCache minimapCache;        // the Song screen's pattern pictures, kept between frames
   int rowsRevision = -1;                 // the revision of `doc` that `rows` shows
   app::Handoff handoff;                  // what the Song screen (and others) ask of the Pattern screen: lane tab, cursor, scroll
   std::string editStatus;

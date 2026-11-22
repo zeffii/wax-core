@@ -86,7 +86,7 @@ float sequenceWidth(const Project& project) {
   return width;
 }
 
-SequenceClick drawSequenceView(const Project& project, const std::string& selectedLane, int playTick, int cursorTick, int pickedTick, bool follow, CurveView& curves, const CurveView::Targets& targets, const SequenceBlock& block, const std::map<std::string, MinimapLane>* minimap, float playFrac) {
+SequenceClick drawSequenceView(const Project& project, const std::string& selectedLane, int playTick, int cursorTick, int pickedTick, bool follow, CurveView& curves, const CurveView::Targets& targets, const SequenceBlock& block, const std::map<std::string, MinimapLane>* minimap, float playFrac, MinimapCache* minimapCache) {
   SequenceClick result;
   const float scale = ImGui::GetStyle().FontScaleDpi;
   if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::GetIO().KeyCtrl && ImGui::GetIO().MouseWheel != 0) {   // Ctrl+wheel: the size of a row, a step a notch
@@ -202,10 +202,9 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
   }
 
   // the pictures of the patterns, when they are switched on (the lanes' rows and columns come from the caller)
-  MinimapCache minimapCache;
   MinimapOptions minimapOptions;
   minimapOptions.lengths = settings().minimapLengths; minimapOptions.caps = settings().minimapCaps; minimapOptions.params = settings().minimapParams;
-  const bool pictures = minimap && settings().minimapOn;
+  const bool pictures = minimap && minimapCache && settings().minimapOn;
 
   // the lanes
   float left = origin.x + gutter;
@@ -234,7 +233,7 @@ SequenceClick drawSequenceView(const Project& project, const std::string& select
         const auto source = minimap->find(lane.id);
         if (source != minimap->end()) {
           draw->PushClipRect(ImVec2(left + 2 * scale, y), ImVec2(left + w - 2 * scale, y + rowHeight), true);
-          drawMinimap(draw, lane.id, source->second, minimapCache, t0, cell, ImVec2(left + 2 * scale, y), w - 4 * scale, rowHeight, minimapOptions);
+          drawMinimap(draw, lane.id, source->second, *minimapCache, t0, cell, ImVec2(left + 2 * scale, y), w - 4 * scale, rowHeight, minimapOptions);
           draw->PopClipRect();
         }
       }

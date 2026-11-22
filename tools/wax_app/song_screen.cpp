@@ -44,8 +44,8 @@ void drawSongScreen(FrameContext& f) {
   const app::CurveView::Targets curveTargetsOf = [&](const Lane& lane) { return curveTargets(player.engine().laneColumns(lane.id), lane.instrument, player.engine().registry()); };
   std::map<std::string, app::MinimapLane> minimapLanes;   // what the pictures of the patterns read (only when they are on)
   if (app::settings().minimapOn)
-    for (const Lane& lane : doc.project().lanes) minimapLanes[lane.id] = {&session->player->engine().laneColumns(lane.id), &session->rows[lane.id]};
-  const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, selectedLane.empty() ? -1 : editor.tick(), editor.tick(), follow && playing && !session->edit, session->curveView, curveTargetsOf, session->edit ? app::selectedBlock(doc.project(), session->song, editor.lane(), editor.tick(), app::sequenceRowTicks(doc.project().song)) : app::SequenceBlock(), &minimapLanes, playing ? session->heard.frac : 0.0f);
+    for (const Lane& lane : doc.project().lanes) minimapLanes[lane.id] = {&session->player->engine().laneColumns(lane.id), &session->rows[lane.id], doc.revision()};
+  const app::SequenceClick hit = app::drawSequenceView(doc.project(), selectedLane, playing ? tick : -1, selectedLane.empty() ? -1 : editor.tick(), editor.tick(), follow && playing && !session->edit, session->curveView, curveTargetsOf, session->edit ? app::selectedBlock(doc.project(), session->song, editor.lane(), editor.tick(), app::sequenceRowTicks(doc.project().song)) : app::SequenceBlock(), &minimapLanes, playing ? session->heard.frac : 0.0f, &session->minimapCache);
   if (hit.curve.any) {   // a curve edited: one undo step per gesture, the lane rebuilt in the engine
     doc.apply(std::make_unique<SetCurves>(hit.curve.lane, hit.curve.curves, hit.curve.label), hit.curve.fold);
     const std::vector<std::string> problems = syncLanes(doc, player.engine());

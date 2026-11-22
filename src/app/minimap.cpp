@@ -96,19 +96,22 @@ const MinimapRow& cached(MinimapCache& cache, const std::string& laneId, const M
 
 }  // namespace
 
-void drawMinimap(ImDrawList* draw, const std::string& laneId, const MinimapLane& lane, MinimapCache& cache, int t0, int ticks, ImVec2 topLeft, float width, float height, const MinimapOptions& options) {
-  if (!lane.columns || !lane.rows || ticks < 1) return;
+namespace {
+
+// The rectangles of one cell's picture, relative to its top left.
+std::vector<MinimapShape> shapesOf(const std::string& laneId, const MinimapLane& lane, MinimapCache& cache, int t0, int ticks, float width, float height, const MinimapOptions& options) {
+  std::vector<MinimapShape> shapes;
   const float charWidth = ImGui::CalcTextSize("0").x;
   const float skip = std::min(width, kReservedChars * charWidth);
-  if (width - skip < charWidth) return;
-  const float x0 = topLeft.x + skip, w = width - skip, y0 = topLeft.y;
+  if (width - skip < charWidth) return shapes;
+  const float x0 = skip, w = width - skip, y0 = 0;
   const Plan plan = planOf(*lane.columns);
   const float step = height / static_cast<float>(ticks), pad = 3;
   const float paramWidth = options.params && !plan.params.empty() ? std::min(w * 0.38f, static_cast<float>(plan.params.size()) * 5 + 3) : 0;
   const float noteWidth = w - paramWidth - pad * 2;
   const auto xOf = [&](int pitch) { return x0 + pad + std::clamp(static_cast<float>(pitch - kLowest) / (kHighest - kLowest), 0.0f, 1.0f) * (noteWidth - 4); };
   const auto ink = [&](float a) { return textAlpha(static_cast<int>(255 * std::clamp(a, 0.0f, 1.0f))); };
-  const auto fill = [&](float x, float y, float rw, float rh, ImU32 colour) { draw->AddRectFilled(ImVec2(x, y), ImVec2(x + rw, y + rh), colour); };
+  const auto fill = [&](float x, float y, float rw, float rh, ImU32 colour) { shapes.push_back({x, y, rw, rh, colour}); };
 
   struct Sounding { float x, from, velocity; };
   std::map<int, Sounding> live;   // the notes that are sounding as the cell begins: the last event in each note column before it
@@ -152,6 +155,22 @@ void drawMinimap(ImDrawList* draw, const std::string& laneId, const MinimapLane&
         if (info.params[c] >= 0) fill(left + static_cast<float>(c) * std::min(cellWidth + 1, each), y, cellWidth, std::max(1.4f, step), ink(0.14f + 0.72f * info.params[c]));
     }
   }
+  return shapes;
+}
+
+}  // namespace
+
+void drawMinimap(ImDrawList* draw, const std::string& laneId, const MinimapLane& lane, MinimapCache& cache, int t0, int ticks, ImVec2 topLeft, float width, float height, const MinimapOptions& options) {
+  if (!lane.columns || !lane.rows || ticks < 1) return;
+  int& seen = cache.revisions[laneId];
+  if (seen != lane.revision) { seen = lane.revision; cache.rows[laneId].clear(); cache.cells[laneId].clear(); }
+  MinimapCache::Cell& cell = cache.cells[laneId][t0];
+  const int bits = (options.lengths ? 1 : 0) | (options.caps ? 2 : 0) | (options.params ? 4 : 0), columns = static_cast<int>(lane.columns->size());
+  if (cell.t0 != t0 || cell.ticks != ticks || cell.revision != lane.revision || cell.columns != columns || cell.width != width || cell.height != height || cell.options != bits || cell.ink != kText) {   // (anything that changes what it looks like: made again)
+    cell.shapes = shapesOf(laneId, lane, cache, t0, ticks, width, height, options);
+    cell.t0 = t0; cell.ticks = ticks; cell.revision = lane.revision; cell.columns = columns; cell.width = width; cell.height = height; cell.options = bits; cell.ink = kText;
+  }
+  for (const MinimapShape& r : cell.shapes) draw->AddRectFilled(ImVec2(topLeft.x + r.x, topLeft.y + r.y), ImVec2(topLeft.x + r.x + r.w, topLeft.y + r.y + r.h), r.colour);
 }
 
 }  // namespace wax::app
