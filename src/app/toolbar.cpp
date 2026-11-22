@@ -24,7 +24,7 @@ ToolbarBox toolbarBox(ImVec2 areaMin, ImVec2 areaMax, float scale, int switches)
 void drawToolbar(ImDrawList* dl, const ToolbarBox& box, const std::vector<ToolbarSwitch>& switches, float scale, bool active) {
   if (box.max.x <= box.min.x) return;
   const ImVec2 mouse = ImGui::GetIO().MousePos;
-  dl->AddRectFilled(box.min, box.max, IM_COL32(24, 32, 36, 215), 5 * scale);
+  dl->AddRectFilled(box.min, box.max, withAlpha(kPanel, 235), 5 * scale);
   dl->AddRect(box.min, box.max, lineAlpha(160), 5 * scale);
   for (std::size_t i = 0; i < switches.size(); i++) {
     const ToolbarSwitch& sw = switches[i];

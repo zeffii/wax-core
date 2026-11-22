@@ -96,6 +96,8 @@ void setTheme(int index) {
   applyColours();
 }
 
+bool themeIsLight() { return kThemes[gTheme].light; }
+
 bool setThemeByName(const char* name) {
   for (int i = 0; i < themeCount(); i++) if (std::strcmp(kThemes[i].name, name) == 0) { setTheme(i); return true; }
   return false;

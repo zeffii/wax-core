@@ -54,6 +54,15 @@ ImU32 lighter(ImU32 colour, float amount) {
   return (colour & 0xFF000000u) | lift(IM_COL32_R_SHIFT) | lift(IM_COL32_G_SHIFT) | lift(IM_COL32_B_SHIFT);
 }
 
+// A colour moved part of the way to black (the alpha stays).
+ImU32 darker(ImU32 colour, float amount) {
+  const auto drop = [&](int shift) { return static_cast<ImU32>(static_cast<float>((colour >> shift) & 255) * (1.0f - amount)) << shift; };
+  return (colour & 0xFF000000u) | drop(IM_COL32_R_SHIFT) | drop(IM_COL32_G_SHIFT) | drop(IM_COL32_B_SHIFT);
+}
+
+// The ink of a bank tile: the category's colour, lifted toward white on a dark theme and deepened toward black on a light one.
+ImU32 bankInk(ImU32 category) { return themeIsLight() ? darker(category, 0.45f) : lighter(category, 0.4f); }
+
 // One tile: a flat tile with the node's glyph; in the bank (`outline` set) it has a thin outline and its glyph in that colour.
 void drawTile(ImDrawList* dl, ImVec2 lo, float size, const std::string& type, float scale, bool lit, ImU32 outline = 0) {
   const NodeLookInfo look = lookOf(type);
@@ -62,7 +71,7 @@ void drawTile(ImDrawList* dl, ImVec2 lo, float size, const std::string& type, fl
   dl->AddRectFilled(lo, hi, kFlat, 2 * scale);
   if (outline) dl->AddRect(lo, hi, (outline & 0x00FFFFFFu) | (80u << IM_COL32_A_SHIFT), 2 * scale, 0, 1.0f);   // a faint hairline: the glyph carries the colour
   if (lit) dl->AddRect(lo, hi, kAccent, 2 * scale, 0, std::max(1.0f, scale) * (outline ? 2.0f : 1.0f));
-  const ImU32 ink = outline ? lighter(outline, 0.4f) : kText;   // (in the bank the glyph and name are the category's colour, lifted toward white: bright, while the border stays faint)
+  const ImU32 ink = outline ? bankInk(outline) : kText;   // (in the bank the glyph and name are the category's colour, lifted toward white: bright, while the border stays faint)
   dl->PushClipRect(lo, hi, true);   // (a wide glyph stays inside its tile)
   drawGlyph(dl, look.glyph, TileShape::Box, ImVec2(lo.x + size / 2, lo.y + size * 0.37f), scale * 0.7f, ink);
   dl->PopClipRect();

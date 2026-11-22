@@ -15,6 +15,8 @@ int themeIndex();
 // Chooses a theme by position or by name (an unknown name leaves the theme as it is); restyles ImGui.
 void setTheme(int index);
 bool setThemeByName(const char* name);
+// True when the current theme has a light background.
+bool themeIsLight();
 
 // The colours of the theme, for the views.
 inline ImU32 kBg, kText, kPanel, kField, kLine, kSoft, kDimText, kAccent, kWarm, kHiFg;
