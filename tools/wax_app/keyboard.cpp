@@ -50,6 +50,7 @@ bool handleKeyboard(Session* session, KeyboardEnv& env) {
   const bool playing = env.playing;
   // The computer keyboard plays notes unless a text box has it. With Enter pressed it also types into the cell under the cursor.
   ImGuiIO& io = ImGui::GetIO();
+  if (session->screen == Screen::Song || session->screen == Screen::Pattern) session->edit = true;   // the caret is always there to move, on both editors (Esc only clears a selection or goes back)
   bool edited = false;
   const auto focusNow = [&] { return keyFocusOf(*session); };   // (asked at each key, as Enter and the arrow keys change it within the frame)
   const bool ctrl = io.KeyCtrl;
@@ -191,7 +192,7 @@ bool handleKeyboard(Session* session, KeyboardEnv& env) {
       if (ImGui::IsKeyPressed(ImGuiKey_A, false)) editor.selectAll();
     }
     const bool typing = focusNow().gridEditing && !ctrl && !io.KeyAlt;   // (only the pattern editor types into the grid: on the Instrument, Info and Config screens the keys only play; the sequence has its own keys, above)
-    if (!typing && session->screen == Screen::Pattern && !ctrl && ImGui::IsKeyPressed(ImGuiKey_Escape, false) && !editor.selection().active) {   // Esc with editing off: back to the sequence as well
+    if (session->screen == Screen::Pattern && !ctrl && ImGui::IsKeyPressed(ImGuiKey_Escape, false) && !editor.selection().active && !session->envelopes.wantsKeys()) {   // Esc with nothing selected: back to the sequence (as the web)
       if (session->solo.on) { session->solo.end(editor); session->editStatus = "Solo-edit ended."; }
       else { session->screen = Screen::Song; session->handoff.scrollToCursor(); }
     }
