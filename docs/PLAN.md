@@ -290,25 +290,27 @@ The menu has the web's items. These are stubs that only say so in the status lin
 
 - Row remap: adding a note column now pads the placed patterns (SetNoteColumns). Exposing or removing parameters, and trigger columns, likely have the same gap (rows keep the old cell count); check and give them the same treatment.
 
-## App structure (tools/wax_app.cpp)
+## App structure (tools/wax_app.cpp and tools/wax_app/)
 
-The web app was split so each concern has one owner; the native app is following, in steps that each keep behaviour identical. Check each step
+The web app was split so each concern has one owner; the native app followed, in steps that each kept behaviour identical. Check a step
 with `tools/golden.sh save DIR` before and `tools/golden.sh check DIR` after (build the "before" in a second worktree; run both from the same
 directory, since the Sample screen shows the folder).
 
-Done:
+Where things are:
+- `tools/wax_app/app_state.h`: `Options`, `Session` (one song, loaded), `Screen`, `KeyFocus`, `KeyboardEnv`, `FrameContext`, the dialog globals, and
+  declarations of what the parts call in each other.
+- `tools/wax_app.cpp`: the frame (`drawFrame`: header, transport, rail, status bar), the helpers (theme, export, splash, blank project) and the
+  main loop.
+- `keyboard.cpp` (`handleKeyboard`, `keyFocusOf`), `browser.cpp` (`drawBrowser`), and one file per screen: `song_screen.cpp`,
+  `pattern_screen.cpp`, `instrument_screen.cpp`, `info_screen.cpp`, `config_screen.cpp`. The Sample screen is one call into src/app.
 - `app::Handoff` (src/app/handoff.h): what the Song screen asks of the Pattern screen (lane tab, cursor tick, scroll, reveal of the pattern
   entered). One-shot messages with one entry point (`openLane`), taken once (`takeScroll`, `landed`).
-- `KeyFocus` / `keyFocusOf`: who the keyboard goes to (sequence caret, grid caret, grid editing, piano keys), asked at each key because Enter and
-  the arrow keys change it within the frame.
-- `handleKeyboard` (with `KeyboardEnv`): the whole keyboard section out of `drawFrame`.
-- `FrameContext`, and one function per screen (`drawSongScreen`, `drawPatternScreen`, `drawInstrumentScreen`, `drawInfoScreen`, `drawConfigScreen`)
-  and for the browser (`drawBrowser`).
+- `KeyFocus`: who the keyboard goes to (sequence caret, grid caret, grid editing, piano keys), asked at each key because Enter and the arrow
+  keys change it within the frame.
 
 Left:
-- The header (File menu, transport, song settings), the rail and the status bar are still inline in `drawFrame`. All of these functions are
-  still in `tools/wax_app.cpp`; each wants its own file (`tools/screens/*.cpp`), with `Session`, `Options`, `FrameContext` and the dialog
-  globals moved to a header (`tools/session.h`) first so the files can share them.
+- The header, rail and status bar are still inline in `drawFrame` (about 400 lines); the header (File menu, transport, song settings) and the
+  rail each want a function and file.
 - Text-box focus (`infoFocused`, `nameFocused`, `renamingMachine`, `wantTree`) is still separate flags next to `io.WantTextInput`; they belong in
-  `KeyFocus` once the screens are split.
+  `KeyFocus`.
 - Solo-edit (`Session::SoloEdit` and the places that end it) wants one owner.
