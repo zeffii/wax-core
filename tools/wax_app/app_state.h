@@ -302,6 +302,13 @@ struct FrameContext {
   bool mixerShown;
 };
 
+// Where the song is, as the header works it out each frame.
+struct HeaderState {
+  bool playing;
+  int tick;      // the tick to show as the playhead (as it is heard)
+  int perBeat, perBar;   // ticks
+};
+
 // The functions the parts call in each other.
 void SDLCALL dialogDone(void* userdata, const char* const* files, int count);
 void drawMeter(const char* id, float level, ImVec2 size);
@@ -322,6 +329,8 @@ void drawPatternScreen(FrameContext& f);   // (pattern_screen.cpp)
 void drawInstrumentScreen(FrameContext& f);   // (instrument_screen.cpp)
 void drawInfoScreen(FrameContext& f);   // (info_screen.cpp)
 void drawConfigScreen(FrameContext& f);   // (config_screen.cpp)
+HeaderState drawHeader(Session* session, const Options& options, bool& follow, bool& requestSave, float& meterL, float& meterR, int& playFromRequest);   // (header.cpp)
+void drawRail(Session* session, float scale, float below);   // (header.cpp)
 void drawBrowser(FrameContext& f, const Lane* listed, app::PatternListResult& listed2, float railGap, float below);   // (browser.cpp)
 
 }  // namespace wax::tool
