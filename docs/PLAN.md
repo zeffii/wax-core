@@ -302,10 +302,13 @@ Done:
 - `KeyFocus` / `keyFocusOf`: who the keyboard goes to (sequence caret, grid caret, grid editing, piano keys), asked at each key because Enter and
   the arrow keys change it within the frame.
 - `handleKeyboard` (with `KeyboardEnv`): the whole keyboard section out of `drawFrame`.
+- `FrameContext`, and one function per screen (`drawSongScreen`, `drawPatternScreen`, `drawInstrumentScreen`, `drawInfoScreen`, `drawConfigScreen`)
+  and for the browser (`drawBrowser`).
 
 Left:
-- `drawFrame` is still about 1,300 lines: the header, the rail, the browser and one block per screen. Each screen wants its own file with a
-  `draw<Screen>(Session&, ...)` function; `Session` moves to a header (`tools/session.h`) first so the files can share it.
+- The header (File menu, transport, song settings), the rail and the status bar are still inline in `drawFrame`. All of these functions are
+  still in `tools/wax_app.cpp`; each wants its own file (`tools/screens/*.cpp`), with `Session`, `Options`, `FrameContext` and the dialog
+  globals moved to a header (`tools/session.h`) first so the files can share them.
 - Text-box focus (`infoFocused`, `nameFocused`, `renamingMachine`, `wantTree`) is still separate flags next to `io.WantTextInput`; they belong in
   `KeyFocus` once the screens are split.
 - Solo-edit (`Session::SoloEdit` and the places that end it) wants one owner.
