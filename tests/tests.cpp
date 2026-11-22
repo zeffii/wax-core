@@ -1774,7 +1774,8 @@ void testSequenceOps() {
         for (Json& n : savedInstrument["graph"]["nodes"]) if (n.value("type", "") == "msg") n["type"] = "note";
       { std::ofstream out(file); out << saved.dump(); }
       bool migrated = false;
-      for (const GraphNode& n : loadProject(file).instruments.front().graph.nodes) if (n.type == "msg") migrated = true;
+      for (const Instrument& inst : loadProject(file).instruments)   // (every instrument: the rewritten file may list them in another order)
+        for (const GraphNode& n : inst.graph.nodes) if (n.type == "msg") migrated = true;
       check(migrated, "msg: a file with the first name, note, loads as msg");
     }
     std::filesystem::remove(file);
