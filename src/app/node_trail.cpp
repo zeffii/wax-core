@@ -1,7 +1,5 @@
 #include "app/node_trail.h"
 
-#include <cstdlib>
-
 #include <algorithm>
 #include <cmath>
 #include <map>
