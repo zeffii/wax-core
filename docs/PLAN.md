@@ -335,3 +335,8 @@ Gaps against the web's graph rail:
 ## Pattern toolbar
 - The pattern editor has a toolbar like the graph's (toolbar.{h,cpp} draws both): all lanes, tint, hear notes, hide empty columns, solo-edit shows the song, follow. The same settings are still in the browser's "Pattern view" group; more switches to come.
 - The node bank on the Instrument screen stops above the node strip (it scrolls), and the strip spans the whole window.
+
+## Edit step and preview time
+- Edit step (Settings.editStep, 0 to 16, default 1; in the browser's Pattern view group): rows the caret moves down after a value is entered. Web: Config > Editing. No key for changing it yet.
+- Preview time per machine (Instrument::previewMs, saved as `previewMs`; the browser's instrument group, web: the "ms" field by Tracks): a note played from the keys sounds at least that long; a held key sounds while held. Native keys never repeat (IsKeyPressed without repeat); the web now ignores `e.repeat` for typing keys.
+- Gap: the preview time is not applied to MIDI-keyboard notes or to the hear-on-move preview.

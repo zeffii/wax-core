@@ -97,6 +97,7 @@ struct Instrument {
   Graph graph;
   int noteColumns = 1;
   bool noVel = false;
+  int previewMs = 0;        // the least time a played or typed note sounds when the key is let go sooner (a slow attack is heard); 0: it stops with the key
   std::vector<Exposed> exposed;
   std::vector<Command> commands;
   std::vector<Trigger> triggers;

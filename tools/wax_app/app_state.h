@@ -146,6 +146,9 @@ struct Session {
   std::unique_ptr<RtMidiIn> midi;
   std::string midiName = "none";
   std::string keyjazzInstrument;
+  struct HeldKey { double since = 0; int previewMs = 0; };
+  std::map<ImGuiKey, HeldKey> heldSince;     // the piano keys held: when each went down (seconds) and the machine's least preview time
+  std::vector<std::pair<double, int>> releaseAt;   // notes whose key was let go before the machine's least preview time: when to release each (seconds), and the note
   app::SampleView sampleView;   // the Sample screen: the sample chosen, its selection, the view of its waveform
   app::SampleBrowserState sampleBrowser;   // the Samples tab: the folder shown and the file picked
   app::CurveView curveView;   // the lane curves drawn over the Song screen: the one each lane shows, what is dragged

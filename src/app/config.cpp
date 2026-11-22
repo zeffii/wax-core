@@ -65,6 +65,7 @@ void loadSettings() {
   s.stripShown = data.value("stripShown", s.stripShown);
   s.mixerHeight = std::clamp(data.value("mixerHeight", s.mixerHeight), 60.0f, 2000.0f);
   s.patternText = std::clamp(data.value("patternText", s.patternText), 0.6f, 2.0f);
+  s.editStep = std::clamp(data.value("editStep", s.editStep), 0, 16);
   s.notePreview = data.value("notePreview", s.notePreview);
   s.tintPatterns = data.value("tintPatterns", s.tintPatterns);
   s.seqOverview = data.value("seqOverview", s.seqOverview);
@@ -108,7 +109,7 @@ void saveSettings() {
   if (path.empty()) return;
   const Settings& s = gSettings;
   Json data = {{"wireAudio", hexOf(s.wireAudio)}, {"wireControl", hexOf(s.wireControl)}, {"wireStereo", hexOf(s.wireStereo)},
-               {"wireParam", hexOf(s.wireParam)}, {"wireDashed", s.wireDashed}, {"follow", s.follow}, {"arrangementRow", s.arrangementRow}, {"insertCut", s.insertCut}, {"patternAll", s.patternAll}, {"hideEmpty", s.hideEmpty}, {"soloHatch", s.soloHatch}, {"seqNames", s.seqNames}, {"patternText", s.patternText}, {"mixerHeight", s.mixerHeight}, {"stripHeight", s.stripHeight}, {"stripShown", s.stripShown}, {"windowWidth", s.windowWidth}, {"windowHeight", s.windowHeight}, {"windowMaximised", s.windowMaximised}, {"notePreview", s.notePreview}, {"tintPatterns", s.tintPatterns}, {"seqOverview", s.seqOverview}, {"minimapOn", s.minimapOn}, {"minimapLengths", s.minimapLengths}, {"minimapCaps", s.minimapCaps}, {"minimapParams", s.minimapParams}, {"pinnedMachines", s.pinnedMachines},
+               {"wireParam", hexOf(s.wireParam)}, {"wireDashed", s.wireDashed}, {"follow", s.follow}, {"arrangementRow", s.arrangementRow}, {"insertCut", s.insertCut}, {"patternAll", s.patternAll}, {"hideEmpty", s.hideEmpty}, {"soloHatch", s.soloHatch}, {"seqNames", s.seqNames}, {"patternText", s.patternText}, {"editStep", s.editStep}, {"mixerHeight", s.mixerHeight}, {"stripHeight", s.stripHeight}, {"stripShown", s.stripShown}, {"windowWidth", s.windowWidth}, {"windowHeight", s.windowHeight}, {"windowMaximised", s.windowMaximised}, {"notePreview", s.notePreview}, {"tintPatterns", s.tintPatterns}, {"seqOverview", s.seqOverview}, {"minimapOn", s.minimapOn}, {"minimapLengths", s.minimapLengths}, {"minimapCaps", s.minimapCaps}, {"minimapParams", s.minimapParams}, {"pinnedMachines", s.pinnedMachines},
                {"backupOn", s.backupOn}, {"backupMinutes", s.backupMinutes}, {"backupKeep", s.backupKeep}, {"rowWrap", s.rowWrap}, {"graphPullOut", s.graphPullOut}, {"graphGrid", s.graphGrid}, {"graphGridSize", s.graphGridSize}, {"graphGridMajor", s.graphGridMajor}, {"graphSnap", s.graphSnap}, {"wireStraight", s.wireStraight}, {"pvHideCc", s.pvHideCc}, {"threads", s.threads}, {"laneWrap", s.laneWrap}, {"sliceSensitivity", s.sliceSensitivity}, {"sliceMinGap", s.sliceMinGap}, {"sliceReplace", s.sliceReplace}, {"sliceWhole", s.sliceWhole},
                {"waveHideLoop", s.waveHideLoop}, {"waveHideSel", s.waveHideSel}, {"waveHideSus", s.waveHideSus}, {"hexMode", s.hexMode}, {"sampleAskMB", s.sampleAskMB}, {"recentFiles", s.recentFiles}};
   std::ofstream(path, std::ios::trunc) << data.dump(1) << "\n";

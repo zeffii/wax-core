@@ -26,6 +26,7 @@ struct Settings {
   bool patternAll = false;     // the Pattern screen shows every lane side by side (off: one lane, picked by its tab)
   static constexpr bool kNotePreviewDefault = true;   // never off by default
   bool notePreview = kNotePreviewDefault;   // a note typed into the grid sounds as it goes in
+  int editStep = 1;             // rows the caret moves down after a value is entered in a field (0 to 16; 0: it stays)
   float patternText = 1.0f;    // the Pattern grid's text size, as a multiple of the normal size
   bool seqNames = false;       // the Song screen's pattern cells show the pattern's name after its number (off: just the two-digit number; H toggles)
   bool soloHatch = false;      // solo-edit shows the whole song with the rest hatched and locked (off: the pattern on its own, rows from 0)

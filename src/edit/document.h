@@ -124,6 +124,19 @@ private:
   bool neverSleeps_, oldNeverSleeps_ = false;
 };
 
+// The least time a note previewed on the machine sounds (Instrument::previewMs).
+class SetInstrumentPreview final : public Edit {
+public:
+  SetInstrumentPreview(std::string instrument, int milliseconds) : instrument_(std::move(instrument)), milliseconds_(milliseconds) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return "Preview time of " + instrument_; }
+
+private:
+  std::string instrument_;
+  int milliseconds_, old_ = 0;
+};
+
 // An instrument renamed: the lanes that play it follow. Refused when another machine listens to it (a sidechain) or plays it (a meta
 // machine), as those references live in the file under the old name.
 class RenameInstrument final : public Edit {

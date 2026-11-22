@@ -238,9 +238,18 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   }
   // the cursor's columns follow the lane as it is now (a Note + Vol pair added or taken away, an exposed parameter, an undo): the editor keeps its own copy
   if (!editor.lane().empty()) editor.setLane(editor.lane(), player.engine().laneColumns(editor.lane()));
-  for (auto it = held.begin(); it != held.end();) {   // a held key lets go when it is up (or the text box took the keyboard)
+  const double now = ImGui::GetTime();
+  for (auto it = session->releaseAt.begin(); it != session->releaseAt.end();) {   // the notes whose time has come
+    if (it->first <= now) { player.ring().push({LiveCommand::NoteOff, it->second, 0}); it = session->releaseAt.erase(it); }
+    else ++it;
+  }
+  for (auto it = held.begin(); it != held.end();) {   // a held key lets go when it is up (or the text box took the keyboard); a note the machine keeps for at least its preview time is released then
     if (!ImGui::IsKeyDown(it->first) || io.WantTextInput) {
-      player.ring().push({LiveCommand::NoteOff, it->second, 0});
+      const Session::HeldKey since = session->heldSince[it->first];
+      const double due = since.since + since.previewMs / 1000.0;
+      if (now < due) session->releaseAt.push_back({due, it->second});
+      else player.ring().push({LiveCommand::NoteOff, it->second, 0});
+      session->heldSince.erase(it->first);
       it = held.erase(it);
     } else {
       ++it;

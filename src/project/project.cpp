@@ -1,5 +1,6 @@
 #include "project/project.h"
 
+#include <algorithm>
 #include <fstream>
 #include <set>
 #include <sstream>
@@ -65,6 +66,7 @@ Instrument readInstrument(const std::string& id, const Json& data) {
   instrument.graph = readGraph(data.value("graph", Json::object()));
   instrument.noteColumns = data.value("noteColumns", 1);
   instrument.noVel = data.value("noVel", false);
+  instrument.previewMs = std::clamp(data.value("previewMs", 0), 0, 10000);
 
   for (const Json& e : data.value("exposed", Json::array())) {
     instrument.exposed.push_back({text(e, "node"), text(e, "param"), e.value("bits", 8), text(e, "scale") == "log", text(e, "label"), text(e, "long")});

@@ -650,6 +650,14 @@ void testSave() {
   fresh.apply(std::make_unique<wax::AddPattern>("lone", np, wax::Placement{"9-0", 3, 1}));
   const wax::Project again = wax::parseProject(wax::serializeProject(fresh.project()));
   check(again.lanes[1].patterns.back().id == "9-0" && again.lanes[1].placements.back().start == 3, "a new pattern and its placement are saved");
+  // the preview time of a machine is saved with it, and undone
+  wax::Document timed(wax::loadProject(songs + "/jawharp.wax"));
+  const std::string machine = timed.project().lanes[1].instrument;
+  timed.apply(std::make_unique<wax::SetInstrumentPreview>(machine, 1500));
+  const auto previewOf = [&](const wax::Project& project) { for (const wax::Instrument& i : project.instruments) if (i.id == machine) return i.previewMs; return -1; };
+  check(previewOf(wax::parseProject(wax::serializeProject(timed.project()))) == 1500, "a machine's preview time is saved");
+  timed.undo();
+  check(previewOf(timed.project()) == 0 && !wax::serializeProject(timed.project()).empty() && wax::serializeProject(timed.project()).find("previewMs") == std::string::npos, "and undone, it leaves nothing in the file");
   // writing to disk
   const std::string path = (std::filesystem::temp_directory_path() / "wax-save-test.wax").string();
   wax::saveProject(fresh.project(), path);

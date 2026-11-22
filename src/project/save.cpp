@@ -83,6 +83,7 @@ std::string serializeProject(const Project& project) {
     Json& definition = out["instruments"][instrument.id];
     if (instrument.raw.is_object() && instrument.raw.contains("presets")) definition["presets"] = instrument.raw["presets"];   // presets as edited
     else definition.erase("presets");
+    if (instrument.previewMs > 0) definition["previewMs"] = instrument.previewMs; else definition.erase("previewMs");
     if (instrument.noteColumns != definition.value("noteColumns", 1) && instrument.noteColumns > 0) definition["noteColumns"] = instrument.noteColumns;   // tracks as edited
     {   // the parameters shown as pattern columns, as edited: entries the file has keep what it holds about them
       Json shown = Json::array();

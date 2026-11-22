@@ -34,6 +34,14 @@ bool enterPatternUnderCaret(Session* session, std::string& selectedLane) {
   return edited;
 }
 
+// The least time a note played from the keys sounds on the machine they play (Instrument::previewMs; 0: it stops with the key).
+static int previewMsOf(const Session& session) {
+  std::string machine = session.screen == Screen::Instrument ? session.instrument : std::string();
+  if (machine.empty()) for (const Lane& lane : session.doc->project().lanes) if (lane.id == session.editor->lane()) machine = lane.instrument;
+  for (const Instrument& instrument : session.doc->project().instruments) if (instrument.id == machine) return instrument.previewMs;
+  return 0;
+}
+
 // The computer keyboard: the transport keys, Enter and the caret, the editing keys of the Song and Pattern screens, and the piano keys.
 // Returns true when the song was changed (the engine is brought up to date afterwards).
 bool handleKeyboard(Session* session, KeyboardEnv& env) {
@@ -51,6 +59,7 @@ bool handleKeyboard(Session* session, KeyboardEnv& env) {
   // The computer keyboard plays notes unless a text box has it. With Enter pressed it also types into the cell under the cursor.
   ImGuiIO& io = ImGui::GetIO();
   if (session->screen == Screen::Song || session->screen == Screen::Pattern) session->edit = true;   // the caret is always there to move, on both editors (Esc only clears a selection or goes back)
+  editor.setStep(app::settings().editStep);   // (rows down after a value is entered)
   bool edited = false;
   const auto focusNow = [&] { return keyFocusOf(*session); };   // (asked at each key, as Enter and the arrow keys change it within the frame)
   const bool ctrl = io.KeyCtrl;
@@ -319,6 +328,8 @@ bool handleKeyboard(Session* session, KeyboardEnv& env) {
           if (note > 127) { session->editStatus = "Note out of range."; continue; }   // (as the web: nothing is entered)
           const bool entering = typing && editor.onNoteCell();   // the key puts a note in the grid
           held[key] = note;
+          session->releaseAt.erase(std::remove_if(session->releaseAt.begin(), session->releaseAt.end(), [&](const std::pair<double, int>& due) { return due.second == note; }), session->releaseAt.end());   // (a note struck again keeps its new life)
+          session->heldSince[key] = {ImGui::GetTime(), previewMsOf(*session)};
           if (!entering || app::settings().notePreview) player.ring().push({LiveCommand::NoteOn, note, 0.8});   // (Note preview off: entering is silent)
           if (entering) edited |= editor.typeNote(note);
         }

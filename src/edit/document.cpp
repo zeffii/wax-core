@@ -643,6 +643,14 @@ void SetInstrumentSetup::revert(Project& project) {
   g.voices = oldVoices_; g.neverSleeps = oldNeverSleeps_;
 }
 
+void SetInstrumentPreview::apply(Project& project) {
+  Instrument& instrument = instrumentNamed(project, instrument_);
+  old_ = instrument.previewMs;
+  instrument.previewMs = std::clamp(milliseconds_, 0, 10000);
+}
+
+void SetInstrumentPreview::revert(Project& project) { instrumentNamed(project, instrument_).previewMs = old_; }
+
 namespace {
 int instrumentIndex(const Project& project, const std::string& id) {
   for (std::size_t i = 0; i < project.instruments.size(); i++) if (project.instruments[i].id == id) return static_cast<int>(i);

@@ -109,6 +109,14 @@ void drawBrowser(FrameContext& f, const Lane* listed, app::PatternListResult& li
       if (app::checkbox("Note preview", &app::settings().notePreview)) app::saveSettings();
       ImGui::SetNextItemWidth(120 * ImGui::GetStyle().FontScaleDpi);
       if (ImGui::SliderFloat("Text size", &app::settings().patternText, 0.6f, 2.0f, "%.2fx")) app::saveSettings();
+      {   // the rows the caret moves down after a value is entered
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "Edit step");
+        ImGui::SameLine();
+        char stepText[16]; std::snprintf(stepText, sizeof stepText, "%d", app::settings().editStep);
+        const int change = app::spinBox("##editstep", stepText, 56 * ImGui::GetStyle().FontScaleDpi);
+        if (change && app::settings().editStep + change >= 0 && app::settings().editStep + change <= 16) { app::settings().editStep += change; app::saveSettings(); }
+      }
       if (app::checkbox("Hide empty columns", &app::settings().hideEmpty)) app::saveSettings();
       if (app::checkbox("Solo-edit shows the song", &app::settings().soloHatch)) app::saveSettings();   // (the rest hatched and locked; off: the pattern alone)
       if (app::checkbox("Follow the playing row", &follow)) { app::settings().follow = follow; app::saveSettings(); }
@@ -253,6 +261,14 @@ void drawBrowser(FrameContext& f, const Lane* listed, app::PatternListResult& li
             const std::vector<std::string> problems = syncLanes(doc, player.engine());
             session->editStatus = problems.empty() ? std::string() : problems.front();
           }
+        }
+        if (name != kMaster) {   // the least time a note played from the keys sounds (a slow attack is heard even when the key is let go at once)
+          ImGui::AlignTextToFramePadding();
+          ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(app::kDimText), "preview ms");
+          ImGui::SameLine();
+          char previewText[16]; std::snprintf(previewText, sizeof previewText, "%d", current->previewMs);
+          const int more = app::spinBox("##previewms", previewText, 72 * scale);
+          if (more && current->previewMs + more * 250 >= 0 && current->previewMs + more * 250 <= 10000) doc.apply(std::make_unique<SetInstrumentPreview>(name, current->previewMs + more * 250));
         }
         bool sleeps = !never;
         if (app::checkbox("sleep when quiet", &sleeps)) { never = !sleeps; setup = true; }
