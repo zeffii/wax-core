@@ -340,7 +340,7 @@ Gaps against the web's graph rail:
 ## Edit step and preview time
 - Edit step (Settings.editStep, 0 to 16, default 1; in the browser's Pattern view group): rows the caret moves down after a value is entered. Web: Config > Editing. No key for changing it yet.
 - Preview time per machine (Instrument::previewMs, saved as `previewMs`; the browser's instrument group, web: the "ms" field by Tracks): a note played from the keys sounds at least that long; a held key sounds while held. Native keys never repeat (IsKeyPressed without repeat); the web now ignores `e.repeat` for typing keys.
-- Gap: the preview time is not applied to MIDI-keyboard notes or to the hear-on-move preview.
+- Preview time is for the computer keys only, as in the web: MIDI-keyboard notes stop with the key (web main.js `midiVoices`), and the web has no hear-on-move preview. Applying it to MIDI would be a change to make in the web first.
 
 ## Piano realism
 - Piano `realism` (0 off, the default): 1 = one string, one voice. A key struck again while it still rings goes to the voice that holds it (engine: `NodeType::restrikeParam`), and the hammer hits the strings as they are instead of a fresh copy starting from silence. Saves voices and CPU (about 30% on the cloves song).
