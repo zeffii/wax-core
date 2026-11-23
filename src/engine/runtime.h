@@ -68,6 +68,8 @@ public:
 
   // A note for an instrument: to its arp when it has one, else to its voices (see deliver).
   void note(const std::string& instrument, const NoteEvent& event);
+  // Every voice of every instrument stops at once (the web's panic: a note cut for each instrument).
+  void panic();
 
   // A sample for one node (every copy of it): the sampler's. Kept, to be sent again when the instrument is rebuilt.
   void sendSample(const std::string& instrument, const std::string& nodeId, std::shared_ptr<const SampleMessage> message);

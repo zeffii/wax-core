@@ -342,6 +342,8 @@ Gaps against the web's graph rail:
 - Preview time per machine (Instrument::previewMs, saved as `previewMs`; the browser's instrument group, web: the "ms" field by Tracks): a note played from the keys sounds at least that long; a held key sounds while held. Native keys never repeat (IsKeyPressed without repeat); the web now ignores `e.repeat` for typing keys.
 - Preview time is for the computer keys only, as in the web: MIDI-keyboard notes stop with the key (web main.js `midiVoices`), and the web has no hear-on-move preview. Applying it to MIDI would be a change to make in the web first.
 
+- Live notes (`Player`): a MIDI or key note is held until its release; the release goes to the machine the note started on (even after the lane or machine changed), and MIDI all-notes-off (CC 120/123) releases every live note on its machine. The status bar's panic stops every voice of every machine (`GraphRuntime::panic`, as the web's Panic) and lets go the keys held. Gap: the web's Cut (halt all audio computation until Play) has no native button.
+
 ## Piano realism
 - Piano `realism` (0 off, the default): 1 = one string, one voice. A key struck again while it still rings goes to the voice that holds it (engine: `NodeType::restrikeParam`), and the hammer hits the strings as they are instead of a fresh copy starting from silence. Saves voices and CPU (about 30% on the cloves song).
 - Gap (parity): the web piano has no `realism` parameter yet; a .wax file that sets it plays the old way there.

@@ -2,6 +2,7 @@
 // keyboard), and the Player, which an audio callback (or a test, by hand) asks for frames. No window, no device here.
 #pragma once
 
+#include <array>
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -16,7 +17,7 @@ namespace wax {
 
 // Things the player is told, from other threads, and does at the start of the next block.
 struct LiveCommand {
-  enum Kind : int { None, Play, Stop, NoteOn, NoteOff, AllOff, Row } kind = None;
+  enum Kind : int { None, Play, Stop, NoteOn, NoteOff, AllOff, Row, Panic } kind = None;
   int note = 0;
   double vel = 1;
 };
@@ -54,7 +55,9 @@ private:
 class Player {
 public:
   Player(const Project& project, double rate, int threads, std::string instrument, bool loop)
-      : engine_(project, rate, threads), instrument_(std::move(instrument)), once_(!loop), rate_(rate) {}
+      : engine_(project, rate, threads), instrument_(std::move(instrument)), once_(!loop), rate_(rate) {
+    for (std::string& id : liveOn_) id.reserve(48);   // (so noting a machine on the audio thread never allocates)
+  }
 
   LiveRing& ring() { return ring_; }
   Engine& engine() { return engine_; }
@@ -95,15 +98,22 @@ private:
         case LiveCommand::Stop: engine_.sequencer().stop(); engine_.runtime().note(instrument_, NoteEvent{NoteType::AllOff}); break;
         case LiveCommand::NoteOn: {
           NoteEvent e; e.type = NoteType::On; e.note = c.note; e.vel = c.vel;
+          if (c.note >= 0 && c.note < kLiveNotes) liveOn_[c.note] = instrument_;   // the release goes to the machine the note started on
           engine_.runtime().note(instrument_, e);
           break;
         }
         case LiveCommand::NoteOff: {
           NoteEvent e; e.type = NoteType::Off; e.note = c.note;
-          engine_.runtime().note(instrument_, e);
+          const bool known = c.note >= 0 && c.note < kLiveNotes && !liveOn_[c.note].empty();
+          engine_.runtime().note(known ? liveOn_[c.note] : instrument_, e);
+          if (known) liveOn_[c.note].clear();
           break;
         }
-        case LiveCommand::AllOff: engine_.runtime().note(instrument_, NoteEvent{NoteType::AllOff}); break;
+        case LiveCommand::AllOff: releaseLiveNotes(); break;
+        case LiveCommand::Panic:
+          engine_.runtime().panic();
+          for (std::string& id : liveOn_) id.clear();
+          break;
         case LiveCommand::None: break;
       }
     }
@@ -120,7 +130,20 @@ private:
 
   Engine engine_;
   LiveRing ring_;
+  // Releases what the keys and the MIDI keyboard started, each on the machine it started on, and all notes on the current machine.
+  void releaseLiveNotes() {
+    NoteEvent off{NoteType::AllOff};
+    for (std::string& id : liveOn_) {
+      if (id.empty()) continue;
+      engine_.runtime().note(id, off);
+      id.clear();
+    }
+    engine_.runtime().note(instrument_, off);
+  }
+
+  static constexpr int kLiveNotes = 128;
   std::string instrument_;
+  std::array<std::string, kLiveNotes> liveOn_;   // for each MIDI note held: the machine it was played on
   bool once_;
   double rate_;
   float left_[kEngineBlock] = {}, right_[kEngineBlock] = {};

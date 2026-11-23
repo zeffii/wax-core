@@ -30,6 +30,7 @@
 #include "nodes/genexpr_check.h"
 #include "app/units.h"
 #include "engine/engine.h"
+#include "live/player.h"
 #include "engine/takes.h"
 #include "io/wav.h"
 #include "project/project.h"
@@ -512,4 +513,48 @@ WAX_TEST("graph", testSetParam) {
   doc.undo();
   check(!doc.project().lanes[1].silenced, "undo lets it play again");
   std::printf("ok: parameter edits\n");
+}
+
+// Live notes (the MIDI keyboard, the piano keys): a release finds the machine the note started on even when the machine
+// being played has changed since, and panic stops every machine.
+WAX_TEST("graph", testLiveNotes) {
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax"));
+  for (const char* kind : {"subtractive", "fourpole"}) {
+    const wax::Json machine = wax::app::machineJson(kind);
+    check(!machine.is_null(), "the machine table knows the machine");
+    doc.apply(std::make_unique<wax::AddInstrument>(kind, machine, kind));
+  }
+  const double rate = 44100;
+  // The loudest sample in the last tenth of a second of `seconds` of sound.
+  const auto tailPeak = [&](wax::Player& player, double seconds) {
+    std::vector<float> out(static_cast<std::size_t>(seconds * rate) * 2);
+    player.fill(out.data(), static_cast<int>(out.size() / 2));
+    float peak = 0;
+    for (std::size_t i = out.size() - static_cast<std::size_t>(rate / 10) * 2; i < out.size(); i++) peak = std::max(peak, std::fabs(out[i]));
+    return peak;
+  };
+  const auto start = [&](wax::Player& player) {
+    player.setInstrument("subtractive");
+    player.ring().push({wax::LiveCommand::NoteOn, 60, 1});
+    tailPeak(player, 0.3);
+  };
+
+  wax::Player held(doc.project(), rate, 1, "subtractive", false);
+  start(held);
+  check(tailPeak(held, 0.5) > 0.001, "a note held keeps sounding");
+
+  wax::Player released(doc.project(), rate, 1, "subtractive", false);
+  start(released);
+  released.setInstrument("fourpole");   // the machine being played changes while the key is down
+  released.ring().push({wax::LiveCommand::NoteOff, 60, 0});
+  check(tailPeak(released, 4.0) < 0.001, "its release goes to the machine it started on, not the one played now");
+
+  wax::Player panicked(doc.project(), rate, 1, "subtractive", false);
+  start(panicked);
+  panicked.setInstrument("fourpole");
+  panicked.ring().push({wax::LiveCommand::NoteOn, 64, 1});
+  tailPeak(panicked, 0.3);
+  panicked.ring().push({wax::LiveCommand::Panic, 0, 0});
+  check(tailPeak(panicked, 0.5) < 0.001, "panic stops the notes on every machine");
+  std::printf("ok: live notes\n");
 }

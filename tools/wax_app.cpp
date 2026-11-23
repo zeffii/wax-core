@@ -486,7 +486,12 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     const double limitOn = player.engine().registry().slotOf("master.m.limit") >= 0 ? player.engine().registry().get("master.m.limit") : 0;
     if (app::textButton("Lim", limitOn > 0.5)) { doc.apply(std::make_unique<SetParam>("master", "m", "limit", limitOn > 0.5 ? 0.0 : 1.0)); syncParams(doc, player.engine()); }
     ImGui::SameLine(0, 10 * scale);
-    if (app::textButton("panic")) player.ring().push({LiveCommand::AllOff, 0, 0});
+    if (app::textButton("panic")) {   // every sounding note on every machine stops, and the keys held are let go (as the web)
+      player.ring().push({LiveCommand::Panic, 0, 0});
+      held.clear();
+      session->heldSince.clear();
+      session->releaseAt.clear();
+    }
     ImGui::SameLine(0, 14 * scale);
     ImGui::SetNextItemWidth(110 * scale);
     if (ImGui::BeginCombo("##theme", app::themeName(app::themeIndex()), ImGuiComboFlags_HeightLarge)) {

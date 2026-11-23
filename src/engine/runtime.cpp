@@ -446,6 +446,12 @@ void GraphRuntime::passOn(const std::string& instrument, const NoteEvent& event)
   following_.erase(instrument);
 }
 
+void GraphRuntime::panic() {
+  NoteEvent cut;
+  cut.type = NoteType::Cut;
+  for (const auto& entry : instruments_) note(entry.first, cut);
+}
+
 void GraphRuntime::note(const std::string& instrument, const NoteEvent& event) {
   passOn(instrument, event);
   Instrument* inst = find(instrument);
