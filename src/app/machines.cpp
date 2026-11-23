@@ -53,10 +53,24 @@ const std::vector<MachineNode>& machineTree() {
   return tree;
 }
 
+namespace {
+
+// A new piano stands in a hall: a convolver with a built-in room after the voices, so all the notes share one convolution. (The web app's piano
+// starts dry; this is native only.)
+void addNaturalRoom(Json& instrument) {
+  Json& graph = instrument["graph"];
+  graph["nodes"].insert(graph["nodes"].end() - 1, Json{{"id", "room"}, {"type", "convolver"}, {"params", {{"room", 3}, {"mix", 0.2}}}});   // (before the out node)
+  for (Json& wire : graph["connections"]) if (wire[0] == "poly.out" && wire[1] == "out.in") wire[1] = "room.in";
+  graph["connections"].push_back(Json::array({"room.out", "out.in"}));
+}
+
+}  // namespace
+
 Json machineJson(const std::string& kind, const std::vector<std::string>& sampleIds) {
   for (const MachineKind& k : kMachineKinds) {
     if (kind != k.kind) continue;
     Json instrument = Json::parse(k.json);
+    if (kind == "piano") addNaturalRoom(instrument);
     if (k.needsSample && k.sampleNode[0] && !sampleIds.empty()) {
       Json samples = Json::object();
       if (k.allSamples) samples[k.sampleNode] = sampleIds; else samples[k.sampleNode] = sampleIds.front();

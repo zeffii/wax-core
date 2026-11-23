@@ -344,3 +344,7 @@ Gaps against the web's graph rail:
 ## Piano realism
 - Piano `realism` (0 off, the default): 1 = one string, one voice. A key struck again while it still rings goes to the voice that holds it (engine: `NodeType::restrikeParam`), and the hammer hits the strings as they are instead of a fresh copy starting from silence. Saves voices and CPU (about 30% on the cloves song).
 - Gap (parity): the web piano has no `realism` parameter yet; a .wax file that sets it plays the old way there.
+
+## Built-in rooms (convolver)
+- Convolver `room` (0 = the sample, 1 studio, 2 chamber, 3 hall, 4 church): impulse responses built in `nodes/rooms.cpp` from room physics (image-source early reflections, three-band noise tail, energy from the critical distance). Measured RT60 matches the table. A new piano (machine tree) gets a convolver set to the hall at mix 0.2 after its voices (native only: `addNaturalRoom` in `app/machines.cpp`).
+- Gap (parity): the web convolver has no `room` parameter or help text for it (node_help_table.inc is generated from the web app, so the help line comes with the web side); web needs the same generator to play files that use it.

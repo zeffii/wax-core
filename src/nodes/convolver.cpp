@@ -14,12 +14,13 @@
 #include "core/js_math.h"
 #include "nodes/all_nodes.h"
 #include "nodes/fft.h"
+#include "nodes/rooms.h"
 #include "nodes/shared_dsp.h"
 
 namespace wax {
 namespace {
 
-enum Param { kSample = 0, kSize, kDecay, kPredelay, kLowcut, kHighcut, kWidth, kLevel, kMix };
+enum Param { kSample = 0, kSize, kDecay, kPredelay, kLowcut, kHighcut, kWidth, kLevel, kMix, kRoom };
 constexpr int kB1 = 128, kB2 = 1024, kB3 = 4096;
 const int kMaxP[3] = {7, 7, std::numeric_limits<int>::max()};
 const int kStart[3] = {0, 896, 8064};
@@ -200,14 +201,16 @@ public:
     float* outL = outputs[0];
     float* outR = outputs[1];
     auto g = [&](int i) { return static_cast<double>(params[slots[i]]); };
-    const int slot = std::max(0, std::min(255, static_cast<int>(std::floor(g(kSample)))));
+    // a built-in room stands in for the sample: it takes a slot number after the 256 the project can have
+    const int room = std::max(0, std::min(kRoomCount, static_cast<int>(std::floor(g(kRoom)))));
+    const int slot = room > 0 ? 255 + room : std::max(0, std::min(255, static_cast<int>(std::floor(g(kSample)))));
     const std::int64_t sizeKey = std::llround(g(kSize) * 1000), decayKey = std::llround(g(kDecay) * 100);
     const Sig sig{slot, sizeKey, decayKey, irVersion_};
     if (!haveWant_ || !(sig == want_)) {
       want_ = sig; haveWant_ = true; stable_ = 0;
       if (job_ && !(jobSig_ == sig)) { job_.reset(); haveBuilt_ = false; }
     } else if (stable_ < 1000) stable_++;
-    const Bank* ir = slot < static_cast<int>(bank_.size()) ? bank_[static_cast<std::size_t>(slot)].get() : nullptr;
+    const Bank* ir = room > 0 ? roomBank(room) : slot < static_cast<int>(bank_.size()) ? bank_[static_cast<std::size_t>(slot)].get() : nullptr;
     if (!job_ && stable_ >= 12 && !(haveBuilt_ && built_ == want_) && ir) {
       job_ = startBuild(*ir, g(kSize), g(kDecay));
       jobSig_ = want_;
@@ -254,6 +257,18 @@ public:
   }
 
 private:
+  // The response of a built-in room, made the first time it is asked for.
+  const Bank* roomBank(int room) {
+    std::unique_ptr<Bank>& kept = rooms_[static_cast<std::size_t>(room - 1)];
+    if (!kept) {
+      kept = std::make_unique<Bank>();
+      kept->msg = makeRoom(room, sampleRate_);
+      kept->ratio = 1;   // (made at the engine's rate)
+      kept->gain = 1;
+    }
+    return kept.get();
+  }
+
   struct Sig {
     int slot = 0;
     std::int64_t size = 0, decay = 0;
@@ -353,6 +368,7 @@ private:
 
   double sampleRate_;
   std::vector<std::unique_ptr<Bank>> bank_;
+  std::unique_ptr<Bank> rooms_[kRoomCount];
   std::vector<Stage> stages_;
   int irVersion_ = 0;
   Sig want_, built_, jobSig_;
@@ -378,6 +394,7 @@ void registerConvolver(NodeRegistry& registry) {
   type.params = {
     {"sample", 0, 255, 0, true}, {"size", 0.25, 2, 1}, {"decay", 0.05, 10, 10}, {"predelay", 0, 500, 0}, {"lowcut", 20, 2000, 20}, {"highcut", 1000, 20000, 20000},
     {"width", 0, 1.5, 1}, {"level", -24, 12, 0}, {"mix", 0, 1, 0.3},
+    {"room", 0, kRoomCount, 0, true},   // 0: the sample is the response; 1 studio, 2 chamber, 3 hall, 4 church
   };
   type.create = [](const NodeContext& context) { return std::make_unique<Convolver>(context); };
   registry.add(std::move(type));
