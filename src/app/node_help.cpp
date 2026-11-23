@@ -1,4 +1,5 @@
 #include "app/node_help.h"
+#include "app/native_additions.h"
 
 #include <cstdio>
 #include <vector>
@@ -71,6 +72,8 @@ void bullets(const std::vector<const char*>& items) {
 }  // namespace
 
 std::string paramHint(const std::string& type, const std::string& param) {
+  const std::string native = nativeParamHint(type, param);   // (what only native has comes first)
+  if (!native.empty()) return native;
   for (const ParamHint& hint : kParamHints) if (type == hint.type && param == hint.name) return hint.text;
   return std::string();
 }

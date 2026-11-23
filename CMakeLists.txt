@@ -112,6 +112,7 @@ add_library(waxcore
   src/seq/loop.cpp
   src/app/units.cpp
   src/app/machines.cpp
+  src/app/native_additions.cpp
   src/app/module_util.cpp
   src/app/xm_import.cpp
   src/app/it_import.cpp
@@ -222,7 +223,9 @@ target_link_libraries(wax-compare PRIVATE waxcore)
 
 # Tests: one plain program, run by `ctest`.
 enable_testing()
-add_executable(wax-tests tests/tests.cpp)
+add_executable(wax-tests tests/main.cpp tests/support.cpp
+  tests/core_tests.cpp tests/document_tests.cpp tests/curves_tests.cpp tests/graph_tests.cpp tests/samples_tests.cpp tests/import_tests.cpp tests/nodes_tests.cpp tests/render_tests.cpp)
+target_include_directories(wax-tests PRIVATE ${CMAKE_SOURCE_DIR})
 target_link_libraries(wax-tests PRIVATE waxcore)
 target_compile_definitions(wax-tests PRIVATE WAX_TEST_SONGS="${CMAKE_SOURCE_DIR}/tests/songs")
 add_test(NAME wax-tests COMMAND wax-tests)

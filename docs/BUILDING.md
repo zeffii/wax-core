@@ -19,7 +19,7 @@
 4. **Run:** pick the target in the status bar (the play-triangle button: `wax-app`), then `Ctrl+F5`.
    To open another song, drop a `.wax` file on the window. Or use *Run and Debug* (`F5`) and choose
    *wax-app: concrete demo*; that runs under the debugger.
-5. **Tests:** `wax-tests` as the target, then `Ctrl+F5`; it should end with `all tests passed`.
+5. **Tests:** `wax-tests` as the target, then `Ctrl+F5`; it should end with `all tests passed`. `wax-tests --quick` skips the slow song renders; see docs/TESTING.md.
 
 Buttons in the status bar: the build type (Release or Debug; Release is the one to listen with, Debug is slow),
 the kit, the target to build, and the target to run.
