@@ -72,6 +72,9 @@ struct Column {
 // Throws std::runtime_error when the instrument shows a parameter that its graph does not have.
 std::vector<Column> buildColumns(const Instrument& instrument, const Project& project, const ParamRegistry& registry);
 
+// The columns of a meta machine that show, as indices into its metaColumns (the cells of its lane's rows, in order).
+std::vector<int> visibleMetaSpecs(const Instrument& meta, const Project& project);
+
 int channelCount(const std::vector<Column>& columns);
 
 }  // namespace wax

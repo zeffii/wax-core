@@ -96,15 +96,49 @@ Column commandColumn(const Instrument& instrument, const ParamRegistry& registry
   return column;
 }
 
-// A meta machine plays other instruments: each of its columns is a proxy for one thing of another instrument
-// (its notes, a velocity, a trigger, or a shown parameter), so one lane can drive many machines.
-std::vector<Column> metaColumns(const Instrument& self, const Project& project, const ParamRegistry& registry) {
+}  // namespace
+
+// Which of a meta machine's columns show, as indices into its metaColumns: a column of a machine that is gone, a velocity whose
+// note is not played, a trigger the machine does not have, or a parameter it does not show, is left out. Spacers always show.
+// A meta lane's rows have one cell for each of these, so the cells and the columns can be matched while parameters come and go.
+std::vector<int> visibleMetaSpecs(const Instrument& self, const Project& project) {
   const auto usable = [&](const MetaColumn& spec) { return spec.instrument != self.id && project.findInstrument(spec.instrument) != nullptr; };
 
   // where each instrument's note columns stand among the lane's, so a velocity finds its note wherever it was put
+  std::set<std::pair<std::string, int>> noted;
+  for (const MetaColumn& spec : self.metaColumns)
+    if ((spec.role == "note" || spec.role == "rnote") && usable(spec)) noted.insert({spec.instrument, spec.nc});
+
+  std::vector<int> visible;
+  for (std::size_t i = 0; i < self.metaColumns.size(); i++) {
+    const MetaColumn& spec = self.metaColumns[i];
+    bool shows = false;
+    if (spec.role == "spacer") {
+      shows = true;
+    } else if (usable(spec)) {
+      const Instrument& target = *project.findInstrument(spec.instrument);
+      if (spec.role == "note" || spec.role == "rnote") shows = true;
+      else if (spec.role == "vel") shows = noted.count({spec.instrument, spec.nc}) > 0;
+      else if (spec.role == "trig") shows = spec.tc >= 0 && spec.tc < static_cast<int>(target.triggers.size());
+      else if (spec.role == "param") shows = std::any_of(target.exposed.begin(), target.exposed.end(), [&](const Exposed& e) { return e.node == spec.node && e.param == spec.param; });
+    }
+    if (shows) visible.push_back(static_cast<int>(i));
+  }
+  return visible;
+}
+
+namespace {
+
+// A meta machine plays other instruments: each of its columns is a proxy for one thing of another instrument
+// (its notes, a velocity, a trigger, or a shown parameter), so one lane can drive many machines.
+std::vector<Column> metaColumns(const Instrument& self, const Project& project, const ParamRegistry& registry) {
+  const std::vector<int> visible = visibleMetaSpecs(self, project);
+
+  // where each instrument's note columns stand among the lane's, so a velocity finds its note wherever it was put
   std::map<std::pair<std::string, int>, int> noteAt;
-  for (const MetaColumn& spec : self.metaColumns) {
-    if ((spec.role == "note" || spec.role == "rnote") && usable(spec)) {
+  for (const int at : visible) {
+    const MetaColumn& spec = self.metaColumns[static_cast<std::size_t>(at)];
+    if (spec.role == "note" || spec.role == "rnote") {
       const std::pair<std::string, int> key = {spec.instrument, spec.nc};
       if (!noteAt.count(key)) { const int next = static_cast<int>(noteAt.size()); noteAt[key] = next; }
     }
@@ -112,7 +146,8 @@ std::vector<Column> metaColumns(const Instrument& self, const Project& project, 
 
   std::vector<Column> columns;
   int notes = 0, trigs = 0;
-  for (const MetaColumn& spec : self.metaColumns) {
+  for (const int at : visible) {
+    const MetaColumn& spec = self.metaColumns[static_cast<std::size_t>(at)];
     if (spec.role == "spacer") {   // a gap between groups of columns
       Column gap;
       gap.kind = ColumnKind::Spacer;
@@ -120,7 +155,6 @@ std::vector<Column> metaColumns(const Instrument& self, const Project& project, 
       columns.push_back(gap);
       continue;
     }
-    if (!usable(spec)) continue;   // a machine that is gone has no column
     const Instrument& target = *project.findInstrument(spec.instrument);
     Column column;
     column.target = spec.instrument;
@@ -132,12 +166,10 @@ std::vector<Column> metaColumns(const Instrument& self, const Project& project, 
       column.nc = notes++;
     } else if (spec.role == "vel") {
       const auto partner = noteAt.find({spec.instrument, spec.nc});
-      if (partner == noteAt.end()) continue;
       column.kind = ColumnKind::Vel;
       column.token = Token::Hex2;
       column.nc = partner->second;
     } else if (spec.role == "trig") {
-      if (spec.tc < 0 || spec.tc >= static_cast<int>(target.triggers.size())) continue;
       column.kind = ColumnKind::Trig;
       column.token = Token::Hex1;
       column.tc = trigs++;
@@ -145,7 +177,7 @@ std::vector<Column> metaColumns(const Instrument& self, const Project& project, 
     } else if (spec.role == "param") {
       const auto shown = std::find_if(target.exposed.begin(), target.exposed.end(), [&](const Exposed& e) { return e.node == spec.node && e.param == spec.param; });
       const int slot = registry.slotOf(spec.instrument + "." + spec.node + "." + spec.param);
-      if (shown == target.exposed.end() || slot < 0) continue;
+      if (slot < 0) continue;
       column = paramColumn(slot, registry, spec.bits ? spec.bits : shown->bits, shown->log, spec.node, spec.param);
       column.label = shown->label.empty() ? spec.param : shown->label;
       column.longName = !shown->longName.empty() ? shown->longName : longName(spec.param);

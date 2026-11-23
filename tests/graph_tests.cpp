@@ -558,3 +558,38 @@ WAX_TEST("graph", testLiveNotes) {
   check(tailPeak(panicked, 0.5) < 0.001, "panic stops the notes on every machine");
   std::printf("ok: live notes\n");
 }
+
+// A meta lane has a cell for each column that shows; a parameter shown or hidden on a machine it plays takes its cell in or out of the rows.
+WAX_TEST("graph", testMetaRowsFollowExposed) {
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/concrete.wax"));
+  const auto cellsOf = [](const std::string& row) {
+    std::vector<std::string> cells;
+    std::istringstream words(row);
+    for (std::string cell; words >> cell;) cells.push_back(cell);
+    return cells;
+  };
+  const auto gridRows = [&]() {
+    for (const wax::Lane& lane : doc.project().lanes) if (lane.instrument == "grid") return lane.patterns.front().rows;
+    return std::vector<std::string>();
+  };
+  const std::vector<std::string> original = gridRows();
+  check(!original.empty(), "the song has a meta lane with rows");
+  doc.apply(std::make_unique<wax::SetExposed>("kick", "pitchEnv", "amount", false));
+  const std::vector<std::string> hidden = gridRows();
+  check(hidden.size() == original.size(), "the rows stay");
+  bool cellsGone = true;
+  for (std::size_t r = 0; r < original.size(); r++) {
+    std::vector<std::string> expected = cellsOf(original[r]);
+    expected.erase(expected.begin() + 2);   // the third column of the grid is that parameter
+    cellsGone = cellsGone && cellsOf(hidden[r]) == expected;
+  }
+  check(cellsGone, "hiding the parameter takes its cell out of every row of the meta lane");
+  doc.undo();
+  check(gridRows() == original, "undo puts the rows back");
+  doc.apply(std::make_unique<wax::SetExposed>("kick", "pitchEnv", "amount", false));
+  doc.apply(std::make_unique<wax::SetExposed>("kick", "pitchEnv", "amount", true));
+  bool widthBack = true;
+  for (std::size_t r = 0; r < original.size(); r++) widthBack = widthBack && cellsOf(gridRows()[r]).size() == cellsOf(original[r]).size();
+  check(widthBack, "showing it again puts a blank cell back where the grid lists it");
+  std::printf("ok: meta rows follow exposed\n");
+}

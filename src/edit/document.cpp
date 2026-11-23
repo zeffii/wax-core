@@ -5,6 +5,7 @@
 #include "edit/document.h"
 #include "project/samples.h"
 #include "core/node_registry.h"
+#include "seq/columns.h"
 
 #include <sstream>
 #include <stdexcept>
@@ -907,6 +908,55 @@ void changeCells(Project& project, const Instrument& instrument, std::map<std::p
   }
 }
 
+// A meta machine's lane has one cell in its rows for each column that shows, and a column of a shown parameter comes and goes with the
+// machine's own "exposed" list. So before the list changes the columns that show are noted, and after it the rows of the meta lanes
+// are rebuilt to match: the cells of columns that went are taken out, a blank put in where one came.
+using MetaShown = std::map<std::string, std::vector<int>>;   // meta machine -> the indices of its metaColumns that show
+
+MetaShown metaColumnsShown(const Project& project) {
+  MetaShown shown;
+  for (const Instrument& instrument : project.instruments) if (instrument.isMeta) shown[instrument.id] = visibleMetaSpecs(instrument, project);
+  return shown;
+}
+
+std::string blankCellOf(const MetaColumn& spec, const Project& project) {
+  if (spec.role == "note") return "...";
+  if (spec.role == "trig") return ".";
+  if (spec.role != "param") return spec.role == "spacer" ? "|" : "..";
+  int bits = spec.bits;
+  if (const Instrument* target = project.findInstrument(spec.instrument))
+    for (const Exposed& e : target->exposed) if (e.node == spec.node && e.param == spec.param && !bits) bits = e.bits;
+  return bits == 4 ? "." : bits == 16 ? "...." : "..";
+}
+
+void keepMetaRowsInStep(Project& project, const MetaShown& before, std::map<std::pair<std::string, std::string>, std::vector<std::string>>& saved) {
+  for (const Instrument& meta : project.instruments) {
+    const auto old = before.find(meta.id);
+    if (!meta.isMeta || old == before.end()) continue;
+    const std::vector<int> now = visibleMetaSpecs(meta, project);
+    if (now == old->second) continue;
+    for (Lane& lane : project.lanes) {
+      if (lane.instrument != meta.id) continue;
+      for (Pattern& pattern : lane.patterns) {
+        saved[{lane.id, pattern.id}] = pattern.rows;
+        for (std::string& row : pattern.rows) {
+          std::vector<std::string> cells;
+          std::istringstream words(row);
+          for (std::string cell; words >> cell;) cells.push_back(cell);
+          if (cells.size() != old->second.size()) continue;   // a row that does not fit its columns is left as it is
+          std::map<int, std::string> byColumn;
+          for (std::size_t i = 0; i < cells.size(); i++) byColumn[old->second[i]] = cells[i];
+          row.clear();
+          for (std::size_t i = 0; i < now.size(); i++) {
+            const auto kept = byColumn.find(now[i]);
+            row += (i ? " " : "") + (kept != byColumn.end() ? kept->second : blankCellOf(meta.metaColumns[static_cast<std::size_t>(now[i])], project));
+          }
+        }
+      }
+    }
+  }
+}
+
 }  // namespace
 
 void SetExposed::apply(Project& project) {
@@ -914,11 +964,13 @@ void SetExposed::apply(Project& project) {
   before_ = instrument.exposed;
   const auto found = std::find_if(instrument.exposed.begin(), instrument.exposed.end(), [&](const Exposed& e) { return e.node == node_ && e.param == param_; });
   rowsBefore_.clear();
+  const MetaShown metaBefore = metaColumnsShown(project);
   if (!on_) {
     if (found == instrument.exposed.end()) return;
     const std::size_t at = static_cast<std::size_t>(firstParamCell(instrument) + (found - instrument.exposed.begin()));
     changeCells(project, instrument, rowsBefore_, [&](std::vector<std::string>& cells) { if (at < cells.size()) cells.erase(cells.begin() + static_cast<std::ptrdiff_t>(at)); });
     instrument.exposed.erase(found);
+    keepMetaRowsInStep(project, metaBefore, rowsBefore_);
     return;
   }
   if (found != instrument.exposed.end()) return;
@@ -945,6 +997,7 @@ void SetExposed::apply(Project& project) {
   const std::string blank = added.bits == 4 ? "." : added.bits == 16 ? "...." : "..";
   changeCells(project, instrument, rowsBefore_, [&](std::vector<std::string>& cells) { if (at < cells.size()) cells.insert(cells.begin() + static_cast<std::ptrdiff_t>(at), blank); });
   instrument.exposed.push_back(std::move(added));
+  keepMetaRowsInStep(project, metaBefore, rowsBefore_);
 }
 
 void SetExposed::revert(Project& project) {
