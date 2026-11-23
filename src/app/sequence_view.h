@@ -29,9 +29,26 @@ struct SequenceBlock {
   int from = 0, to = 0;
 };
 
-// `playTick` is -1 when stopped (`playFrac`, 0 to 1: how far through that tick the sound is, for the smooth playhead); `cursorTick` -1 hides the edit cursor. With `follow` the view keeps the play row in sight.
+// What the view is told each frame about the song's state. `playTick` is -1 when stopped (`playFrac`, 0 to 1: how far through that tick the
+// sound is, for the smooth playhead); `cursorTick` -1 hides the edit cursor. With `follow` the view keeps the play row in sight.
+struct SequenceState {
+  std::string selectedLane;
+  int playTick = -1;
+  float playFrac = 0.0f;
+  int cursorTick = -1;
+  int pickedTick = -1;    // the pattern clicked last: a rectangle round it
+  bool follow = false;
+  SequenceBlock block;    // the selected block, tinted
+};
+
+// What the pictures of the patterns need (see minimap.h): what each lane's pictures read, and where they are kept. Without them, no pictures.
+struct SequencePictures {
+  const std::map<std::string, MinimapLane>* lanes = nullptr;
+  MinimapCache* cache = nullptr;
+};
+
 // `curves` keeps the lane curves' view state; `targets` says what a lane's curve can move.
-SequenceClick drawSequenceView(const Project& project, const std::string& selectedLane, int playTick, int cursorTick, int pickedTick, bool follow, CurveView& curves, const CurveView::Targets& targets, const SequenceBlock& block = {}, const std::map<std::string, MinimapLane>* minimap = nullptr, float playFrac = 0.0f, MinimapCache* minimapCache = nullptr);
+SequenceClick drawSequenceView(const Project& project, const SequenceState& state, CurveView& curves, const CurveView::Targets& targets, const SequencePictures& pictures = {});
 
 // What the cursor is on, for the status line: the lane, the row, the tick and the pattern there ("lane 2/9 oberheim · row 9/96 · tick 144 ·
 // 00 "pat00" used 8x in this lane").

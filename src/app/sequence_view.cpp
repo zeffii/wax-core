@@ -86,261 +86,321 @@ float sequenceWidth(const Project& project) {
   return width;
 }
 
-SequenceClick drawSequenceView(const Project& project, const std::string& selectedLane, int playTick, int cursorTick, int pickedTick, bool follow, CurveView& curves, const CurveView::Targets& targets, const SequenceBlock& block, const std::map<std::string, MinimapLane>* minimap, float playFrac, MinimapCache* minimapCache) {
-  SequenceClick result;
-  const float scale = ImGui::GetStyle().FontScaleDpi;
-  if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::GetIO().KeyCtrl && ImGui::GetIO().MouseWheel != 0) {   // Ctrl+wheel: the size of a row, a step a notch
-    const std::vector<int> sizes = rowSizes(project.song);
-    const int at = static_cast<int>(std::find(sizes.begin(), sizes.end(), rowTicks(project.song)) - sizes.begin());
-    const int next = std::clamp(at + (ImGui::GetIO().MouseWheel > 0 ? 1 : -1), 0, static_cast<int>(sizes.size()) - 1);
-    if (next != at) { settings().arrangementRow = sizes[static_cast<std::size_t>(next)]; saveSettings(); }
+namespace {
+
+// Where everything is, worked out once a frame inside the child window: the sizes in pixels, and which rows are on show.
+struct Geometry {
+  float scale = 1;
+  int cell = 1, rows = 1;                  // a row is `cell` ticks; the song has `rows` of them
+  float rowHeight = 0, headHeight = 0, gutter = 0, totalWidth = 0;
+  ImVec2 origin;                           // the top left of the sheet (scrolled with it)
+  float scrollY = 0, viewHeight = 0;
+  int first = 0, last = 0;                 // the rows on show
+
+  float rowTop(int row) const { return origin.y + headHeight + static_cast<float>(row) * rowHeight; }
+  float bottom() const { return rowTop(rows); }
+};
+
+// The overview strip at the right edge, when the whole song is not on show already: where it is, so clicks there do not reach the sheet.
+struct Strip {
+  bool shown = false, over = false;
+  ImVec2 min, max;
+  float bodyHeight = 0;
+};
+
+Geometry measure(const Project& project, ImVec2 origin) {
+  Geometry g;
+  g.scale = ImGui::GetStyle().FontScaleDpi;
+  g.cell = rowTicks(project.song);
+  g.rows = std::max(1, (project.song.length + g.cell - 1) / g.cell);
+  g.rowHeight = ImGui::GetTextLineHeight() + 2 * g.scale;
+  g.headHeight = g.rowHeight + 4 * g.scale;
+  g.gutter = gutterWidth(g.scale);
+  g.origin = origin;
+  g.scrollY = ImGui::GetScrollY();
+  g.viewHeight = ImGui::GetWindowHeight();
+  g.totalWidth = g.gutter;
+  for (const Lane& lane : project.lanes) g.totalWidth += laneWidth(lane, g.scale);
+  g.first = std::max(0, static_cast<int>((g.scrollY - g.headHeight) / g.rowHeight));
+  g.last = std::min(g.rows - 1, static_cast<int>((g.scrollY + g.viewHeight) / g.rowHeight));
+  return g;
+}
+
+// Ctrl+wheel: the size of a row, a step a notch.
+void zoomRows(const Project& project) {
+  if (!ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) || !ImGui::GetIO().KeyCtrl || ImGui::GetIO().MouseWheel == 0) return;
+  const std::vector<int> sizes = rowSizes(project.song);
+  const int at = static_cast<int>(std::find(sizes.begin(), sizes.end(), rowTicks(project.song)) - sizes.begin());
+  const int next = std::clamp(at + (ImGui::GetIO().MouseWheel > 0 ? 1 : -1), 0, static_cast<int>(sizes.size()) - 1);
+  if (next != at) { settings().arrangementRow = sizes[static_cast<std::size_t>(next)]; saveSettings(); }
+}
+
+// Keeps the play row (with follow) and a cursor moved by the keys in sight.
+void keepInSight(const Geometry& g, const SequenceState& state) {
+  if (state.follow && state.playTick >= 0) {   // the play row in the middle third
+    const float y = g.headHeight + static_cast<float>(state.playTick / g.cell) * g.rowHeight;
+    if (y < g.scrollY + g.headHeight || y > g.scrollY + g.viewHeight - 2 * g.rowHeight) ImGui::SetScrollY(std::max(0.0f, y - g.viewHeight * 0.4f));
   }
-  const int cell = rowTicks(project.song);
-  const int rows = std::max(1, (project.song.length + cell - 1) / cell);
-  const float rowHeight = ImGui::GetTextLineHeight() + 2 * scale;
-  const float headHeight = rowHeight + 4 * scale;
-  const float gutter = gutterWidth(scale);
-
-  ImGui::SetCursorPosX(ImGui::GetCursorPosX() + leftMargin());
-  ImGui::BeginChild("sequence", ImVec2(0, 0), false, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_HorizontalScrollbar);
-  ImDrawList* draw = ImGui::GetWindowDrawList();
-  const ImVec2 origin = ImGui::GetCursorScreenPos();
-  const float scrollY = ImGui::GetScrollY();
-  const float viewHeight = ImGui::GetWindowHeight();
-
-  float totalWidth = gutter;
-  for (const Lane& lane : project.lanes) totalWidth += laneWidth(lane, scale);
-
-  if (follow && playTick >= 0) {   // keep the play row in the middle third
-    const float y = headHeight + static_cast<float>(playTick / cell) * rowHeight;
-    if (y < scrollY + headHeight || y > scrollY + viewHeight - 2 * rowHeight) ImGui::SetScrollY(std::max(0.0f, y - viewHeight * 0.4f));
+  static int lastCursor = -1;   // (the view only follows a cursor that has moved, so the mouse wheel can scroll it away)
+  if (state.cursorTick >= 0 && state.cursorTick != lastCursor) {
+    const float y = g.headHeight + static_cast<float>(state.cursorTick / g.cell) * g.rowHeight;
+    if (y < g.scrollY + g.headHeight) ImGui::SetScrollY(std::max(0.0f, y - g.headHeight));
+    else if (y + g.rowHeight > g.scrollY + g.viewHeight) ImGui::SetScrollY(y + g.rowHeight - g.viewHeight);
   }
+  lastCursor = state.cursorTick;
+}
 
-  {   // a cursor moved by the keys stays in sight
-    static int lastCursor = -1;
-    if (cursorTick >= 0 && cursorTick != lastCursor) {
-      const float y = headHeight + static_cast<float>(cursorTick / cell) * rowHeight;
-      if (y < scrollY + headHeight) ImGui::SetScrollY(std::max(0.0f, y - headHeight));
-      else if (y + rowHeight > scrollY + viewHeight) ImGui::SetScrollY(y + rowHeight - viewHeight);
-    }
-    lastCursor = cursorTick;
-  }
-
-  // the overview strip at the right edge (when the whole song is not on show already): its place, so clicks there do not reach the sheet
-  const float stripPad = 4 * scale;
+Strip placeStrip(const Geometry& g, const Project& project) {
+  Strip strip;
+  const float pad = 4 * g.scale;
   const int lanesShown = static_cast<int>(std::count_if(project.lanes.begin(), project.lanes.end(), [](const Lane& l) { return !l.placements.empty(); }));
-  const float stripW = static_cast<float>(lanesShown) * 8 * scale + 8 * scale;
-  const float bodyHeight = viewHeight - headHeight;
-  const bool fitsOnScreen = bodyHeight >= rowHeight * static_cast<float>(rows);
-  const bool hasStrip = settings().seqOverview && !fitsOnScreen && lanesShown > 0 && bodyHeight > 40 * scale;
+  const float width = static_cast<float>(lanesShown) * 8 * g.scale + 8 * g.scale;
+  strip.bodyHeight = g.viewHeight - g.headHeight;
+  const bool fitsOnScreen = strip.bodyHeight >= g.rowHeight * static_cast<float>(g.rows);
+  strip.shown = settings().seqOverview && !fitsOnScreen && lanesShown > 0 && strip.bodyHeight > 40 * g.scale;
   const float scrollbarW = ImGui::GetScrollMaxY() > 0 ? ImGui::GetStyle().ScrollbarSize : 0;
   const ImVec2 windowPos = ImGui::GetWindowPos();
-  const ImVec2 stripMin(windowPos.x + ImGui::GetWindowWidth() - scrollbarW - stripW - stripPad, windowPos.y + headHeight);
-  const ImVec2 stripMax(stripMin.x + stripW, stripMin.y + std::max(0.0f, bodyHeight - stripPad));
-  const ImVec2 mousePos = ImGui::GetIO().MousePos;
-  const bool overStrip = hasStrip && mousePos.x >= stripMin.x && mousePos.x < stripMax.x && mousePos.y >= stripMin.y && mousePos.y < stripMax.y;
+  strip.min = ImVec2(windowPos.x + ImGui::GetWindowWidth() - scrollbarW - width - pad, windowPos.y + g.headHeight);
+  strip.max = ImVec2(strip.min.x + width, strip.min.y + std::max(0.0f, strip.bodyHeight - pad));
+  const ImVec2 mouse = ImGui::GetIO().MousePos;
+  strip.over = strip.shown && mouse.x >= strip.min.x && mouse.x < strip.max.x && mouse.y >= strip.min.y && mouse.y < strip.max.y;
+  return strip;
+}
 
-  {   // the curves' view: where each lane's column is, and what the pointer is over
-    std::vector<CurveView::LaneBox> boxes;
-    float x = origin.x + gutter;
-    for (const Lane& lane : project.lanes) {
-      boxes.push_back({&lane, x, laneWidth(lane, scale), lane.id == selectedLane});
-      x += laneWidth(lane, scale);
-    }
-    const int firstShown = std::max(0, static_cast<int>((scrollY - headHeight) / rowHeight));
-    const int lastShown = std::min(rows - 1, static_cast<int>((scrollY + viewHeight) / rowHeight));
-    curves.frame(project, std::move(boxes), origin.y + headHeight, rowHeight, cell, firstShown * cell, (lastShown + 1) * cell, scale);
+// Tells the curves' view where each lane's column is, and what the pointer is over.
+void frameCurves(CurveView& curves, const Project& project, const Geometry& g, const std::string& selectedLane) {
+  std::vector<CurveView::LaneBox> boxes;
+  float x = g.origin.x + g.gutter;
+  for (const Lane& lane : project.lanes) {
+    boxes.push_back({&lane, x, laneWidth(lane, g.scale), lane.id == selectedLane});
+    x += laneWidth(lane, g.scale);
   }
+  curves.frame(project, std::move(boxes), g.rowTop(0), g.rowHeight, g.cell, g.first * g.cell, (g.last + 1) * g.cell, g.scale);
+}
 
-  // the click target covers the whole sheet
-  ImGui::SetCursorScreenPos(origin);
-  ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
-  ImGui::InvisibleButton("##sheet", ImVec2(totalWidth, headHeight + rowHeight * static_cast<float>(rows)));
-  ImGui::PopItemFlag();
-  // The lane and row under the mouse (false over the tick column, the gutter or past the last lane).
-  const auto laneRowAt = [&](const ImVec2& mouse, std::string& laneId, int& rowTick) {
-    const float y = mouse.y - origin.y - headHeight;
-    float x = mouse.x - origin.x - gutter;
-    if (y < 0) return false;
-    for (const Lane& lane : project.lanes) {
-      const float w = laneWidth(lane, scale);
-      if (x >= 0 && x < w) { laneId = lane.id; rowTick = std::clamp(static_cast<int>(y / rowHeight), 0, rows - 1) * cell; return true; }
-      x -= w;
-    }
-    return false;
-  };
-  if (ImGui::IsItemClicked() && !overStrip && !curves.claimsPointer()) {
+// The lane and row under the mouse (false over the tick column, the gutter or past the last lane).
+bool laneRowAt(const Project& project, const Geometry& g, const ImVec2& mouse, std::string& laneId, int& rowTick) {
+  const float y = mouse.y - g.origin.y - g.headHeight;
+  float x = mouse.x - g.origin.x - g.gutter;
+  if (y < 0) return false;
+  for (const Lane& lane : project.lanes) {
+    const float w = laneWidth(lane, g.scale);
+    if (x >= 0 && x < w) { laneId = lane.id; rowTick = std::clamp(static_cast<int>(y / g.rowHeight), 0, g.rows - 1) * g.cell; return true; }
+    x -= w;
+  }
+  return false;
+}
+
+// What the click target (the whole sheet) was given this frame: a click, or a drag that grows a block.
+void readMouse(const Project& project, const Geometry& g, const Strip& strip, const CurveView& curves, SequenceClick& result) {
+  if (ImGui::IsItemClicked() && !strip.over && !curves.claimsPointer()) {
     const ImVec2 mouse = ImGui::GetIO().MousePos;
-    const float y = mouse.y - origin.y - headHeight;
-    if (y >= 0 && mouse.x - origin.x - gutter < 0) result.playFrom = std::clamp(static_cast<int>(y / rowHeight), 0, rows - 1) * cell;   // the tick column: play from there
-    else if (laneRowAt(mouse, result.lane, result.tick)) result.doubleClicked = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
-  } else if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left) && !overStrip && !curves.claimsPointer()) {   // dragging from a click: the block grows to the pointer
-    laneRowAt(ImGui::GetIO().MousePos, result.dragLane, result.dragTick);
+    const float y = mouse.y - g.origin.y - g.headHeight;
+    if (y >= 0 && mouse.x - g.origin.x - g.gutter < 0) result.playFrom = std::clamp(static_cast<int>(y / g.rowHeight), 0, g.rows - 1) * g.cell;   // the tick column: play from there
+    else if (laneRowAt(project, g, mouse, result.lane, result.tick)) result.doubleClicked = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
+  } else if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left) && !strip.over && !curves.claimsPointer()) {   // dragging from a click: the block grows to the pointer
+    laneRowAt(project, g, ImGui::GetIO().MousePos, result.dragLane, result.dragTick);
   }
+}
 
-  const int first = std::max(0, static_cast<int>((scrollY - headHeight) / rowHeight));
-  const int last = std::min(rows - 1, static_cast<int>((scrollY + viewHeight) / rowHeight));
-  const int bar16 = cell * 4;   // a brighter number every four bars
+// The loop: a thin bar in the lane left of the tick numbers over its rows, and a line across the sheet at each end.
+void drawLoop(ImDrawList* draw, const Geometry& g, const Song& song) {
+  const LoopRange loop = loopOf(song);
+  if (!loop.on) return;
+  const float top = g.rowTop(loop.start / g.cell), bottom = g.rowTop((loop.end + g.cell - 1) / g.cell);
+  draw->AddRectFilled(ImVec2(g.origin.x + g.scale, top), ImVec2(g.origin.x + 4 * g.scale, bottom), kWarm);   // (its own narrow lane, left of the tick numbers)
+  draw->AddLine(ImVec2(g.origin.x, top), ImVec2(g.origin.x + g.totalWidth, top), withAlpha(kWarm, 110));
+  draw->AddLine(ImVec2(g.origin.x, bottom), ImVec2(g.origin.x + g.totalWidth, bottom), withAlpha(kWarm, 110));
+}
 
-  // the loop: a thin bar in the lane left of the tick numbers over its rows, and a line across the sheet at each end
-  const LoopRange loop = loopOf(project.song);
-  if (loop.on) {
-    const float top = origin.y + headHeight + static_cast<float>(loop.start / cell) * rowHeight;
-    const float bottom = origin.y + headHeight + static_cast<float>((loop.end + cell - 1) / cell) * rowHeight;
-    draw->AddRectFilled(ImVec2(origin.x + scale, top), ImVec2(origin.x + 4 * scale, bottom), kWarm);   // (its own narrow lane, left of the tick numbers)
-    draw->AddLine(ImVec2(origin.x, top), ImVec2(origin.x + totalWidth, top), withAlpha(kWarm, 110));
-    draw->AddLine(ImVec2(origin.x, bottom), ImVec2(origin.x + totalWidth, bottom), withAlpha(kWarm, 110));
-  }
-
-  // the gutter: tick numbers, the bright ones every four bars
-  for (int r = first; r <= last; ++r) {
-    const float y = origin.y + headHeight + static_cast<float>(r) * rowHeight;
-    const int t = r * cell;
+// The gutter: tick numbers, the bright ones every four bars.
+void drawTickNumbers(ImDrawList* draw, const Geometry& g) {
+  const int bar16 = g.cell * 4;
+  for (int r = g.first; r <= g.last; ++r) {
     char number[16];
-    std::snprintf(number, sizeof number, "%04d", t);
-    draw->AddText(ImVec2(origin.x + (kLoopLane + 2) * scale, y + scale), t % bar16 == 0 ? kText : kDimText, number);
+    std::snprintf(number, sizeof number, "%04d", r * g.cell);
+    draw->AddText(ImVec2(g.origin.x + (kLoopLane + 2) * g.scale, g.rowTop(r) + g.scale), r * g.cell % bar16 == 0 ? kText : kDimText, number);
   }
+}
 
-  // the pictures of the patterns, when they are switched on (the lanes' rows and columns come from the caller)
-  MinimapOptions minimapOptions;
-  minimapOptions.lengths = settings().minimapLengths; minimapOptions.caps = settings().minimapCaps; minimapOptions.params = settings().minimapParams;
-  const bool pictures = minimap && minimapCache && settings().minimapOn;
+// The pictures of the patterns go in their own layer, so they cost a few draw commands and not one between every cell's fill and label.
+enum Layer { kFills = 0, kPictures = 1, kTop = 2 };
 
-  // the lanes
-  // Three layers when pictures are on: fills, the pictures, the rest. A layer is submitted as one run, so the pictures (a texture of their own) cost a few draw
-  // commands instead of one between every cell's fill and label.
-  enum Layer { kFills = 0, kPictures = 1, kTop = 2 };
-  if (pictures) draw->ChannelsSplit(3);
-  const auto layer = [&](Layer l) { if (pictures) draw->ChannelsSetCurrent(l); };
-  float left = origin.x + gutter;
+// One row of one lane: the pattern's block (fill, edge, picture, and its index and name where it starts).
+void drawCell(ImDrawList* draw, const Geometry& g, const Lane& lane, int row, float left, float width, ImU32 blockFill, ImU32 blockEdge, const SequencePictures& pictures, const MinimapOptions& pictureOptions) {
+  const float y = g.rowTop(row);
+  const int t0 = row * g.cell;
+  // what the row shows: the pattern that starts inside it, else the one covering its start
+  const Placement* shown = nullptr;
+  for (const Placement& p : lane.placements) if (p.start >= t0 && p.start < t0 + g.cell && (!shown || p.start < shown->start)) shown = &p;
+  const bool starts = shown != nullptr;
+  if (!shown) shown = placementAt(lane, t0);
+  if (!shown) return;
+  const bool withPictures = pictures.lanes && pictures.cache && settings().minimapOn;
+  const auto layer = [&](Layer l) { if (withPictures) draw->ChannelsSetCurrent(l); };
+  const Pattern* shownPattern = patternOf(lane, shown->pattern);
+  const ImU32 fill = shownPattern ? patternColour(*shownPattern, 50) : blockFill;   // the pattern's own colour
+  const ImVec2 inner = ImVec2(left + 2 * g.scale, y);
+  layer(kFills);
+  draw->AddRectFilled(inner, ImVec2(left + width - 2 * g.scale, y + g.rowHeight), fill);
+  draw->AddLine(inner, ImVec2(inner.x, y + g.rowHeight), blockEdge);
+  layer(kTop);
+  if (withPictures) {
+    const auto source = pictures.lanes->find(lane.id);
+    if (source != pictures.lanes->end()) {
+      layer(kPictures);
+      drawMinimap(draw, lane.id, source->second, *pictures.cache, t0, g.cell, inner, width - 4 * g.scale, g.rowHeight, pictureOptions);
+      layer(kTop);
+    }
+  }
+  if (!starts) return;
+  draw->AddLine(inner, ImVec2(left + width - 2 * g.scale, y), blockEdge);
+  const Pattern* pattern = patternOf(lane, shown->pattern);
+  if (!pattern) return;
+  char label[48];
+  if (settings().seqNames) std::snprintf(label, sizeof label, "%02X %s", pattern->index, pattern->name.c_str());
+  else std::snprintf(label, sizeof label, "%02X", pattern->index);   // (the hex number alone; the status bar still has the name)
+  draw->PushClipRect(ImVec2(left, y), ImVec2(left + width - 2 * g.scale, y + g.rowHeight), true);
+  draw->AddText(ImVec2(left + 5 * g.scale, y + g.scale), kText, label);
+  draw->PopClipRect();
+}
+
+// The lane's marks over its cells: the selected block's tint, the clicked pattern's rectangle, the cursor cell.
+void drawLaneMarks(ImDrawList* draw, const Geometry& g, const Lane& lane, int laneIndex, float left, float width, bool selected, const SequenceState& state) {
+  const SequenceBlock& block = state.block;
+  if (block.first >= 0 && laneIndex >= block.first && laneIndex <= block.last) {   // the selected block, tinted
+    draw->AddRectFilled(ImVec2(left, g.rowTop(block.from / g.cell)), ImVec2(left + width, g.rowTop((block.to + g.cell - 1) / g.cell)), accentAlpha(55));
+  }
+  if (selected && state.pickedTick >= 0) {   // the pattern that was clicked: a rectangle round it
+    if (const Placement* picked = placementAt(lane, state.pickedTick)) {
+      const float top = g.rowTop(picked->start / g.cell), bottom = g.rowTop((picked->start + picked->length + g.cell - 1) / g.cell);
+      draw->AddRect(ImVec2(left + 2 * g.scale, top + 1), ImVec2(left + width - 2 * g.scale, bottom - 1), kAccent, 0, 0, 1.5f * g.scale);
+    }
+  }
+  if (state.cursorTick >= 0 && selected) {
+    const float y = g.rowTop(state.cursorTick / g.cell);
+    draw->AddRectFilled(ImVec2(left, y), ImVec2(left + width, y + g.rowHeight), kCursorCell);
+  }
+}
+
+// The lanes, column by column.
+void drawLanes(ImDrawList* draw, const Geometry& g, const Project& project, CurveView& curves, const SequenceState& state, const SequencePictures& pictures) {
+  MinimapOptions pictureOptions;
+  pictureOptions.lengths = settings().minimapLengths; pictureOptions.caps = settings().minimapCaps; pictureOptions.params = settings().minimapParams;
+  const bool withPictures = pictures.lanes && pictures.cache && settings().minimapOn;
+  if (withPictures) draw->ChannelsSplit(3);
+  float left = g.origin.x + g.gutter;
   int laneIndex = -1;
   for (const Lane& lane : project.lanes) {
     laneIndex++;
-    layer(kTop);
-    const float w = laneWidth(lane, scale);
-    const bool selected = lane.id == selectedLane;
-    const ImU32 blockFill = dimAlpha(50);   // (every lane alike: the picked lane is shown by its head, the picked pattern by its rectangle)
-    const ImU32 blockEdge = dimAlpha(140);
-    draw->AddLine(ImVec2(left, origin.y + headHeight), ImVec2(left, origin.y + headHeight + rowHeight * static_cast<float>(rows)), lineAlpha(160));
-    for (int r = first; r <= last; ++r) {
-      const float y = origin.y + headHeight + static_cast<float>(r) * rowHeight;
-      const int t0 = r * cell;
-      // what the row shows: the pattern that starts inside it, else the one covering its start
-      const Placement* shown = nullptr;
-      for (const Placement& p : lane.placements) if (p.start >= t0 && p.start < t0 + cell && (!shown || p.start < shown->start)) shown = &p;
-      const bool starts = shown != nullptr;
-      if (!shown) shown = placementAt(lane, t0);
-      if (!shown) continue;
-      const Pattern* shownPattern = patternOf(lane, shown->pattern);
-      const ImU32 fill = shownPattern ? patternColour(*shownPattern, 50) : blockFill;   // the pattern's own colour
-      layer(kFills);
-      draw->AddRectFilled(ImVec2(left + 2 * scale, y), ImVec2(left + w - 2 * scale, y + rowHeight), fill);
-      draw->AddLine(ImVec2(left + 2 * scale, y), ImVec2(left + 2 * scale, y + rowHeight), blockEdge);
-      layer(kTop);
-      if (pictures) {
-        const auto source = minimap->find(lane.id);
-        if (source != minimap->end()) {
-          layer(kPictures);
-          drawMinimap(draw, lane.id, source->second, *minimapCache, t0, cell, ImVec2(left + 2 * scale, y), w - 4 * scale, rowHeight, minimapOptions);
-          layer(kTop);
-        }
-      }
-      if (starts) {
-        draw->AddLine(ImVec2(left + 2 * scale, y), ImVec2(left + w - 2 * scale, y), blockEdge);
-        if (const Pattern* pattern = patternOf(lane, shown->pattern)) {
-          char label[48];
-          if (settings().seqNames) std::snprintf(label, sizeof label, "%02X %s", pattern->index, pattern->name.c_str());
-          else std::snprintf(label, sizeof label, "%02X", pattern->index);   // (the hex number alone; the status bar still has the name)
-          draw->PushClipRect(ImVec2(left, y), ImVec2(left + w - 2 * scale, y + rowHeight), true);
-          draw->AddText(ImVec2(left + 5 * scale, y + scale), kText, label);
-          draw->PopClipRect();
-        }
-      }
-    }
+    const float width = laneWidth(lane, g.scale);
+    const bool selected = lane.id == state.selectedLane;
+    if (withPictures) draw->ChannelsSetCurrent(kTop);
+    draw->AddLine(ImVec2(left, g.rowTop(0)), ImVec2(left, g.bottom()), lineAlpha(160));
+    for (int r = g.first; r <= g.last; ++r) drawCell(draw, g, lane, r, left, width, dimAlpha(50), dimAlpha(140), pictures, pictureOptions);   // (every lane alike: the picked lane is shown by its head, the picked pattern by its rectangle)
+    if (withPictures) draw->ChannelsSetCurrent(kTop);
     curves.draw(draw, lane, selected);
-    if (block.first >= 0 && laneIndex >= block.first && laneIndex <= block.last) {   // the selected block, tinted
-      const float top = origin.y + headHeight + static_cast<float>(block.from / cell) * rowHeight;
-      const float bottom = origin.y + headHeight + static_cast<float>((block.to + cell - 1) / cell) * rowHeight;
-      draw->AddRectFilled(ImVec2(left, top), ImVec2(left + w, bottom), accentAlpha(55));
-    }
-    if (selected && pickedTick >= 0) {   // the pattern that was clicked: a rectangle round it
-      if (const Placement* picked = placementAt(lane, pickedTick)) {
-        const float top = origin.y + headHeight + static_cast<float>(picked->start / cell) * rowHeight;
-        const float bottom = origin.y + headHeight + static_cast<float>((picked->start + picked->length + cell - 1) / cell) * rowHeight;
-        draw->AddRect(ImVec2(left + 2 * scale, top + 1), ImVec2(left + w - 2 * scale, bottom - 1), kAccent, 0, 0, 1.5f * scale);
-      }
-    }
-    if (cursorTick >= 0 && selected) {
-      const float y = origin.y + headHeight + static_cast<float>(cursorTick / cell) * rowHeight;
-      draw->AddRectFilled(ImVec2(left, y), ImVec2(left + w, y + rowHeight), kCursorCell);
-    }
-    left += w;
+    drawLaneMarks(draw, g, lane, laneIndex, left, width, selected, state);
+    left += width;
   }
-  if (pictures) draw->ChannelsMerge();
+  if (withPictures) draw->ChannelsMerge();
+}
 
-  if (!overStrip) result.curve = curves.interact(targets);
+// The playhead: a thin red line across the lanes, moving smoothly down through the rows as the song plays.
+void drawPlayhead(ImDrawList* draw, const Geometry& g, const SequenceState& state) {
+  if (state.playTick < 0) return;
+  const float y = g.origin.y + g.headHeight + (static_cast<float>(state.playTick) + std::clamp(state.playFrac, 0.0f, 1.0f)) / static_cast<float>(g.cell) * g.rowHeight;
+  draw->AddLine(ImVec2(g.origin.x, y), ImVec2(g.origin.x + g.totalWidth, y), IM_COL32(230, 60, 60, 255), 1.0f);
+}
 
-  if (playTick >= 0) {   // the playhead: a thin red line across the lanes, moving smoothly down through the rows as the song plays
-    const float y = origin.y + headHeight + (static_cast<float>(playTick) + std::clamp(playFrac, 0.0f, 1.0f)) / static_cast<float>(cell) * rowHeight;
-    draw->AddLine(ImVec2(origin.x, y), ImVec2(origin.x + totalWidth, y), IM_COL32(230, 60, 60, 255), 1.0f);
-  }
-
-  // the head, drawn last and held at the top of the view
-  const float headTop = origin.y + scrollY;
-  draw->AddRectFilled(ImVec2(origin.x, headTop), ImVec2(origin.x + totalWidth, headTop + headHeight), ImGui::GetColorU32(ImGuiCol_ChildBg) | 0xFF000000);
-  left = origin.x + gutter;
+// The head, drawn last and held at the top of the view.
+void drawHead(ImDrawList* draw, const Geometry& g, const Project& project, const std::string& selectedLane) {
+  const float headTop = g.origin.y + g.scrollY;
+  draw->AddRectFilled(ImVec2(g.origin.x, headTop), ImVec2(g.origin.x + g.totalWidth, headTop + g.headHeight), ImGui::GetColorU32(ImGuiCol_ChildBg) | 0xFF000000);
+  float left = g.origin.x + g.gutter;
   for (const Lane& lane : project.lanes) {
-    const float w = laneWidth(lane, scale);
-    draw->PushClipRect(ImVec2(left, headTop), ImVec2(left + w, headTop + headHeight), true);
+    const float w = laneWidth(lane, g.scale);
+    draw->PushClipRect(ImVec2(left, headTop), ImVec2(left + w, headTop + g.headHeight), true);
     if (lane.id == selectedLane) {   // the picked lane: its head is tinted and underlined
-      draw->AddRectFilled(ImVec2(left, headTop), ImVec2(left + w, headTop + headHeight), accentAlpha(40));
-      draw->AddRectFilled(ImVec2(left, headTop + headHeight - 2 * scale), ImVec2(left + w, headTop + headHeight), kAccent);
+      draw->AddRectFilled(ImVec2(left, headTop), ImVec2(left + w, headTop + g.headHeight), accentAlpha(40));
+      draw->AddRectFilled(ImVec2(left, headTop + g.headHeight - 2 * g.scale), ImVec2(left + w, headTop + g.headHeight), kAccent);
     }
-    draw->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.85f, ImVec2(left + 4 * scale, headTop + 3 * scale), lane.id == selectedLane ? kAccent : kDimText, lane.id.c_str());   // a small face, so names fit the lane
+    draw->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 0.85f, ImVec2(left + 4 * g.scale, headTop + 3 * g.scale), lane.id == selectedLane ? kAccent : kDimText, lane.id.c_str());   // a small face, so names fit the lane
     draw->PopClipRect();
     // a lane that does not sound steps back, whether it is muted or another lane is soloed (the same amount); the whole column, head included
     const int stepBack = lane.silenced || lane.soloMuted ? 80 : 0;
-    if (stepBack > 0) draw->AddRectFilled(ImVec2(left, headTop), ImVec2(left + w, origin.y + headHeight + rowHeight * static_cast<float>(rows)), withAlpha(ImGui::GetColorU32(ImGuiCol_ChildBg), stepBack));
+    if (stepBack > 0) draw->AddRectFilled(ImVec2(left, headTop), ImVec2(left + w, g.bottom()), withAlpha(ImGui::GetColorU32(ImGuiCol_ChildBg), stepBack));
     left += w;
   }
-  draw->AddLine(ImVec2(origin.x, headTop + headHeight - 1), ImVec2(origin.x + totalWidth, headTop + headHeight - 1), kLine);
+  draw->AddLine(ImVec2(g.origin.x, headTop + g.headHeight - 1), ImVec2(g.origin.x + g.totalWidth, headTop + g.headHeight - 1), kLine);
+}
 
-  if (hasStrip) {   // the overview: the whole song in a thin strip, patterns in their colours; click or drag to scroll there
-    const int len = std::max(1, project.song.length);
-    const float inner = 2 * scale, height = std::max(1.0f, stripMax.y - stripMin.y - 2 * inner);
-    const auto yOf = [&](int tick) { return stripMin.y + inner + static_cast<float>(std::clamp(tick, 0, len)) / static_cast<float>(len) * height; };
-    draw->PushClipRect(windowPos, ImVec2(windowPos.x + ImGui::GetWindowWidth(), windowPos.y + viewHeight), false);
-    draw->AddRectFilled(stripMin, stripMax, lineAlpha(40));
-    if (loop.start < loop.end && loop.on) {   // the loop: a solid edge down the strip and a bright line at each end (no tint over its span)
-      draw->AddRectFilled(ImVec2(stripMin.x, yOf(loop.start)), ImVec2(stripMin.x + 2 * scale, yOf(loop.end)), kWarm);
-      draw->AddRectFilled(ImVec2(stripMin.x, yOf(loop.start) - scale), ImVec2(stripMax.x, yOf(loop.start) + scale), kWarm);
-      draw->AddRectFilled(ImVec2(stripMin.x, yOf(loop.end) - scale), ImVec2(stripMax.x, yOf(loop.end) + scale), kWarm);
-    }
-    float x = stripMin.x + 4 * scale;
-    for (const Lane& lane : project.lanes) {
-      if (lane.placements.empty()) continue;
-      for (const Placement& placement : lane.placements) {
-        const Pattern* pattern = patternOf(lane, placement.pattern);
-        if (!pattern) continue;
-        const int end = placement.start + std::min(placement.length, static_cast<int>(pattern->rows.size()));
-        draw->AddRectFilled(ImVec2(x, yOf(placement.start)), ImVec2(x + 6 * scale, std::max(yOf(placement.start) + 1.5f, yOf(end) - 1)), patternColour(*pattern, lane.id == selectedLane ? 230 : 150));
-      }
-      x += 8 * scale;
-    }
-    const int firstTick = static_cast<int>(scrollY / rowHeight) * cell, lastTick = static_cast<int>((scrollY + bodyHeight) / rowHeight) * cell;
-    draw->AddRectFilled(ImVec2(stripMin.x, yOf(firstTick)), ImVec2(stripMax.x, std::max(yOf(firstTick) + 3, yOf(lastTick))), IM_COL32(255, 255, 255, 36));   // the part on show
-    if (cursorTick >= 0) draw->AddRectFilled(ImVec2(stripMin.x, yOf(cursorTick)), ImVec2(stripMax.x, yOf(cursorTick) + 2), kAccent);
-    if (playTick >= 0) draw->AddLine(ImVec2(stripMin.x, yOf(playTick)), ImVec2(stripMax.x, yOf(playTick)), kText);
-    draw->PopClipRect();
-    static bool dragging = false;
-    if (overStrip && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) dragging = true;
-    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) dragging = false;
-    if (dragging) {   // the box centres on the pointer
-      const float share = std::clamp((mousePos.y - stripMin.y - inner) / height, 0.0f, 1.0f);
-      ImGui::SetScrollY(std::max(0.0f, share * static_cast<float>(len) / static_cast<float>(cell) * rowHeight - bodyHeight / 2));
-    }
+// The overview: the whole song in a thin strip, patterns in their colours; click or drag to scroll there.
+void drawOverview(ImDrawList* draw, const Geometry& g, const Strip& strip, const Project& project, const SequenceState& state) {
+  const LoopRange loop = loopOf(project.song);
+  const int len = std::max(1, project.song.length);
+  const float inner = 2 * g.scale, height = std::max(1.0f, strip.max.y - strip.min.y - 2 * inner);
+  const auto yOf = [&](int tick) { return strip.min.y + inner + static_cast<float>(std::clamp(tick, 0, len)) / static_cast<float>(len) * height; };
+  const ImVec2 windowPos = ImGui::GetWindowPos();
+  draw->PushClipRect(windowPos, ImVec2(windowPos.x + ImGui::GetWindowWidth(), windowPos.y + g.viewHeight), false);
+  draw->AddRectFilled(strip.min, strip.max, lineAlpha(40));
+  if (loop.start < loop.end && loop.on) {   // the loop: a solid edge down the strip and a bright line at each end (no tint over its span)
+    draw->AddRectFilled(ImVec2(strip.min.x, yOf(loop.start)), ImVec2(strip.min.x + 2 * g.scale, yOf(loop.end)), kWarm);
+    draw->AddRectFilled(ImVec2(strip.min.x, yOf(loop.start) - g.scale), ImVec2(strip.max.x, yOf(loop.start) + g.scale), kWarm);
+    draw->AddRectFilled(ImVec2(strip.min.x, yOf(loop.end) - g.scale), ImVec2(strip.max.x, yOf(loop.end) + g.scale), kWarm);
   }
+  float x = strip.min.x + 4 * g.scale;
+  for (const Lane& lane : project.lanes) {
+    if (lane.placements.empty()) continue;
+    for (const Placement& placement : lane.placements) {
+      const Pattern* pattern = patternOf(lane, placement.pattern);
+      if (!pattern) continue;
+      const int end = placement.start + std::min(placement.length, static_cast<int>(pattern->rows.size()));
+      draw->AddRectFilled(ImVec2(x, yOf(placement.start)), ImVec2(x + 6 * g.scale, std::max(yOf(placement.start) + 1.5f, yOf(end) - 1)), patternColour(*pattern, lane.id == state.selectedLane ? 230 : 150));
+    }
+    x += 8 * g.scale;
+  }
+  const int firstTick = static_cast<int>(g.scrollY / g.rowHeight) * g.cell, lastTick = static_cast<int>((g.scrollY + strip.bodyHeight) / g.rowHeight) * g.cell;
+  draw->AddRectFilled(ImVec2(strip.min.x, yOf(firstTick)), ImVec2(strip.max.x, std::max(yOf(firstTick) + 3, yOf(lastTick))), IM_COL32(255, 255, 255, 36));   // the part on show
+  if (state.cursorTick >= 0) draw->AddRectFilled(ImVec2(strip.min.x, yOf(state.cursorTick)), ImVec2(strip.max.x, yOf(state.cursorTick) + 2), kAccent);
+  if (state.playTick >= 0) draw->AddLine(ImVec2(strip.min.x, yOf(state.playTick)), ImVec2(strip.max.x, yOf(state.playTick)), kText);
+  draw->PopClipRect();
+  static bool dragging = false;
+  if (strip.over && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) dragging = true;
+  if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) dragging = false;
+  if (dragging) {   // the box centres on the pointer
+    const float share = std::clamp((ImGui::GetIO().MousePos.y - strip.min.y - inner) / height, 0.0f, 1.0f);
+    ImGui::SetScrollY(std::max(0.0f, share * static_cast<float>(len) / static_cast<float>(g.cell) * g.rowHeight - strip.bodyHeight / 2));
+  }
+}
 
+}  // namespace
+
+SequenceClick drawSequenceView(const Project& project, const SequenceState& state, CurveView& curves, const CurveView::Targets& targets, const SequencePictures& pictures) {
+  SequenceClick result;
+  zoomRows(project);
+  ImGui::SetCursorPosX(ImGui::GetCursorPosX() + leftMargin());
+  ImGui::BeginChild("sequence", ImVec2(0, 0), false, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_HorizontalScrollbar);
+  ImDrawList* draw = ImGui::GetWindowDrawList();
+  const Geometry g = measure(project, ImGui::GetCursorScreenPos());
+  keepInSight(g, state);
+  const Strip strip = placeStrip(g, project);
+  frameCurves(curves, project, g, state.selectedLane);
+
+  // the click target covers the whole sheet
+  ImGui::SetCursorScreenPos(g.origin);
+  ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
+  ImGui::InvisibleButton("##sheet", ImVec2(g.totalWidth, g.headHeight + g.rowHeight * static_cast<float>(g.rows)));
+  ImGui::PopItemFlag();
+  readMouse(project, g, strip, curves, result);
+
+  drawLoop(draw, g, project.song);
+  drawTickNumbers(draw, g);
+  drawLanes(draw, g, project, curves, state, pictures);
+  if (!strip.over) result.curve = curves.interact(targets);
+  drawPlayhead(draw, g, state);
+  drawHead(draw, g, project, state.selectedLane);
+  if (strip.shown) drawOverview(draw, g, strip, project, state);
   ImGui::EndChild();
   return result;
 }
