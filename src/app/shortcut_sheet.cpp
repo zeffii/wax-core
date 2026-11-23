@@ -40,6 +40,7 @@ const std::vector<Shortcut>& patternShortcuts() {
       {"Ctrl+Up, Ctrl+Down", "transpose the notes under the cursor or in the selection by one (Shift: an octave)"},
       {"Alt+Up, Alt+Down", "the tempo a bpm up or down (Shift: ten), on every screen"},
       {"Ctrl+Comma, Ctrl+Period", "move the hex values under the cursor or in the selection by one (Shift: a digit)"},
+      {"Alt+Enter", "solo-edit the pattern under the cursor (it alone can be changed); again leaves it"},
       {"Esc", "drops the selection; with none, leaves solo-edit if on; then back to the sequence (Song screen)"},
       {"Tab / Esc", "in solo-edit: Tab switches between the pattern alone and the whole song with the rest locked; Esc (with no selection) leaves it"},
       {"Ctrl+G", "this placement gets its own copy of the pattern under the cursor: edit it without changing the other places it is used"},

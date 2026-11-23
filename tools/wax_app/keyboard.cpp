@@ -34,6 +34,20 @@ bool enterPatternUnderCaret(Session* session, std::string& selectedLane) {
   return edited;
 }
 
+// Starts solo-edit on the pattern under the caret (its rows alone can be changed). False where no pattern plays at the caret.
+static bool beginSoloUnderCaret(Session* session, int songLength) {
+  const Project& project = session->doc->project();
+  CellEditor& editor = *session->editor;
+  const Lane* lane = nullptr;
+  for (const Lane& l : project.lanes) if (l.id == editor.lane()) lane = &l;
+  const Placement* at = lane ? seq::placementAt(*lane, editor.tick()) : nullptr;
+  const Pattern* pattern = at ? seq::patternOf(*lane, at->pattern) : nullptr;
+  if (!at || !pattern) return false;
+  const int lo = at->start, hi = std::min(songLength, at->start + std::min(at->length, static_cast<int>(pattern->rows.size())));
+  session->solo.begin(editor, lane->id, lo, hi);
+  return true;
+}
+
 // The least time a note played from the keys sounds on the machine they play (Instrument::previewMs; 0: it stops with the key).
 static int previewMsOf(const Session& session) {
   std::string machine = session.screen == Screen::Instrument ? session.instrument : std::string();
@@ -83,20 +97,18 @@ bool handleKeyboard(Session* session, KeyboardEnv& env) {
     if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) {
       if (ctrl && !io.KeyShift && !io.KeyAlt) {   // Ctrl+Enter in the sequence: the pattern under the cursor on its own (solo-edit); where none is: "No pattern here."
         if (session->screen == Screen::Song) {
-          const Lane* soloLane = nullptr;
-          for (const Lane& l : doc.project().lanes) if (l.id == editor.lane()) soloLane = &l;
-          const Placement* at = soloLane ? seq::placementAt(*soloLane, editor.tick()) : nullptr;
-          const Pattern* pattern = at ? seq::patternOf(*soloLane, at->pattern) : nullptr;
-          if (!at || !pattern) session->editStatus = "No pattern here.";
+          if (!beginSoloUnderCaret(session, song.length)) session->editStatus = "No pattern here.";
           else {
-            const int lo = at->start, hi = std::min(song.length, at->start + std::min(at->length, static_cast<int>(pattern->rows.size())));
-            session->solo.begin(editor, soloLane->id, lo, hi);
-            selectedLane = soloLane->id; session->handoff.openLane(selectedLane, std::clamp(editor.tick(), lo, hi - 1));
+            selectedLane = editor.lane(); session->handoff.openLane(selectedLane, std::clamp(editor.tick(), session->solo.lo, session->solo.hi - 1));
             session->screen = Screen::Pattern;
             session->edit = true;
             session->editStatus = "Solo-edit: only this pattern can be changed. Tab: whole song or just the pattern. Esc leaves.";
           }
         }
+      } else if (io.KeyAlt && !ctrl && !io.KeyShift && session->screen == Screen::Pattern) {   // Alt+Enter on the Pattern screen: solo-edit the pattern under the caret, or leave it (as the web)
+        if (session->solo.on) { session->solo.end(editor); session->editStatus = "Solo-edit ended."; }
+        else if (beginSoloUnderCaret(session, song.length)) session->editStatus = "Solo-edit: only this pattern can be changed. Tab: whole song or just the pattern. Esc leaves.";
+        else session->editStatus = "No pattern here to solo-edit.";
       } else if (focusNow().sequenceCaret) {   // in the sequence, Enter goes into the pattern under the cursor (a new one where none is)
         edited |= enterPatternUnderCaret(session, selectedLane);
       } else if (session->screen == Screen::Pattern && !session->solo.on && !editor.patternHere()) {   // Enter on the Pattern screen where no pattern plays: a new one (as the web), at the caret's block of 16 rows or the nearest free one
