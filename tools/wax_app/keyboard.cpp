@@ -241,7 +241,9 @@ bool handleKeyboard(Session* session, KeyboardEnv& env) {
         if (ImGui::IsKeyPressed(ImGuiKey_Delete)) edited |= editor.shiftSelection(CellEditor::Shift::PullUp);   // the selection goes, the rows below move up
         if (ImGui::IsKeyPressed(ImGuiKey_Insert)) edited |= editor.shiftSelection(CellEditor::Shift::PushDown);   // the rows from the selection down move down
       }
-      if (!io.KeyAlt) {   // (Shift: a digit for values; Ctrl+Up/Down is not here: it steps through the pattern list, and Alt+Up/Down transposes notes)
+      if (!io.KeyAlt) {   // (Shift: an octave for notes, a digit for values)
+        if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) edited |= editor.transpose(true, 1, io.KeyShift);       // Ctrl+Up/Down: the notes under the cursor or in the selection by one
+        if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) edited |= editor.transpose(true, -1, io.KeyShift);
         if (ImGui::IsKeyPressed(ImGuiKey_Period)) edited |= editor.transpose(false, 1, io.KeyShift);
         if (ImGui::IsKeyPressed(ImGuiKey_Comma)) edited |= editor.transpose(false, -1, io.KeyShift);
       } else if (editor.selection().active) {   // Ctrl+Alt+Up/Down: the selected rows rotate
@@ -252,10 +254,6 @@ bool handleKeyboard(Session* session, KeyboardEnv& env) {
         if (direction != 0) session->editStatus = changeNoteColumns(session, doc, player, laneMachine(doc, editor.lane()), direction);
       }
       if (before != editor.tick() * 4096 + editor.cell() || edited) session->handoff.scrollToCursor();
-    }
-    if (editing && io.KeyAlt && !ctrl && !io.WantTextInput) {   // Alt+Up/Down: transpose the notes under the cursor or in the selection by one (Alt+Shift: an octave)
-      if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) edited |= editor.transpose(true, 1, io.KeyShift);
-      if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) edited |= editor.transpose(true, -1, io.KeyShift);
     }
     if (typing) {
       const int before = editor.tick() * 4096 + editor.cell();

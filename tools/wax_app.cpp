@@ -129,7 +129,7 @@ void drawPatternMenu(Session* session, Document& doc, Player& player) {
   for (int c = from; c <= to && c < static_cast<int>(columns.size()); c++) hasNotes |= columns[static_cast<std::size_t>(c)].kind == ColumnKind::Note;
   const char* up = hasNotes ? "Transpose up" : "Values up";
   const char* down = hasNotes ? "Transpose down" : "Values down";
-  const float width = app::menuWidth({{"Cut", "Ctrl+X"}, {"Paste", "Ctrl+V"}, {"Transpose down", "Alt+Up"}, {"Values down", "Ctrl+,"}, {"Down an octave", "Alt+Shift+Down"}, {"Interpolate...", "Ctrl+I"}, {"Chord palette...", "Alt+C"}, {"Machine help", "Ctrl+Alt+H"}});
+  const float width = app::menuWidth({{"Cut", "Ctrl+X"}, {"Paste", "Ctrl+V"}, {"Transpose down", "Ctrl+Up"}, {"Values down", "Ctrl+,"}, {"Down an octave", "Ctrl+Shift+Down"}, {"Interpolate...", "Ctrl+I"}, {"Chord palette...", "Alt+C"}, {"Machine help", "Ctrl+Alt+H"}});
   bool changed = false;
   const auto stub = [&](const char* what) { session->editStatus = std::string(what) + " is not in this app yet."; ImGui::CloseCurrentPopup(); };
   if (app::menuRow("Cut", "Ctrl+X", width)) { ImGui::SetClipboardText(editor.copy().c_str()); changed |= editor.cut(); ImGui::CloseCurrentPopup(); }
@@ -141,11 +141,11 @@ void drawPatternMenu(Session* session, Document& doc, Player& player) {
   }
   if (app::menuRow("Clear", "Delete", width)) { changed |= editor.clearCell(false); ImGui::CloseCurrentPopup(); }
   ImGui::Separator();
-  if (app::menuRow(up, hasNotes ? "Alt+Up" : "Ctrl+.", width)) { changed |= editor.transpose(hasNotes, 1, false); ImGui::CloseCurrentPopup(); }
-  if (app::menuRow(down, hasNotes ? "Alt+Down" : "Ctrl+,", width)) { changed |= editor.transpose(hasNotes, -1, false); ImGui::CloseCurrentPopup(); }
+  if (app::menuRow(up, hasNotes ? "Ctrl+Up" : "Ctrl+.", width)) { changed |= editor.transpose(hasNotes, 1, false); ImGui::CloseCurrentPopup(); }
+  if (app::menuRow(down, hasNotes ? "Ctrl+Down" : "Ctrl+,", width)) { changed |= editor.transpose(hasNotes, -1, false); ImGui::CloseCurrentPopup(); }
   if (hasNotes) {
-    if (app::menuRow("Up an octave", "Alt+Shift+Up", width)) { changed |= editor.transpose(true, 1, true); ImGui::CloseCurrentPopup(); }
-    if (app::menuRow("Down an octave", "Alt+Shift+Down", width)) { changed |= editor.transpose(true, -1, true); ImGui::CloseCurrentPopup(); }
+    if (app::menuRow("Up an octave", "Ctrl+Shift+Up", width)) { changed |= editor.transpose(true, 1, true); ImGui::CloseCurrentPopup(); }
+    if (app::menuRow("Down an octave", "Ctrl+Shift+Down", width)) { changed |= editor.transpose(true, -1, true); ImGui::CloseCurrentPopup(); }
   }
   ImGui::Separator();
   if (app::menuRow("Interpolate...", "Ctrl+I", width)) stub("Interpolate");
@@ -275,6 +275,11 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (ImGui::IsKeyPressed(ImGuiKey_F4, false)) session->screen = Screen::Sample;
     if (ImGui::IsKeyPressed(ImGuiKey_F10, false)) session->screen = Screen::Info;
     if (ImGui::IsKeyPressed(ImGuiKey_F11, false)) session->screen = Screen::Config;
+    if (io.KeyAlt && !ctrl) {   // Alt+Up / Alt+Down: the tempo a bpm up or down (Alt+Shift: ten), on every screen, as in the web
+      const double step = io.KeyShift ? 10 : 1;
+      if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) nudgeTempo(session, step);
+      if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) nudgeTempo(session, -step);
+    }
     if (ImGui::IsKeyPressed(ImGuiKey_F12, false)) app::drawStatsSet(!app::drawStatsOn());   // (a tool for me: what a frame costs to draw)
   }
   const bool mixerShown = session->showMixer && (session->screen == Screen::Song || session->screen == Screen::Pattern || session->screen == Screen::Instrument);
@@ -315,7 +320,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
         if (listed) for (const Pattern& pat : listed->patterns) if (pat.id == toPlace) editor.moveTo(std::min(before + static_cast<int>(pat.rows.size()), song.length - 1), editor.cell());   // on to where it ends
       }
     }
-    if ((session->screen == Screen::Song || session->screen == Screen::Pattern) && ImGui::GetIO().KeyCtrl && !ImGui::GetIO().KeyAlt && !ImGui::GetIO().KeyShift && !ImGui::GetIO().WantTextInput) {   // Ctrl+Up / Ctrl+Down step through the pattern list (on the Pattern screen too)
+    if (session->screen == Screen::Song && ImGui::GetIO().KeyCtrl && !ImGui::GetIO().KeyAlt && !ImGui::GetIO().KeyShift && !ImGui::GetIO().WantTextInput) {   // Ctrl+Up / Ctrl+Down step through the pattern list (on the Song screen; on the Pattern screen they transpose, as in the web)
       if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) app::stepPatternList(session->patternList, listed, -1);
       if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) app::stepPatternList(session->patternList, listed, 1);
     }

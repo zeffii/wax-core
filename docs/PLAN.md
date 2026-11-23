@@ -328,7 +328,8 @@ Gaps against the web's graph rail:
 
 ## Mouse selection (drag)
 - Pattern screen: a drag from a cell selects a rectangle within that cell's lane; Song screen: a drag from a tile selects a block (lanes x rows), as Shift+arrows do.
-- Gap: no auto-scroll while a drag is held at the edge of the view.
+- Drag at the edge of the view does not auto-scroll: the web does not either (parity, left as is).
+- Pattern screen keys follow the web: Ctrl+Up/Down transpose notes (Shift: an octave), Alt+Up/Down nudge the tempo (Shift: 10 bpm), on every screen; Ctrl+Up/Down steps the pattern list on the Song screen only.
 - Gap (parity): typing a note where no pattern plays makes a pattern here (`CellEditor::setCell`); the web says "No pattern here. Press Enter to insert one." Check which is wanted.
 - Divergence by request: a new pattern (Enter on the Pattern screen or in the sequence, G on the Pattern screen) starts on a multiple of 16, at the caret's block, or at the nearest free block when that one is taken (the web says "A pattern is already here.").
 

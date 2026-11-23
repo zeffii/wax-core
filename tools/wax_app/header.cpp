@@ -230,4 +230,18 @@ void drawRail(Session* session, float scale, float below) {
   }
 }
 
+// Alt+Up/Down: the tempo a bpm up or down (Alt+Shift: ten), kept between 20 and 400 as the web does.
+void nudgeTempo(Session* session, double by) {
+  Document& doc = *session->doc;
+  Player& player = *session->player;
+  const std::string address = "master.m.bpm";
+  if (player.engine().registry().slotOf(address) < 0) return;
+  const double bpm = std::clamp(player.engine().registry().get(address) + by, 20.0, 400.0);
+  doc.apply(std::make_unique<SetParam>("master", "m", "bpm", bpm), false);
+  syncParams(doc, player.engine());
+  char text[48];
+  std::snprintf(text, sizeof text, "Tempo %g bpm.", bpm);
+  session->editStatus = text;
+}
+
 }  // namespace wax::tool
