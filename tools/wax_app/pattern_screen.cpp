@@ -37,7 +37,7 @@ void drawPatternScreen(FrameContext& f) {
     for (const Lane* shownLane : shown) {
       app::PatternLane grid;
       grid.id = shownLane->id;
-      grid.rows = &session->rows[shownLane->id];
+      grid.rows = &session->rows.of(shownLane->id);
       grid.labels = &session->player->engine().columnLabels(shownLane->id);
       if (app::settings().tintPatterns) {   // each pattern's rows in the pattern's colour, faintly
         grid.tint.assign(static_cast<std::size_t>(song.length), 0);
@@ -80,7 +80,7 @@ void drawPatternScreen(FrameContext& f) {
     const CellEditor::Selection sel = editor.selection();
     { const LoopRange lr = loopOf(song); cursor.loop = song.raw.is_object() && song.raw.contains("loop") && song.raw["loop"].is_object(); cursor.loopOn = lr.on; cursor.loopStart = lr.start; cursor.loopEnd = lr.end; }
     cursor.playFrac = playing ? session->heard.frac : 0.0f;
-    cursor.info = app::describeColumn(doc.project(), cursorOwner, session->player->engine().laneColumns(cursorOwner.id), session->rows[cursorOwner.id], editor.tick(), editor.cell());
+    cursor.info = app::describeColumn(doc.project(), cursorOwner, session->player->engine().laneColumns(cursorOwner.id), session->rows.of(cursorOwner.id), editor.tick(), editor.cell());
     cursor.selected = sel.active; cursor.tick0 = sel.tick0; cursor.tick1 = sel.tick1; cursor.cell0 = sel.cell0; cursor.cell1 = sel.cell1;
     ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * app::settings().patternText);   // Text size
     const app::PatternViewResult result = app::drawPatternView(grids, song.ticksPerBeat, song.beatsPerBar, playing ? tick : -1, follow && playing && !session->edit, cursor);

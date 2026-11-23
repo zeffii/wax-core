@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "app/draw_stats.h"
+#include "app/lane_rows.h"
 #include "app/minimap.h"
 #include "app/pattern_toolbar.h"
 #include "app/sequence_toolbar.h"
@@ -157,7 +158,7 @@ struct Session {
   app::SampleBrowserState sampleBrowser;   // the Samples tab: the folder shown and the file picked
   app::CurveView curveView;   // the lane curves drawn over the Song screen: the one each lane shows, what is dragged
   std::vector<std::string> playable;                                       // the machines a keyboard can play
-  std::map<std::string, std::vector<std::vector<std::string>>> rows;      // lane id -> flattened rows
+  app::LaneRows rows;                      // every lane's rows as the tables show them, kept up to date with the document
   std::string audioName;
   bool pickedTab = false;   // the first lane that is not the master is shown at first
   std::unique_ptr<Document> doc;         // the song as edited: every change goes through it, so it can be undone
@@ -176,8 +177,6 @@ struct Session {
   int backupRevision = 0;                // the revision of `doc` the last snapshot (or the opening) holds
   std::time_t backupAt = 0;              // when the last snapshot was made (or the song opened)
   app::MinimapCache minimapCache;        // the Song screen's pattern pictures, kept between frames
-  std::map<std::string, int> rowsVersion;   // lane id -> counts the times its rows changed (the pattern pictures are painted again when it moves)
-  int rowsRevision = -1;                 // the revision of `doc` that `rows` shows
   app::Handoff handoff;                  // what the Song screen (and others) ask of the Pattern screen: lane tab, cursor, scroll
   std::string editStatus;
   app::ParamPanelState panel;

@@ -187,7 +187,7 @@ std::string changeNoteColumns(Session* session, Document& doc, Player& player, c
     const std::size_t last = notes.back();
     const bool hasVel = last + 1 < columns.size() && columns[last + 1].kind == ColumnKind::Vel;
     for (const std::string& laneId : laneIds) {
-      for (const std::vector<std::string>& row : session->rows[laneId]) {
+      for (const std::vector<std::string>& row : session->rows.of(laneId)) {
         for (const std::size_t c : {last, last + 1}) {
           if (c == last + 1 && !hasVel) continue;
           if (c < row.size() && row[c].find_first_not_of('.') != std::string::npos) return "The last note column has notes in it: clear them first.";
@@ -217,14 +217,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
   Document& doc = *session->doc;
   CellEditor& editor = *session->editor;
   const Song& song = doc.project().song;
-  if (session->rowsRevision != doc.revision()) {   // the table shows the song as it is edited
-    for (const Lane& lane : doc.project().lanes) {
-      std::vector<std::vector<std::string>> fresh = app::flattenLane(lane, song.length);
-      std::vector<std::vector<std::string>>& kept = session->rows[lane.id];
-      if (fresh != kept) { kept = std::move(fresh); session->rowsVersion[lane.id]++; }   // (only a lane whose rows really changed)
-    }
-    session->rowsRevision = doc.revision();
-  }
+  session->rows.update(doc);   // the table shows the song as it is edited
 
   bool requestSave = false;   // the File menu or Ctrl+S
 

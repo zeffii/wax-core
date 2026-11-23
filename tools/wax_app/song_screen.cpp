@@ -44,7 +44,7 @@ void drawSongScreen(FrameContext& f) {
   const app::CurveView::Targets curveTargetsOf = [&](const Lane& lane) { return curveTargets(player.engine().laneColumns(lane.id), lane.instrument, player.engine().registry()); };
   std::map<std::string, app::MinimapLane> minimapLanes;   // what the pictures of the patterns read (only when they are on)
   if (app::settings().minimapOn)
-    for (const Lane& lane : doc.project().lanes) minimapLanes[lane.id] = {&session->player->engine().laneColumns(lane.id), &session->rows[lane.id], session->rowsVersion[lane.id]};
+    for (const Lane& lane : doc.project().lanes) minimapLanes[lane.id] = {&session->player->engine().laneColumns(lane.id), &session->rows.of(lane.id), session->rows.version(lane.id)};
   app::SequenceState seq;
   seq.selectedLane = selectedLane;
   seq.playTick = playing ? tick : -1;

@@ -113,6 +113,7 @@ add_library(waxcore
   src/app/units.cpp
   src/app/machines.cpp
   src/app/native_additions.cpp
+  src/app/lane_rows.cpp
   src/app/module_util.cpp
   src/app/xm_import.cpp
   src/app/it_import.cpp
