@@ -120,6 +120,7 @@ void registerString(NodeRegistry& registry);   // string
 void registerWavetable(NodeRegistry& registry);   // wavetable
 void registerFmSynth(NodeRegistry& registry);   // fmsynth
 void registerPiano(NodeRegistry& registry);   // piano
+void registerPiano2(NodeRegistry& registry);   // piano2
 void registerShimmer(NodeRegistry& registry);   // shimmer
 void registerShiva(NodeRegistry& registry);   // shiva
 void registerWoodblock(NodeRegistry& registry);   // woodblock

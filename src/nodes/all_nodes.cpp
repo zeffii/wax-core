@@ -97,6 +97,7 @@ const NodeRegistry& builtinNodes() {
     registerShimmer(r);
     registerFmSynth(r);
     registerPiano(r);
+    registerPiano2(r);
     registerTape(r);
     registerCircuit(r);
     registerString(r);

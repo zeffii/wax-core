@@ -17,7 +17,7 @@ const std::set<std::string> kFree = {"lfo", "ctrl"};
 // sound only while a note does
 const std::set<std::string> kGated = {
   "env", "env2", "notetrig", "sampler", "drumsynth", "drumsynth2", "clap", "membrane", "clang", "subsynth", "pulsar", "pulsetrain",
-  "westcoast", "pluckgate", "fourpole", "oberheim", "cardinal", "piano", "fmsynth", "dvii", "wavetable", "granular", "woodblock",
+  "westcoast", "pluckgate", "fourpole", "oberheim", "cardinal", "piano", "piano2", "fmsynth", "dvii", "wavetable", "granular", "woodblock",
   "jawharp", "snarl", "string", "hat808", "hat2", "bongo", "combperc", "squelch", "duette", "compass", "waveseq", "khufu", "lone"};
 // in ms, on the effect node types that have them
 const std::set<std::string> kTimeParams = {"time", "length", "delay", "predelay", "maxdelay", "mindelay", "ringtime"};

@@ -96,6 +96,7 @@ add_library(waxcore
   src/nodes/shimmer.cpp
   src/nodes/fmsynth.cpp
   src/nodes/piano.cpp
+  src/nodes/piano2.cpp
   src/nodes/wave_table_data.cpp
   src/nodes/tape.cpp
   src/nodes/circuit.cpp
