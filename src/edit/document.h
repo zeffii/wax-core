@@ -838,6 +838,31 @@ private:
 
 // The song's length in ticks (a whole number of 16-tick rows). Shortening drops the placements that start past the end, trims one
 // that runs over it, and drops the mutes and note-offs past it; the patterns stay in the lanes. Undo brings it all back.
+// An edit that needs the song longer (a pattern put past its end, say): the song grows to `length` first, and the one undo step takes the edit and the
+// growth back together. Everything but the song's length is the inner edit's own.
+class GrowSongThen final : public Edit {
+public:
+  GrowSongThen(int length, std::unique_ptr<Edit> inner) : length_(length), inner_(std::move(inner)) {}
+  void apply(Project& project) override;
+  void revert(Project& project) override;
+  std::string label() const override { return inner_->label(); }
+  bool allLanes() const override { return true; }   // (every lane's rows are laid out for the song's length)
+  std::string otherLane() const override { return inner_->otherLane(); }
+  std::string lane() const override { return inner_->lane(); }
+  std::string paramAddress() const override { return inner_->paramAddress(); }
+  std::vector<std::string> paramAddresses() const override { return inner_->paramAddresses(); }
+  std::string graphInstrument() const override { return inner_->graphInstrument(); }
+  std::string sampleId() const override { return inner_->sampleId(); }
+  bool songLoop() const override { return inner_->songLoop(); }
+  std::string dataNode() const override { return inner_->dataNode(); }
+  std::vector<std::string> dataNodes() const override { return inner_->dataNodes(); }
+
+private:
+  int length_;
+  std::unique_ptr<Edit> inner_;
+  int oldLength_ = 0;
+};
+
 class SetSongLength final : public Edit {
 public:
   explicit SetSongLength(int ticks) : ticks_(ticks) {}

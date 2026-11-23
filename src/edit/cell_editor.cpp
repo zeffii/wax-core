@@ -65,7 +65,7 @@ int CellEditor::lastTick() const { return solo() ? std::min(soloHi_, std::max(1,
 
 void CellEditor::moveTo(int tick, int cell) {
   selecting_ = false;
-  tick_ = std::clamp(tick, firstTick(), std::max(firstTick(), lastTick()));
+  tick_ = std::clamp(tick, firstTick(), pastEnd_ && !solo() ? kMaxSongTicks - 1 : std::max(firstTick(), lastTick()));
   const int before = cell_;
   cell_ = std::clamp(cell, 0, std::max(0, static_cast<int>(columns_.size()) - 1));
   if (cell_ != before) char_ = 0;   // another column: its first character
@@ -148,14 +148,16 @@ bool CellEditor::createPatternHere() {
   // The new pattern starts on a multiple of its length, never in the middle of one: at the caret's own block when it is free, otherwise at the
   // nearest block that is (the caret goes to its first row then).
   const std::vector<RowOwner> owners = rowOwners(*lane, project.song.length);
+  const int home = tick_ / kNewPatternRows * kNewPatternRows;
+  const bool beyond = home >= project.song.length;   // the caret is past the song's end: the pattern goes there and the song grows to hold it
   const auto free = [&](int at) {
+    if (beyond) return at == home;
     if (at < 0 || at >= project.song.length) return false;
     for (const Placement& p : lane->placements) if (p.start == at) return false;   // one already starts there
     return owners[static_cast<std::size_t>(at)].pattern < 0;                         // none plays there
   };
-  const int home = tick_ / kNewPatternRows * kNewPatternRows;
   int start = -1;
-  for (int step = 0; start < 0 && (home - step * kNewPatternRows >= 0 || home + step * kNewPatternRows < project.song.length); step++) {
+  for (int step = 0; start < 0 && (home - step * kNewPatternRows >= 0 || home + step * kNewPatternRows < project.song.length || beyond); step++) {
     const int below = home - step * kNewPatternRows, above = home + step * kNewPatternRows;
     const bool belowFree = free(below), aboveFree = free(above);
     if (belowFree && aboveFree) start = (tick_ - below <= above - tick_) ? below : above;
@@ -163,7 +165,8 @@ bool CellEditor::createPatternHere() {
     else if (aboveFree) start = above;
   }
   if (start < 0) return false;
-  const int length = std::min(kNewPatternRows, project.song.length - start);
+  const int grownLength = beyond ? songLengthFor(project.song.length, start + kNewPatternRows - 1) : project.song.length;
+  const int length = std::min(kNewPatternRows, grownLength - start);
   std::set<int> used;
   for (const Pattern& p : lane->patterns) used.insert(p.index);
   int index = 0;
@@ -181,7 +184,8 @@ bool CellEditor::createPatternHere() {
   placement.pattern = pattern.id;
   placement.start = start;
   placement.length = length;
-  document_.apply(std::make_unique<AddPattern>(lane_, pattern, placement));
+  if (grownLength > project.song.length) document_.apply(std::make_unique<GrowSongThen>(grownLength, std::make_unique<AddPattern>(lane_, pattern, placement)));
+  else document_.apply(std::make_unique<AddPattern>(lane_, pattern, placement));
   if (tick_ < start || tick_ >= start + length) tick_ = start;   // (the caret was not inside the new pattern)
   return true;
 }

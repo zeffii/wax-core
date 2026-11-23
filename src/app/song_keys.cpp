@@ -36,6 +36,22 @@ std::string blankRowOf(const Engine& engine, const std::string& lane) {
   return blank;
 }
 
+// The last tick of the song that a lane reaches: the end of a placement, a mute or a note-off marker.
+int reachOf(const Lane& lane) {
+  int last = -1;
+  for (const Placement& p : lane.placements) last = std::max(last, p.start + std::max(1, p.length) - 1);
+  for (int t : lane.mutes) last = std::max(last, t);
+  for (int t : lane.offs) last = std::max(last, t);
+  return last;
+}
+
+// Applies an edit that reaches `lastTick`. Past the song's end the song grows to hold it, in chunks, as part of the same undo step.
+void applyReaching(Document& doc, std::unique_ptr<Edit> edit, int lastTick) {
+  const int length = songLengthFor(doc.project().song.length, lastTick);
+  if (length > doc.project().song.length) doc.apply(std::make_unique<GrowSongThen>(length, std::move(edit)));
+  else doc.apply(std::move(edit));
+}
+
 int glueBlock(Document& doc, Engine& engine, const SequenceBlock& block, bool fillEmpty) {
   std::vector<Lane> changed;
   for (int i = block.first; i <= block.last && i < static_cast<int>(doc.project().lanes.size()); i++) {
@@ -66,7 +82,8 @@ void songCursorKeys(SongEdit& state, SongKeysEnv& env) {
   if (!io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_H, false)) { settings().seqNames = !settings().seqNames; saveSettings(); status = settings().seqNames ? "Pattern names shown." : "Pattern names hidden."; }
   {   // the sequence's cursor: a row is `cell` ticks, the lanes run across
     const int cell = sequenceRowTicks(song), rows = std::max(1, (song.length + cell - 1) / cell);
-    const auto toRow = [&](int row) { editor.moveTo(std::clamp(row, 0, rows - 1) * cell, editor.cell()); };
+    // the caret may go on past the song's end: the song grows when something is put there (Home and End keep to the song)
+    const auto toRow = [&](int row) { editor.moveTo(std::clamp(row, 0, kMaxSongTicks / cell - 1) * cell, editor.cell()); };
     const int row = editor.tick() / cell;
     // Shift with a movement key grows a block from where the cursor was; Delete clears it, G glues it; any other key drops it
     const ImGuiKey movers[] = {ImGuiKey_UpArrow, ImGuiKey_DownArrow, ImGuiKey_PageUp, ImGuiKey_PageDown, ImGuiKey_Home, ImGuiKey_End, ImGuiKey_LeftArrow, ImGuiKey_RightArrow};
@@ -110,12 +127,12 @@ void songCursorKeys(SongEdit& state, SongKeysEnv& env) {
     if (current) {
       const int tick = editor.tick(), rowStart = tick / cell * cell;
       seq::Context context;
-      context.length = song.length;
+      context.length = kMaxSongTicks;   // (what reaches past the song's end makes it longer: applyReaching)
       context.blankRow = editor.blankRowText();
       const auto change = [&](const char* label, const char* done, const std::function<bool(Lane&)>& edit) {
         Lane copy = *current;
         if (!edit(copy)) { status = std::string("Cannot ") + label + " here."; return false; }
-        doc.apply(std::make_unique<SetLaneSequence>(copy, label));
+        applyReaching(doc, std::make_unique<SetLaneSequence>(copy, label), reachOf(copy));
         edited = true;
         status = done;
         return true;
@@ -238,7 +255,7 @@ void songBlockKeys(SongEdit& state, SongKeysEnv& env) {
       block.to += cell;   // (to is exclusive)
     }
     seq::Context context;
-    context.length = song.length;
+    context.length = kMaxSongTicks;
     const auto count = [](int n) { return std::to_string(n) + (n == 1 ? " pattern" : " patterns"); };
     const auto putCursor = [&](int lane, int tick) {   // the cursor moves; the lane tab follows
       const std::string id = all[static_cast<std::size_t>(lane)].id;
@@ -254,11 +271,13 @@ void songBlockKeys(SongEdit& state, SongKeysEnv& env) {
       if (!r.changed.empty()) {
         std::vector<Lane> changed;
         for (int i : r.changed) changed.push_back(work[static_cast<std::size_t>(i)]);
-        doc.apply(std::make_unique<SetLaneSequences>(changed, label));
+        int reach = -1;
+        for (const Lane& l : changed) reach = std::max(reach, reachOf(l));
+        applyReaching(doc, std::make_unique<SetLaneSequences>(changed, label), reach);
         edited = true;
       }
       const int lastLane = std::min(static_cast<int>(all.size()) - 1, lane + clip.lanes - 1);
-      const int lastTick = std::min(song.length - 1, tick + clip.ticks - cell) / cell * cell;
+      const int lastTick = std::min(kMaxSongTicks - 1, tick + clip.ticks - cell) / cell * cell;
       state.selecting = lastLane > lane || lastTick > tick;
       state.anchorLane = all[static_cast<std::size_t>(lane)].id; state.anchorTick = tick;
       putCursor(lastLane, lastTick);
@@ -283,7 +302,7 @@ void songBlockKeys(SongEdit& state, SongKeysEnv& env) {
     if (ImGui::IsKeyPressed(ImGuiKey_V, false)) {
       const seq::Clip& clip = state.clip;
       if (clip.items.empty()) status = "Nothing copied.";
-      else if (block.from >= song.length) status = "No room here.";
+      else if (block.from >= kMaxSongTicks) status = "No room here.";
       else {
         const int at = state.selecting ? block.from : rowStart, lane = state.selecting ? block.first : laneAt;
         const seq::PlaceResult r = place(clip, lane, at, "paste");
@@ -294,7 +313,7 @@ void songBlockKeys(SongEdit& state, SongKeysEnv& env) {
       const seq::Clip clip = capture();
       const int down = clip.ticks, at = block.from + down;
       if (clip.items.empty()) status = "Nothing to copy here.";
-      else if (at >= song.length) status = "No room below.";
+      else if (at >= kMaxSongTicks) status = "No room below.";
       else {
         const seq::PlaceResult r = place(clip, block.first, at, "copy down");
         status = r.placed ? "Copied " + count(static_cast<int>(clip.items.size())) + " down." : "Nothing changed.";

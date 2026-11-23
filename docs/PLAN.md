@@ -351,3 +351,10 @@ Gaps against the web's graph rail:
 ## Built-in rooms (convolver)
 - Convolver `room` (0 = the sample, 1 studio, 2 chamber, 3 hall, 4 church): impulse responses built in `nodes/rooms.cpp` from room physics (image-source early reflections, three-band noise tail, energy from the critical distance). Measured RT60 matches the table. A new piano (machine tree) gets a convolver set to the hall at mix 0.2 after its voices. Native-only additions like this live in `app/native_additions.cpp` (a wire-insert table for machines, a hint table for parameters), applied on top of the generated tables; delete an entry there once the web app has it.
 - Gap (parity): the web convolver has no `room` parameter or help text for it (its hint is in native_additions.cpp until the web has it); web needs the same generator to play files that use it.
+
+## Caret past the song end (web 832, native)
+
+- Only the Song screen's caret may go past the song length (`CellEditor::setPastEnd`); leaving the screen clamps it back.
+- Navigation alone never changes the file. The song grows in 64-tick chunks (`songLengthFor`) when something is put there: a pattern created/placed/pasted/duplicated, or a loop point set with Ctrl+B / Ctrl+E.
+- Growth and the edit are one undo step (`GrowSongThen`). No auto-shrink; the `len` field still shrinks.
+- Web does the same through `growTo` in `createEditor`, with `onLength` resyncing engine and views.

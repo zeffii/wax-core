@@ -50,6 +50,10 @@ public:
 
   // Where the cursor may go. Moving ends a half-typed cell.
   void moveTo(int tick, int cell);
+  // The arrangement's caret may go on past the song's end (the song grows when something is put there); the other screens' may not.
+  // Turning it off brings the cursor back inside the song.
+  void setPastEnd(bool on) { if (pastEnd_ == on) return; pastEnd_ = on; if (!on) moveTo(tick_, cell_); }
+  bool pastEnd() const { return pastEnd_; }
   std::string blankRowText() const;   // a row of the lane's columns with every cell empty
   bool patternHere() const { return placeAt(tick_).pattern != nullptr; }   // a pattern plays at the cursor's row
   void move(int rows, int cells);
@@ -120,6 +124,7 @@ private:
   std::vector<Column> columns_;
   int tick_ = 0, cell_ = 0, typed_ = 0, step_ = 1, char_ = 0, noteOffColumns_ = 0;
   bool selecting_ = false, wrapRows_ = false;
+  bool pastEnd_ = false;
   int soloLo_ = -1, soloHi_ = -1;   // the rows of the solo-edited pattern (hi is one past its last); -1: not solo-editing
   int firstTick() const;   // the first and last row the cursor may be on
   int lastTick() const;

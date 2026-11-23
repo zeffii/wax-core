@@ -745,3 +745,35 @@ WAX_TEST("document", testSequenceOps) {
   check(solos.takeChangedLanes().count("bass") == 1, "solo: the lane that let go is rebuilt");
   check(solos.toggleSolo("lead") == false && !solos.project().lanes[1].soloMuted && !solos.toggleSolo("master").has_value(), "solo: off again; the master cannot be soloed");
 }
+
+WAX_TEST("document", testGrowPastEnd) {
+  check(wax::songLengthFor(64, 63) == 64, "growth: inside the song nothing grows");
+  check(wax::songLengthFor(64, 64) == 128 && wax::songLengthFor(64, 127) == 128, "growth: one chunk of 64 ticks");
+  check(wax::songLengthFor(64, 128) == 192, "growth: the next chunk");
+
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/concrete.wax"));
+  const int length = doc.project().song.length;
+  wax::CellEditor editor(doc);
+  const std::string lane = doc.project().lanes.back().id;
+  std::vector<wax::Column> columns(1);
+  columns[0].kind = wax::ColumnKind::Note;  columns[0].token = wax::Token::Note;
+  editor.setLane(lane, columns);
+  editor.moveTo(length + 20, 0);
+  check(editor.tick() == length - 1, "past-end off: the caret stops at the last tick");
+  editor.setPastEnd(true);
+  editor.moveTo(length + 20, 0);
+  check(editor.tick() == length + 20, "past-end on: the caret goes beyond the song");
+  check(doc.project().song.length == length, "moving alone does not change the song");
+  editor.setPastEnd(false);
+  check(editor.tick() == length - 1, "leaving the screen pulls the caret back");
+
+  editor.setPastEnd(true);
+  editor.moveTo(length + 16, 0);
+  check(editor.createPatternHere(), "a pattern can be made past the end");
+  check(doc.project().song.length == length + 64, "the song grew by one chunk");
+  doc.undo();
+  check(doc.project().song.length == length && !doc.canUndo(), "one undo removes the pattern and the growth");
+  doc.redo();
+  check(doc.project().song.length == length + 64, "redo grows it again");
+  std::printf("ok: grow past the song end\n");
+}

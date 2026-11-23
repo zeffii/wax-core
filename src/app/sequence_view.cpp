@@ -91,7 +91,8 @@ namespace {
 // Where everything is, worked out once a frame inside the child window: the sizes in pixels, and which rows are on show.
 struct Geometry {
   float scale = 1;
-  int cell = 1, rows = 1;                  // a row is `cell` ticks; the song has `rows` of them
+  int cell = 1, rows = 1;                  // a row is `cell` ticks; `rows` are shown: the song's, and those up to the caret when it is past the end
+  int songRows = 1;                        // the rows of the song itself
   float rowHeight = 0, headHeight = 0, gutter = 0, totalWidth = 0;
   ImVec2 origin;                           // the top left of the sheet (scrolled with it)
   float scrollY = 0, viewHeight = 0;
@@ -101,6 +102,8 @@ struct Geometry {
   float bottom() const { return rowTop(rows); }
 };
 
+constexpr int kRowsBeyondCaret = 3;   // rows past the caret that are on show when it is past the song's end
+
 // The overview strip at the right edge, when the whole song is not on show already: where it is, so clicks there do not reach the sheet.
 struct Strip {
   bool shown = false, over = false;
@@ -108,11 +111,13 @@ struct Strip {
   float bodyHeight = 0;
 };
 
-Geometry measure(const Project& project, ImVec2 origin) {
+Geometry measure(const Project& project, ImVec2 origin, int cursorTick) {
   Geometry g;
   g.scale = ImGui::GetStyle().FontScaleDpi;
   g.cell = rowTicks(project.song);
-  g.rows = std::max(1, (project.song.length + g.cell - 1) / g.cell);
+  g.songRows = std::max(1, (project.song.length + g.cell - 1) / g.cell);
+  const int caretRow = std::max(0, cursorTick) / g.cell;
+  g.rows = caretRow >= g.songRows ? std::min(kMaxSongTicks / g.cell, caretRow + 1 + kRowsBeyondCaret) : g.songRows;   // (the caret can go past the end: then a few rows past it show too)
   g.rowHeight = ImGui::GetTextLineHeight() + 2 * g.scale;
   g.headHeight = g.rowHeight + 4 * g.scale;
   g.gutter = gutterWidth(g.scale);
@@ -204,6 +209,13 @@ void readMouse(const Project& project, const Geometry& g, const Strip& strip, co
 }
 
 // The loop: a thin bar in the lane left of the tick numbers over its rows, and a line across the sheet at each end.
+// A line where the song ends, when rows past it are on show.
+void drawSongEnd(ImDrawList* draw, const Geometry& g) {
+  if (g.rows <= g.songRows) return;
+  const float y = std::floor(g.rowTop(g.songRows)) + 0.5f;
+  draw->AddLine(ImVec2(g.origin.x, y), ImVec2(g.origin.x + g.totalWidth, y), withAlpha(kDimText, 140), 1.0f);
+}
+
 void drawLoop(ImDrawList* draw, const Geometry& g, const Song& song) {
   const LoopRange loop = loopOf(song);
   if (!loop.on) return;
@@ -219,7 +231,7 @@ void drawTickNumbers(ImDrawList* draw, const Geometry& g) {
   for (int r = g.first; r <= g.last; ++r) {
     char number[16];
     std::snprintf(number, sizeof number, "%04d", r * g.cell);
-    draw->AddText(ImVec2(g.origin.x + (kLoopLane + 2) * g.scale, g.rowTop(r) + g.scale), r * g.cell % bar16 == 0 ? kText : kDimText, number);
+    draw->AddText(ImVec2(g.origin.x + (kLoopLane + 2) * g.scale, g.rowTop(r) + g.scale), r >= g.songRows ? withAlpha(kDimText, 120) : r * g.cell % bar16 == 0 ? kText : kDimText, number);   // (the rows past the song's end are dimmer)
   }
 }
 
@@ -382,7 +394,7 @@ SequenceClick drawSequenceView(const Project& project, const SequenceState& stat
   ImGui::SetCursorPosX(ImGui::GetCursorPosX() + leftMargin());
   ImGui::BeginChild("sequence", ImVec2(0, 0), false, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_HorizontalScrollbar);
   ImDrawList* draw = ImGui::GetWindowDrawList();
-  const Geometry g = measure(project, ImGui::GetCursorScreenPos());
+  const Geometry g = measure(project, ImGui::GetCursorScreenPos(), state.cursorTick);
   keepInSight(g, state);
   const Strip strip = placeStrip(g, project);
   frameCurves(curves, project, g, state.selectedLane);
@@ -395,6 +407,7 @@ SequenceClick drawSequenceView(const Project& project, const SequenceState& stat
   readMouse(project, g, strip, curves, result);
 
   drawLoop(draw, g, project.song);
+  drawSongEnd(draw, g);
   drawTickNumbers(draw, g);
   drawLanes(draw, g, project, curves, state, pictures);
   if (!strip.over) result.curve = curves.interact(targets);

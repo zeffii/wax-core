@@ -227,6 +227,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
 
   ImGuiIO& io = ImGui::GetIO();
   const bool ctrl = io.KeyCtrl;
+  editor.setPastEnd(session->screen == Screen::Song);   // (only the arrangement's caret may go past the song's end; the other screens bring it back)
   KeyboardEnv keyboard{octave, follow, playFromRequest, selectedLane, held, requestSave, playing};
   const bool edited = handleKeyboard(session, keyboard);
   if (edited) {

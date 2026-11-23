@@ -147,8 +147,12 @@ bool handleKeyboard(Session* session, KeyboardEnv& env) {
     if (ctrl && !io.KeyShift && !io.KeyAlt && (session->screen == Screen::Pattern || session->screen == Screen::Song)) {   // the song loop: start and end at the cursor row, switch
       const auto setPoint = [&](const char* which, int at) {
         std::string message;
-        Json loop = loopWithPoint(song, which, at, message);
-        doc.apply(std::make_unique<SetLoop>(std::move(loop), message));
+        Song reaching = song;   // a point past the song's end takes the song out to it (in the same undo step)
+        const bool start = std::string(which) == "start";
+        reaching.length = songLengthFor(song.length, start ? at : at - 1);
+        Json loop = loopWithPoint(reaching, which, at, message);
+        if (reaching.length > song.length) doc.apply(std::make_unique<GrowSongThen>(reaching.length, std::make_unique<SetLoop>(std::move(loop), message)));
+        else doc.apply(std::make_unique<SetLoop>(std::move(loop), message));
         syncLoop(doc, player.engine());
         session->editStatus = message;
       };

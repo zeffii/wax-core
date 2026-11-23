@@ -6,12 +6,24 @@
 #pragma once
 
 #include <optional>
+#include <algorithm>
 #include <string>
 #include <vector>
 
 #include "core/node.h"   // Json
 
 namespace wax {
+
+// The longest song, in ticks, and the steps it grows in: something put at or past its end takes it out to the next whole chunk.
+constexpr int kMaxSongTicks = 65536;
+constexpr int kGrowTicks = 64;
+
+// The length a song of `length` ticks needs for something whose last tick is `lastTick`: the same, or out to the chunk that holds it.
+inline int songLengthFor(int length, int lastTick) {
+  if (lastTick < length) return length;
+  const int chunks = (lastTick + kGrowTicks) / kGrowTicks;   // (lastTick + 1, rounded up to whole chunks)
+  return std::min(kMaxSongTicks, chunks * kGrowTicks);
+}
 
 struct Song {
   std::string name = "untitled";

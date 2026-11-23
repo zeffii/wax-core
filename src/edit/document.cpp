@@ -181,7 +181,7 @@ Lane& laneNamed(Project& project, const std::string& id) {
 }  // namespace
 
 namespace {
-constexpr int kMaxSong = 65536;
+constexpr int kMaxSong = kMaxSongTicks;
 int movedBy(int t, int at, int n) { return t >= at ? t + n : t; }
 }  // namespace
 
@@ -212,6 +212,17 @@ void SetSongLength::apply(Project& project) {
     const int start = loop.value("start", 0), end = std::min(loop.value("end", 0), length);
     if (start >= end) project.song.raw.erase("loop"); else loop["end"] = end;
   }
+}
+
+void GrowSongThen::apply(Project& project) {
+  oldLength_ = project.song.length;
+  project.song.length = std::max(oldLength_, std::min(length_, kMaxSong));
+  inner_->apply(project);
+}
+
+void GrowSongThen::revert(Project& project) {
+  inner_->revert(project);
+  project.song.length = oldLength_;
 }
 
 void SetSongLength::revert(Project& project) {
