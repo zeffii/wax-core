@@ -24,6 +24,7 @@
 #include <string>
 #include <vector>
 
+#include "app/draw_stats.h"
 #include "app/minimap.h"
 #include "app/pattern_toolbar.h"
 #include "app/sequence_toolbar.h"
@@ -107,6 +108,7 @@ struct Options {
   double rate = 48000;
   int threads = 0, midiPort = 0, frames = 3, playFrom = -1, buffer = 0;
   bool useNull = false;
+  bool stats = false;      // --stats: the draw-stats line on, and printed with a screenshot
   bool allLanes = false;   // --all-lanes: the Pattern screen shows every lane side by side
   bool splashForced = false;
   bool noPlay = false;   // --no-play: a screenshot run does not start the song (the picture does not depend on the timing of the audio)

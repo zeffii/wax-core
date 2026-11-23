@@ -282,6 +282,7 @@ void drawFrame(Session* session, const Options& options, const std::string& stat
     if (ImGui::IsKeyPressed(ImGuiKey_F4, false)) session->screen = Screen::Sample;
     if (ImGui::IsKeyPressed(ImGuiKey_F10, false)) session->screen = Screen::Info;
     if (ImGui::IsKeyPressed(ImGuiKey_F11, false)) session->screen = Screen::Config;
+    if (ImGui::IsKeyPressed(ImGuiKey_F12, false)) app::drawStatsSet(!app::drawStatsOn());   // (a tool for me: what a frame costs to draw)
   }
   const bool mixerShown = session->showMixer && (session->screen == Screen::Song || session->screen == Screen::Pattern || session->screen == Screen::Instrument);
   const float statusH = ImGui::GetTextLineHeightWithSpacing() + 6 * scale;
@@ -589,6 +590,7 @@ bool parse(int argc, char** argv, Options& o) {
     else if (a == "--vector" && more) o.vectornode = argv[++i];
     else if (a == "--genexpr" && more) o.genexprnode = argv[++i];
     else if (a == "--screen" && more) o.screen = argv[++i];
+    else if (a == "--stats") o.stats = true;
     else if (a == "--theme" && more) o.theme = argv[++i];
     else if (a == "--frames" && more) o.frames = std::max(1, std::atoi(argv[++i]));
     else if (a == "--play-from" && more) o.playFrom = std::atoi(argv[++i]);
@@ -687,6 +689,7 @@ int main(int argc, char** argv) {
   int octave = 3, playFromRequest = -1, frame = 0;
   std::string selectedLane;
   bool follow = app::settings().follow, running = true;
+  app::drawStatsSet(options.stats);
   bool showSplash = options.splash && (options.splashForced || (options.screenshot.empty() && !options.useNull));
   if (options.noPlay) {}
   else if (session && !options.screenshot.empty() && options.playFrom >= 0)
@@ -706,6 +709,7 @@ int main(int argc, char** argv) {
       }
       if (event.type == SDL_EVENT_DROP_FILE && event.drop.data) open(event.drop.data);
     }
+    app::drawStatsFrameStart();
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     if (!options.clicks.empty() && frame >= 4) feedClicks(options.clicks, frame - 4);
@@ -728,6 +732,7 @@ int main(int argc, char** argv) {
     }
     if (!options.press.empty() && frame >= 4) feedKeys(options.press, frame - 4);   // (the first frames let the window settle)
     ImGui::NewFrame();
+    app::drawStatsOverlay();
     drawFrame(session.get(), options, status, meterL, meterR, held, octave, selectedLane, follow, playFromRequest);
     if (showSplash) showSplash = drawSplash(SDL_GetTicks() / 1000.0, "native");
     if (!gOpenBackup.empty()) {   // a snapshot from the File menu: opened as an untitled song, so Save cannot overwrite the snapshot
@@ -825,6 +830,7 @@ int main(int argc, char** argv) {
     SDL_SetRenderDrawColor(renderer, 22, 27, 32, 255);
     SDL_RenderClear(renderer);
     ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
+    app::drawStatsFrameEnd(ImGui::GetDrawData());
 
     frame++;
     if (!options.screenshot.empty() && frame >= options.frames) {
@@ -833,6 +839,7 @@ int main(int argc, char** argv) {
         SDL_SaveBMP(shot, options.screenshot.c_str());
         SDL_DestroySurface(shot);
         std::printf("saved %s\n", options.screenshot.c_str());
+      if (options.stats) std::printf("%s\n", app::drawStatsLine());
       } else {
         std::printf("SDL: %s\n", SDL_GetError());
       }
