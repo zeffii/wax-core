@@ -358,3 +358,5 @@ Gaps against the web's graph rail:
 - Navigation alone never changes the file. The song grows in 64-tick chunks (`songLengthFor`) when something is put there: a pattern created/placed/pasted/duplicated, or a loop point set with Ctrl+B / Ctrl+E.
 - Growth and the edit are one undo step (`GrowSongThen`). No auto-shrink; the `len` field still shrinks.
 - Web does the same through `growTo` in `createEditor`, with `onLength` resyncing engine and views.
+
+- Gap (parity): web build 834 has a `piano2` node (hammer on a nonlinear felt spring with hysteresis acting on struck-point waveguide strings, strings coupled through one bridge that is a passive modal soundboard admittance, phantom partials, sympathetic strings, una corda, per-blow variance). Not ported natively yet; a .wax file that uses it is silent here until it is.
