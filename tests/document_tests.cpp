@@ -445,6 +445,23 @@ WAX_TEST("document", testSongSettings) {
   std::printf("ok: song settings\n");
 }
 
+WAX_TEST("document", testTempoSurvivesPlay) {
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax"));
+  wax::Engine engine(doc.project(), 44100);
+  const double fromFile = engine.registry().get("master.m.bpm");
+  const double raised = fromFile + 7;
+  doc.apply(std::make_unique<wax::SetParam>("master", "m", "bpm", raised), false);
+  wax::syncParams(doc, engine);
+  engine.sequencer().play(0);
+  check(engine.registry().get("master.m.bpm") == raised, "the tempo set in the header is the tempo Play starts at");
+  engine.sequencer().stop();
+  doc.undo();
+  wax::syncParams(doc, engine);
+  engine.sequencer().play(0);
+  check(engine.registry().get("master.m.bpm") == fromFile, "and an undone change starts the song at the old tempo again");
+  std::printf("ok: tempo survives play\n");
+}
+
 WAX_TEST("document", testLoop) {
   const wax::Project original = wax::loadProject(std::string(WAX_TEST_SONGS) + "/dvii.wax");
   wax::Document doc(original);

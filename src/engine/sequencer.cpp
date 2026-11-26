@@ -90,6 +90,9 @@ void Sequencer::setSong(const SongSettings& song) {
   const SongSettings old = song_;
   const bool hadMaster = songSet_ && old.master.present();
   song_ = song;
+  startBpm_.store(static_cast<float>(song.bpm), std::memory_order_relaxed);
+  startSwing_.store(static_cast<float>(jsRound(song.swing * 100)), std::memory_order_relaxed);
+  startTpb_.store(static_cast<float>(song.ticksPerBeat), std::memory_order_relaxed);
   length_.store(song.length, std::memory_order_relaxed);
   songSet_ = true;
   runtime_.masterSlots = song.master;
@@ -100,12 +103,20 @@ void Sequencer::setSong(const SongSettings& song) {
 
 void Sequencer::setNodeseq(const Json& graph, const nodeseq::Resolve& resolve) { nodeseq_.load(graph, resolve); }
 
+void Sequencer::setStartParam(int slot, double value) {
+  const MasterSlots& m = song_.master;
+  if (!m.present() || slot < 0) return;
+  if (slot == m.bpm) startBpm_.store(static_cast<float>(value), std::memory_order_relaxed);
+  else if (slot == m.swing) startSwing_.store(static_cast<float>(value), std::memory_order_relaxed);
+  else if (slot == m.tpb) startTpb_.store(static_cast<float>(value), std::memory_order_relaxed);
+}
+
 void Sequencer::resetTempo() {
   const MasterSlots& m = song_.master;
   if (!m.present()) return;
-  params_[m.bpm] = static_cast<float>(song_.bpm);
-  params_[m.swing] = static_cast<float>(jsRound(song_.swing * 100));
-  params_[m.tpb] = static_cast<float>(song_.ticksPerBeat);
+  params_[m.bpm] = startBpm_.load(std::memory_order_relaxed);
+  params_[m.swing] = startSwing_.load(std::memory_order_relaxed);
+  params_[m.tpb] = startTpb_.load(std::memory_order_relaxed);
   params_[m.volume] = 1;
 }
 

@@ -140,7 +140,10 @@ void Engine::rememberLane(const PreparedLane& lane) {
 }
 
 void Engine::setParam(const std::string& address, double value) {
-  if (registry_.slotOf(address) >= 0) registry_.set(address, value);
+  const int slot = registry_.slotOf(address);
+  if (slot < 0) return;
+  registry_.set(address, value);
+  sequencer_.setStartParam(slot, value);   // (the header's tempo is where the song starts when it plays)
 }
 
 bool Engine::sendLane(const Project& project, const std::string& laneId) {

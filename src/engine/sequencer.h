@@ -35,6 +35,9 @@ public:
   ~Sequencer();
 
   void setSong(const SongSettings& song);
+  // The tempo the song starts at each time it plays follows the header's values as they are edited (the master tempo node's bpm,
+  // swing and ticks per beat); a parameter that is not one of those is ignored. Any thread.
+  void setStartParam(int slot, double value);
   void setLane(const PreparedLane& lane);
   // The same in two steps, so a lane can be edited while the song plays. buildLane does the slow part (any thread, touches
   // nothing that plays). installLane swaps it in at the start of a block (audio thread) and hands back the lane it replaced,
@@ -94,6 +97,8 @@ private:
 
   SongSettings song_;
   bool songSet_ = false;
+  // where the tempo starts when the song plays (the master tempo node's units: swing in percent)
+  std::atomic<float> startBpm_{120}, startSwing_{50}, startTpb_{4};
   std::vector<std::shared_ptr<LaneState>> lanes_;   // in the order they were first set
   int nextColumnKey_ = 0;
 
