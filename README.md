@@ -4,7 +4,7 @@ The native engine of [Wax](https://github.com/zeffii/webtracker), the tracker: t
 machines, in C++ for speed and for rendering instruments on several processor cores at once. The web app stays as it is
 and is the reference: a machine counts as ported when this engine's render of a song matches the web app's.
 
-The order of work and where it stands is in [docs/PLAN.md](docs/PLAN.md).
+The order of work and where it stands is in [docs/PLAN.md](docs/PLAN.md). Porting a node: [docs/ADDING_NODES.md](docs/ADDING_NODES.md).
 
 ## Building (Windows 11)
 
