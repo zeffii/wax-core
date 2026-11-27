@@ -78,6 +78,8 @@ bool handleKeyboard(Session* session, KeyboardEnv& env) {
   const auto focusNow = [&] { return keyFocusOf(*session); };   // (asked at each key, as Enter and the arrow keys change it within the frame)
   const bool ctrl = io.KeyCtrl;
   const bool menuOpen = ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);   // a menu has the keys while it is open
+  if ((io.WantTextInput || menuOpen) && (session->screen == Screen::Song || session->screen == Screen::Pattern) && !io.InputQueueCharacters.empty() && !ctrl)
+    session->editStatus = menuOpen ? "A menu has the keyboard: Esc closes it." : "A text box has the keyboard: click in the grid, or Esc, to type here.";   // (never a silent refusal)
   if (!io.WantTextInput && !menuOpen) {
     if (ImGui::IsKeyPressed(ImGuiKey_LeftBracket, false)) octave = std::max(0, octave - 1);
     if (ImGui::IsKeyPressed(ImGuiKey_RightBracket, false)) octave = std::min(9, octave + 1);
