@@ -353,7 +353,7 @@ void registerPiano2(NodeRegistry& registry) {
     {"pedal", 0, 1, 0},
     {"release", 20, 3000, 250},    // ms the damper takes to still a released string
     {"tune", -48, 48, 0},
-    {"vel", 0, 1, 0.7},
+    {"vel", 0, 1, 1},
     {"level", 0, 1, 0.5},
     {"quality", 0, 1, 0, true},    // 0 standard, 1 eco
   };

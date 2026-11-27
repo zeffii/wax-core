@@ -1,13 +1,13 @@
 {
   "song": "piano2.wax",
-  "version": "0.834.0",
+  "version": "0.835.0",
   "sampleRate": 44100,
   "frames": 441088,
   "seconds": 10.002,
-  "peak": 0.837748,
+  "peak": 0.602687,
   "tail": 6,
   "seed": 2654435769,
-  "sha256": "399cea7ebf7ba42866777bbaffd95555a92201051f35057c3299733e31bbe32f",
+  "sha256": "e3f721cd69643164d94a14804be73e4c1efbd76dc9a9e3c20c887a9ebbda75d3",
   "nodeTypes": [
     "bus-in",
     "out",
