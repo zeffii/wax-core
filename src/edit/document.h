@@ -25,6 +25,8 @@ public:
   virtual bool allLanes() const { return false; }   // every lane changes (inserting silence)
   virtual std::string otherLane() const { return {}; }  // a second lane whose sound this changes (the old name of a renamed lane)
   virtual std::string lane() const { return {}; }      // the lane whose sound this changes ("" when none)
+  // Every lane whose sound this changes (a block edit reaches several); by default just lane(). The engine is sent each of them.
+  virtual std::vector<std::string> lanes() const { return lane().empty() ? std::vector<std::string>() : std::vector<std::string>{lane()}; }
   virtual std::string paramAddress() const { return {}; }   // "instrument.node.param" of the parameter this sets ("" when none)
   // Every parameter this sets (a recalled preset sets many); by default just paramAddress().
   virtual std::vector<std::string> paramAddresses() const { return paramAddress().empty() ? std::vector<std::string>() : std::vector<std::string>{paramAddress()}; }
@@ -968,6 +970,11 @@ public:
   void apply(Project& project) override;
   void revert(Project& project) override;
   std::string label() const override { return label_; }
+  std::vector<std::string> lanes() const override {
+    std::vector<std::string> ids;
+    for (const Sequence& sequence : after_) ids.push_back(sequence.lane);
+    return ids;
+  }
 
 private:
   struct Sequence { std::string lane; std::vector<Pattern> patterns; std::vector<Placement> placements; std::vector<int> mutes, offs; };

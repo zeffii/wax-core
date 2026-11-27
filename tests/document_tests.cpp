@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <random>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -793,4 +794,45 @@ WAX_TEST("document", testGrowPastEnd) {
   doc.redo();
   check(doc.project().song.length == length + 64, "redo grows it again");
   std::printf("ok: grow past the song end\n");
+}
+
+// A block edit (Ctrl+D, paste, cut, clear in the sequence editor) is one edit over several lanes; each of them must be sent to the engine,
+// or the copies show in the editor and the song goes on playing without them.
+WAX_TEST("document", testBlockEditReachesEngine) {
+  wax::Document doc(wax::loadProject(std::string(WAX_TEST_SONGS) + "/oberheim.wax"));
+  wax::Engine live(doc.project(), 44100);
+  std::vector<std::string> signatures;
+  for (const wax::Lane& l : doc.project().lanes) {
+    std::string sig;
+    for (const wax::Column& c : live.laneColumns(l.id)) sig += std::to_string(static_cast<int>(c.token)) + ":" + c.label + "|";
+    signatures.push_back(sig);
+  }
+  const int lanes = static_cast<int>(doc.project().lanes.size());
+  wax::seq::Context context;
+  context.length = doc.project().song.length;
+  const wax::seq::Clip clip = wax::seq::captureClip(doc.project().lanes, signatures, 0, lanes - 1, 0, 64);
+  std::vector<wax::Lane> work = doc.project().lanes;
+  const wax::seq::PlaceResult placed = wax::seq::placeClip(work, signatures, clip, 0, 64, context);
+  std::vector<wax::Lane> changed;
+  for (int i : placed.changed) changed.push_back(work[static_cast<std::size_t>(i)]);
+  check(changed.size() > 1, "the block copy changes more than one lane");
+  doc.apply(std::make_unique<wax::SetLaneSequences>(changed, "copy down"));
+  const std::set<std::string> told = doc.takeChangedLanes();
+  bool all = true;
+  for (const wax::Lane& l : changed) all = all && told.count(l.id) > 0;
+  check(all, "a block edit tells the engine about every lane it changed");
+  for (const std::string& id : told) doc.markLaneChanged(id);
+  wax::syncLanes(doc, live);
+  live.applySentLanes();
+  wax::Engine fresh(doc.project(), 44100);
+  const auto play = [](wax::Engine& engine) {
+    engine.sequencer().play(0);
+    std::vector<float> l(wax::kEngineBlock), r(wax::kEngineBlock), out;
+    for (int b = 0; b < 600; b++) { engine.sequencer().process(l.data(), r.data(), wax::kEngineBlock); out.insert(out.end(), l.begin(), l.end()); }
+    return out;
+  };
+  check(play(live) == play(fresh), "the song plays the copies as a freshly loaded one does");
+  doc.undo();
+  check(doc.takeChangedLanes().size() >= changed.size(), "and undoing the block edit tells the engine again");
+  std::printf("ok: block edit reaches the engine\n");
 }

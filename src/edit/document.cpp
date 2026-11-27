@@ -1505,7 +1505,7 @@ void Document::touched(const Edit& edit) {
     return;
   }
   revision_++;
-  if (!edit.lane().empty()) changed_.insert(edit.lane());
+  for (const std::string& lane : edit.lanes()) changed_.insert(lane);
   if (!edit.otherLane().empty()) changed_.insert(edit.otherLane());
   if (edit.allLanes()) for (const Lane& l : project_.lanes) changed_.insert(l.id);
   for (const std::string& address : edit.paramAddresses()) changedParams_.insert(address);
