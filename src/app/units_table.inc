@@ -500,6 +500,7 @@ const UnitEntry kTypeUnits[] = {
   {"piano2", "board", "%"},
   {"piano2", "phantom", "%"},
   {"piano2", "sympathy", "%"},
+  {"piano2", "sing", "%"},
   {"piano2", "una", "%"},
   {"piano2", "variance", "%"},
   {"piano", "decay", "s"},

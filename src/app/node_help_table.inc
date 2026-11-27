@@ -1386,6 +1386,7 @@ const ParamHint kParamHints[] = {
   {"piano2", "vel", "How much the key velocity matters. 1 follows the key fully: a soft key is about 25 dB quieter than a hard one and has far fewer high partials, as on a real piano. Lower values squeeze the range towards the middle; 0 plays every key the same."},
   {"piano2", "level", "Output level of this node."},
   {"piano2", "quality", "0 standard, 1 eco: the soundboard uses 16 resonances instead of 40 and the three sympathetic strings are left out. The rest is the same."},
+  {"piano2", "sing", "Entices the strings to resonate by themselves. What reaches the bridge is fed back onto the strings, so a little keeps the note ringing at the level it was struck, more makes it a held tone, and at 1 it jumps up an octave and the fundamental fades, like an overblown flute. Only while the key is down (or the pedal): the damper ends it. 0 is a plain piano."},
   {"addsynth", "harmonics", "How many partials are used (1 to 32)."},
   {"addsynth", "tilt", "Brightens (+) or darkens (-) the sound by adding dB per octave across the partials."},
   {"addsynth", "evenodd", "-1 silences the even partials (hollow, square-like); +1 silences the odd ones."},

@@ -27,10 +27,12 @@
 namespace wax {
 namespace {
 
-enum Param { kDecay = 0, kHard, kPos, kBright, kInharm, kDetune, kBoard, kPhantom, kSympathy, kUna, kVariance, kThump, kKnock, kWidth, kPedal, kRelease, kTune, kVel, kLevel, kQuality };
+enum Param { kDecay = 0, kHard, kPos, kBright, kInharm, kDetune, kBoard, kPhantom, kSympathy, kUna, kVariance, kThump, kKnock, kWidth, kPedal, kRelease, kTune, kVel, kLevel, kQuality, kSing };
 
 constexpr int kSize = 1 << 14, kMask = kSize - 1, kSections = 3, kMaxStr = 6;
 constexpr int kModes = 40, kModesEco = 16, kHammerSub = 6;
+// sing: the strings fed by their own bridge (see piano2.js)
+constexpr double kSingGain = 1.6, kSingQ = 40, kSingJumpFrom = 0.6, kSingJumpTo = 0.9, kSingCapSeconds = 0.1;
 constexpr double kHammerSeconds = 0.03, kCoupling = 0.03, kDry = 0.5;
 constexpr double kHammerSpeed = 4, kFeltHysteresis = 1.2e-4;
 
@@ -149,6 +151,28 @@ public:
         lp_[s] = (1 - lc_[s]) * x + lc_[s] * lp_[s];
         arrive_[s] = lp_[s] * loopNow_[s];
         S += zw_[s] * arrive_[s];
+      }
+      // sing: the bridge motion, through the two narrow filters and the limiter, put back on the struck strings at the strike point
+      if (singGain_ > 0) {
+        const double sig = S - dcState_;
+        if (singAge_ < singCapEnd_) singAge_++;
+        double fed = 0;
+        for (int p = 0; p < 2; p++) {
+          const double y = singB0_[p] * (sig - singX2_[p]) - singA1_[p] * singY1_[p] - singA2_[p] * singY2_[p];
+          singX2_[p] = singX1_[p]; singX1_[p] = sig; singY2_[p] = singY1_[p]; singY1_[p] = y;
+          const double ay = std::abs(y);
+          if (p == 0 && singAge_ < singCapEnd_ && ay > singCap_) singCap_ = ay;   // the level the feed may reach: the fundamental's, just after the blow
+          singEnv_[p] = ay > singEnv_[p] ? ay : singEnv_[p] * 0.9998;
+          const double held = std::min(singEnv_[p], singCap_);
+          fed += (p == 0 ? 1 - singOctave_ : std::min(1.0, 2 * singOctave_)) * (singEnv_[p] > 1e-12 ? js::tanh(1.5 * y / singEnv_[p]) * held : 0);
+        }
+        if (!damped_) {
+          const double inject = singGain_ * fed;
+          for (int s = 0; s < ns_; s++) {
+            const double part = inject * share_[s] * ns_;
+            buf_[s][static_cast<std::size_t>((w_ - tap_[s]) & kMask)] += part; buf_[s][static_cast<std::size_t>((w_ - delay_[s] + tap_[s]) & kMask)] += part;
+          }
+        }
       }
       // the phantom partials: the square of the motion, without its mean, put back on the bridge force
       if (phantom > 0) {
@@ -292,6 +316,17 @@ private:
     thumpEnv_ = 1; thumpDecay_ = js::exp(-1 / (0.012 * fs)); thumpAmp_ = g(kThump) * vm * vm * 0.5;
     knockEnv_ = 0; knockLp_ = 0;
     outAmp_ = lookup(kLoud, 21 + pf * 87);
+    {
+      const double b = g(kSing), jump = clampTo((b - kSingJumpFrom) / (kSingJumpTo - kSingJumpFrom), 0, 1);
+      singOctave_ = jump * jump * (3 - 2 * jump);
+      singGain_ = b * b * kSingGain / static_cast<double>(std::max(1, delay_[0]));
+      singCap_ = 0; singAge_ = 0; singCapEnd_ = static_cast<int>(jsRound(kSingCapSeconds * fs));
+      for (int p = 0; p < 2; p++) {
+        const double w0 = 2 * kPi * f0 * (p + 1) / fs, al = js::sin(w0) / (2 * kSingQ), a0 = 1 + al;
+        singB0_[p] = al / a0; singA1_[p] = -2 * js::cos(w0) / a0; singA2_[p] = (1 - al) / a0;
+        singX1_[p] = singX2_[p] = singY1_[p] = singY2_[p] = singEnv_[p] = 0;
+      }
+    }
     const double place = 0.5 + (pf - 0.5) * g(kWidth);
     panL_ = js::cos(place * kPi / 2) * kSqrt2; panR_ = js::sin(place * kPi / 2) * kSqrt2;
     damped_ = false; quiet_ = 0;
@@ -325,6 +360,10 @@ private:
   double dcCoef_ = 0, dcState_ = 0, nonlinHp_ = 0, nonlinEnv_ = 1e-6;
   double thumpEnv_ = 0, thumpDecay_ = 0, thumpAmp_ = 0, thumpLp_ = 0, knockEnv_ = 0, knockLp_ = 0;
   double quiet_ = 0, panL_ = 1, panR_ = 1, outAmp_ = 1;
+  // sing: a narrow bandpass on the fundamental and one on the octave (RBJ, 0 dB at the peak), each with a level follower
+  double singB0_[2] = {}, singA1_[2] = {}, singA2_[2] = {}, singX1_[2] = {}, singX2_[2] = {}, singY1_[2] = {}, singY2_[2] = {}, singEnv_[2] = {};
+  double singGain_ = 0, singOctave_ = 0, singCap_ = 0;
+  int singAge_ = 0, singCapEnd_ = 0;
 };
 
 }  // namespace
@@ -356,6 +395,7 @@ void registerPiano2(NodeRegistry& registry) {
     {"vel", 0, 1, 1},
     {"level", 0, 1, 0.5},
     {"quality", 0, 1, 0, true},    // 0 standard, 1 eco
+    {"sing", 0, 1, 0},             // the strings fed by their own bridge: 0 a plain piano, 1 an overblown note
   };
   type.create = [](const NodeContext& context) { return std::make_unique<Piano2>(context); };
   registry.add(std::move(type));

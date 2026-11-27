@@ -19,7 +19,7 @@ struct Family {
 
 const std::vector<Family> kFamilies = {
   {"render-songs", {"concrete", "nodes", "suite", "bugsong", "cloves", "curves"}},
-  {"render-synths", {"oberheim", "fourpole", "bongo", "membrane", "cardinal-eco", "cardinal", "drumsynth", "pulsar", "pulsetrain", "jawharp", "jawharpsoft", "khufu", "khufuone", "snarl", "snarlglide", "snarlmod", "dvii", "dviilfo", "dviisolo", "dviigrand", "specsynth", "specsynthroot", "pianofelt", "pianostrike", "piano2", "padsynth", "compass", "compassonce", "waveseq", "waveseqonce", "vecmix", "vecmixonce"}},
+  {"render-synths", {"oberheim", "fourpole", "bongo", "membrane", "cardinal-eco", "cardinal", "drumsynth", "pulsar", "pulsetrain", "jawharp", "jawharpsoft", "khufu", "khufuone", "snarl", "snarlglide", "snarlmod", "dvii", "dviilfo", "dviisolo", "dviigrand", "specsynth", "specsynthroot", "pianofelt", "pianostrike", "piano2", "piano2sing", "padsynth", "compass", "compassonce", "waveseq", "waveseqonce", "vecmix", "vecmixonce"}},
   {"render-effects", {"effects", "effects2", "islands", "eqladdergate", "saturator", "circuit", "circuit2", "declick", "exciter-sweep", "ensemble", "reflect", "mbsat", "split", "headpan", "pan", "mbcomp", "combringtransient", "waveshaper", "amp", "ampclean", "rotary", "rotarystop", "groove", "groovesim", "groovewarp"}},
   {"render-spectral", {"mosh", "hpss", "hpssperc", "bodyblur", "bodyblurbig", "specdyn", "specdynbig", "xsynth", "xsynthbig"}},
   {"render-reverb", {"convolver", "convolverlong", "convolverwide"}},

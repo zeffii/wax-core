@@ -1,0 +1,18 @@
+{
+  "song": "piano2sing.wax",
+  "version": "0.836.0",
+  "sampleRate": 44100,
+  "frames": 441088,
+  "seconds": 10.002,
+  "peak": 1.019479,
+  "tail": 6,
+  "seed": 2654435769,
+  "sha256": "bb29bb3b80f5215f5405d4a9d8577d874fdf7c888b20e75e3175c0598ba56859",
+  "nodeTypes": [
+    "bus-in",
+    "out",
+    "piano2",
+    "tempo",
+    "voices"
+  ]
+}
